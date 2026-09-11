@@ -1,0 +1,10 @@
+# --- shot_detection module ---
+# Remove this block together with backend/shot_detection/ if the module is dropped.
+# torch must come from the CUDA index, not PyPI, whose Windows wheels are CPU-only:
+#   pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+# OmniShotCut hardcodes .to("cuda") and shells out to ffmpeg, so a CUDA GPU and the
+# ffmpeg binary on PATH are both required.
+torch>=2.0
+ffmpeg-python
+omnishotcut @ git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut.git
+# --- end shot_detection module ---
