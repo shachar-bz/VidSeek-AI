@@ -1,0 +1,7 @@
+CLAUDE.md
+AGENTS.md
+AGENT_LESSONS.md
+\.venv
+__pycache__/
+*.pyc
+.env
