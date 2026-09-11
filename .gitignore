@@ -5,3 +5,4 @@ AGENT_LESSONS.md
 __pycache__/
 *.pyc
 .env
+\docs
