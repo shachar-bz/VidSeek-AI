@@ -6,7 +6,7 @@ which requires a CUDA GPU and the ffmpeg binary on PATH.
 
 import functools
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import omnishotcut
 
@@ -18,6 +18,11 @@ DEFAULT_CHECKPOINT_FILENAME = "OmniShotCut_ckpt.pth"
 # Frames shared between adjacent inference windows, so a cut near a window edge is
 # still seen with context on both sides. This is the value OmniShotCut's own CLI uses.
 DEFAULT_OVERLAP_FRAMES = 10
+
+# 0 disables merging: the model's own output is returned as-is. OmniShotCut does not
+# expose a confidence score or a minimum-duration filter of its own, so callers who want
+# one apply it here, after detection, via `min_shot_duration_seconds`.
+DEFAULT_MIN_SHOT_DURATION_SECONDS = 0.0
 
 # Resolution the model works at. Only used when it cannot be read off the loaded
 # checkpoint: OmniShotCut rescales whatever it is given, so a stale default here costs
@@ -96,6 +101,44 @@ def load_detection_model(
     return _load_detection_model_cached(checkpoint, checkpoint_filename)
 
 
+def _merge_short_shots(shots: list[Shot], min_duration_seconds: float) -> list[Shot]:
+    """Merge every shot shorter than `min_duration_seconds` into a neighboring shot.
+
+    A short shot is absorbed into the previous shot by extending the previous shot's end
+    to cover it, so the surviving shot keeps the transition label it was already opened
+    with — the discarded shot's own label is what made it noise in the first place. The
+    video's opening shot has no previous shot, so if it is itself too short it is instead
+    absorbed forward into the shot after it, which keeps the fixed New_Start/General
+    labels of the very first frame.
+
+    Repeats until no shot is left under the threshold (merging can chain: merging two
+    shots can leave the result still short next to another short one) or only one shot
+    remains, whichever comes first.
+    """
+    if min_duration_seconds <= 0:
+        return shots
+
+    merged = list(shots)
+    while len(merged) > 1:
+        short_index = next(
+            (i for i, shot in enumerate(merged) if shot.duration_seconds < min_duration_seconds),
+            None,
+        )
+        if short_index is None:
+            break
+
+        keep_index = 0 if short_index == 0 else short_index - 1
+        absorbed_index = 1 if short_index == 0 else short_index
+        absorbed = merged[absorbed_index]
+
+        merged[keep_index] = replace(
+            merged[keep_index], end_frame=absorbed.end_frame, end_seconds=absorbed.end_seconds
+        )
+        del merged[absorbed_index]
+
+    return [replace(shot, index=index) for index, shot in enumerate(merged)]
+
+
 def _read_process_resolution(model) -> tuple[int, int]:
     """Read the resolution the model runs at, falling back to its published default."""
     model_args = getattr(model, "_model_args", None)
@@ -110,6 +153,7 @@ def detect_shots(
     video_path: str,
     *,
     hard_cuts_only: bool = False,
+    min_shot_duration_seconds: float = DEFAULT_MIN_SHOT_DURATION_SECONDS,
     overlap_frames: int = DEFAULT_OVERLAP_FRAMES,
     checkpoint: str = DEFAULT_CHECKPOINT_REPO,
     checkpoint_filename: str = DEFAULT_CHECKPOINT_FILENAME,
@@ -121,6 +165,11 @@ def detect_shots(
     timecode. Setting `hard_cuts_only` keeps just the shots that begin on a plain cut,
     dropping those that fade or dissolve in — the result then no longer covers the whole
     video, so use it only when gradual transitions are noise for your purpose.
+
+    `min_shot_duration_seconds` merges away shots shorter than that into a neighbor
+    before `hard_cuts_only` is applied, cleaning up the spurious sub-second shots the
+    model sometimes emits at its internal window-stitching seams. The merged result
+    still tiles the whole video.
     """
     if not os.path.isfile(video_path):
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -153,6 +202,8 @@ def detect_shots(
             zip(frame_ranges, transition_types, boundary_types)
         )
     ]
+
+    shots = _merge_short_shots(shots, min_shot_duration_seconds)
 
     if hard_cuts_only:
         shots = [shot for shot in shots if not shot.begins_with_gradual_transition]
