@@ -9,9 +9,9 @@ ffmpeg-python
 omnishotcut @ git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut.git
 # --- end shot_detection module ---
 
-# --- pyscenedetect_shot_detection module ---
-# Remove this block together with backend/pyscenedetect_shot_detection/ if the module is
+# --- scenedetect_shot_detection module ---
+# Remove this block together with backend/scenedetect_shot_detection/ if the module is
 # dropped. Pure CPU, and it pulls opencv-python in itself, so it needs neither a GPU nor
 # ffmpeg. Pinned below 0.8 because PySceneDetect's API is still declared unstable.
 scenedetect<0.8
-# --- end pyscenedetect_shot_detection module ---
+# --- end scenedetect_shot_detection module ---
