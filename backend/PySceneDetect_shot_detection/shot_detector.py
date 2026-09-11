@@ -4,7 +4,7 @@ Wraps PySceneDetect (https://github.com/Breakthrough/PySceneDetect), which finds
 cuts by thresholding the frame-to-frame change in hue, saturation and luma. It runs on
 the CPU through OpenCV, so it needs no GPU, no model weights and no ffmpeg binary.
 
-This package is deliberately standalone: it shares no code with `backend/shot_detection`,
+This package is deliberately standalone: it shares no code with `backend/Omni_shot_detection`,
 the OmniShotCut-based detector that does the same job, so that either of the two can be
 deleted without touching the other.
 """
