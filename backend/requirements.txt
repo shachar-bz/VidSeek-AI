@@ -1,5 +1,5 @@
-# --- shot_detection module ---
-# Remove this block together with backend/shot_detection/ if the module is dropped.
+# --- Omni_shot_detection module ---
+# Remove this block together with backend/Omni_shot_detection/ if the module is dropped.
 # torch must come from the CUDA index, not PyPI, whose Windows wheels are CPU-only:
 #   pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
 # OmniShotCut hardcodes .to("cuda") and shells out to ffmpeg, so a CUDA GPU and the
@@ -7,4 +7,11 @@
 torch>=2.0
 ffmpeg-python
 omnishotcut @ git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut.git
-# --- end shot_detection module ---
+# --- end Omni_shot_detection module ---
+
+# --- PySceneDetect_shot_detection module ---
+# Remove this block together with backend/PySceneDetect_shot_detection/ if the module is
+# dropped. Pure CPU, and it pulls opencv-python in itself, so it needs neither a GPU nor
+# ffmpeg. Pinned below 0.8 because PySceneDetect's API is still declared unstable.
+scenedetect<0.8
+# --- end PySceneDetect_shot_detection module ---
