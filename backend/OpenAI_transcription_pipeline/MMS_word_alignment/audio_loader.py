@@ -4,8 +4,8 @@ The aligner works on 16 kHz mono float32 samples, and ffmpeg can produce those f
 video file directly, so alignment never needs an intermediate audio file on disk.
 
 This package is deliberately standalone and shares no code with
-`backend/OpenAI_transcription`, which extracts audio for its own purposes, so that either
-of the two can be deleted without touching the other.
+`backend/OpenAI_transcription_pipeline/OpenAI_transcription`, which extracts audio for its own
+purposes, so that either of the two can be deleted without touching the other.
 
 Requires the ffmpeg binary on PATH.
 """
