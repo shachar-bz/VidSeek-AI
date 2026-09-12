@@ -12,10 +12,10 @@ requests the transcript took.
 import logging
 from dataclasses import replace
 
-from MMS_word_alignment import SAMPLE_RATE_HZ, align_samples, load_samples, normalize_words
-from OpenAI_transcription import TranscriptChunk, TranscriptionResult, TranscriptWord
-from OpenAI_transcription import transcribe_video
-from OpenAI_transcription.transcriber import DEFAULT_LANGUAGES, DEFAULT_MAX_RETRIES
+from ..MMS_word_alignment import SAMPLE_RATE_HZ, align_samples, load_samples, normalize_words
+from ..OpenAI_transcription import TranscriptChunk, TranscriptionResult, TranscriptWord
+from ..OpenAI_transcription import transcribe_video
+from ..OpenAI_transcription.transcriber import DEFAULT_LANGUAGES, DEFAULT_MAX_RETRIES
 
 # Word alignment holds the whole span in memory at once, so it wants shorter chunks than
 # transcription does: transcription alone is happy with 45 minutes a request. This is a
