@@ -8,8 +8,14 @@ VidSeek-AI/
 │   │   ├── __init__.py                     # Public interface of the shot detection module.
 │   │   ├── shot_detector.py                # Detects each shot's frame range and timecode using OmniShotCut.
 │   │   └── video_decoder.py                # Decodes a video into RGB frames via ffmpeg and reads its frame rate.
-│   └── PySceneDetect_shot_detection/       # Shot boundary detection over a video file, without a GPU.
-│       ├── __init__.py                     # Public interface of the PySceneDetect shot detection module.
-│       └── shot_detector.py                # Detects each shot's frame range and timecode using PySceneDetect.
+│   ├── PySceneDetect_shot_detection/       # Shot boundary detection over a video file, without a GPU.
+│   │   ├── __init__.py                     # Public interface of the PySceneDetect shot detection module.
+│   │   └── shot_detector.py                # Detects each shot's frame range and timecode using PySceneDetect.
+│   └── OpenAI_transcription/               # Speech transcription over a video file.
+│       ├── __init__.py                     # Public interface of the OpenAI transcription module.
+│       ├── audio_extractor.py              # Extracts, probes and cuts a video's audio as 16 kHz mono MP3 via ffmpeg.
+│       ├── chunk_planner.py                # Plans split points in silence for audio too long for one request.
+│       ├── transcriber.py                  # Transcribes audio through OpenAI's gpt-transcribe model.
+│       └── transcript.py                   # Transcript data model shared by the transcription module.
 └── frontend/                               # Frontend application.
 ```

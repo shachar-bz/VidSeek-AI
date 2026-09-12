@@ -15,3 +15,14 @@ omnishotcut @ git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut.git
 # ffmpeg. Pinned below 0.8 because PySceneDetect's API is still declared unstable.
 scenedetect<0.8
 # --- end PySceneDetect_shot_detection module ---
+
+# --- OpenAI_transcription module ---
+# Remove this block together with backend/OpenAI_transcription/ if the module is dropped.
+# Speech transcription through OpenAI's hosted gpt-transcribe model: no GPU and no model
+# weights, but it needs the ffmpeg binary on PATH to pull audio out of a video, and
+# OPENAI_API_KEY_DUDU in backend/.env. ffmpeg-python is already required by
+# Omni_shot_detection and is listed again here so this block stands on its own.
+openai>=2.0
+python-dotenv
+ffmpeg-python
+# --- end OpenAI_transcription module ---
