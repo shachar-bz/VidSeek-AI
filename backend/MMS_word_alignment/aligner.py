@@ -14,6 +14,7 @@ Requires the ffmpeg binary on PATH.
 """
 
 import functools
+import logging
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -26,6 +27,8 @@ from .text_normalizer import NormalizedWord, normalize_text, normalize_words
 # The model emits one probability distribution per frame rather than per sample, so a
 # frame index is converted to a time by scaling it by how many samples it stands for.
 ALIGNMENT_BUNDLE = torchaudio.pipelines.MMS_FA
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -145,8 +148,24 @@ def align_samples(
         raise ValueError("Nothing in this transcript can be aligned: no romanizable words.")
 
     waveform = torch.from_numpy(samples).unsqueeze(0).to(device)
-    with torch.inference_mode():
-        emission, _ = model(waveform)
+    try:
+        with torch.inference_mode():
+            emission, _ = model(waveform)
+    except torch.cuda.OutOfMemoryError:
+        # A long span can exceed a small card, and alignment is a batch job, so falling
+        # back to system memory is better than failing. It is much slower, which is worth
+        # a warning rather than passing silently.
+        if device == "cpu":
+            raise
+        logger.warning(
+            "Aligning %.1fs of audio ran the GPU out of memory; retrying on the CPU.",
+            duration_seconds(samples),
+        )
+        torch.cuda.empty_cache()
+        model, tokenizer, aligner = _load_aligner("cpu")
+        waveform = torch.from_numpy(samples).unsqueeze(0)
+        with torch.inference_mode():
+            emission, _ = model(waveform)
 
     token_spans = aligner(emission[0], tokenizer(pieces))
 

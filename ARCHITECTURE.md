@@ -17,10 +17,13 @@ VidSeek-AI/
 │   │   ├── chunk_planner.py                # Plans split points in silence for audio too long for one request.
 │   │   ├── transcriber.py                  # Transcribes audio through OpenAI's gpt-transcribe model.
 │   │   └── transcript.py                   # Transcript data model shared by the transcription module.
-│   └── MMS_word_alignment/                 # Word-level timestamps for a transcript, aligned locally.
-│       ├── __init__.py                     # Public interface of the MMS word alignment module.
-│       ├── aligner.py                      # Times each word against the audio using torchaudio's MMS forced aligner.
-│       ├── audio_loader.py                 # Decodes a media file to 16 kHz mono float samples via ffmpeg.
-│       └── text_normalizer.py              # Romanizes mixed Hebrew/English text and spells out digits for the aligner.
+│   ├── MMS_word_alignment/                 # Word-level timestamps for a transcript, aligned locally.
+│   │   ├── __init__.py                     # Public interface of the MMS word alignment module.
+│   │   ├── aligner.py                      # Times each word against the audio using torchaudio's MMS forced aligner.
+│   │   ├── audio_loader.py                 # Decodes a media file to 16 kHz mono float samples via ffmpeg.
+│   │   └── text_normalizer.py              # Romanizes mixed Hebrew/English text and spells out digits for the aligner.
+│   └── word_timed_transcription/           # Transcription and word alignment run together as one pipeline.
+│       ├── __init__.py                     # Public interface of the word-timed transcription pipeline.
+│       └── transcription_aligner.py        # Transcribes a video and fills each chunk's words in by alignment.
 └── frontend/                               # Frontend application.
 ```
