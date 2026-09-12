@@ -26,3 +26,17 @@ openai>=2.0
 python-dotenv
 ffmpeg-python
 # --- end OpenAI_transcription module ---
+
+# --- MMS_word_alignment module ---
+# Remove this block together with backend/MMS_word_alignment/ if the module is dropped.
+# Forced alignment runs locally on torchaudio's MMS_FA pipeline, which downloads a 1.2 GB
+# checkpoint to the torch hub cache on first use and runs on the GPU when there is one.
+# torchaudio must match the installed torch and come from the same CUDA index:
+#   pip install --index-url https://download.pytorch.org/whl/cu124 torchaudio==2.6.0
+# uroman romanizes Hebrew into the aligner's Latin vocabulary, and num2words spells digits
+# out in Hebrew and English. ffmpeg-python decodes the audio and needs ffmpeg on PATH.
+torchaudio>=2.1
+uroman
+num2words
+ffmpeg-python
+# --- end MMS_word_alignment module ---
