@@ -1,0 +1,4 @@
+# Development-only verification dependencies for the backend API and pipeline.
+httpx>=0.27
+pytest>=8.0
+
