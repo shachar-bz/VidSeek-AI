@@ -3,7 +3,6 @@ import type { DiscoveryResult, MediaCandidate, MediaKind } from "./types";
 const MEDIA_EXTENSIONS = /\.(mp4|m4v|mov|webm|mkv|avi)(?:$|[?#])/i;
 const HLS = /\.m3u8(?:$|[?#])/i;
 const DASH = /\.mpd(?:$|[?#])/i;
-const CAPTION = /\.(vtt|srt|ttml)(?:$|[?#])/i;
 
 export function classifyMediaUrl(url: string, mimeType = ""): MediaKind | null {
   const mime = mimeType.toLowerCase();
@@ -24,7 +23,8 @@ export function originPatterns(discovery: DiscoveryResult): string[] {
     try {
       const parsed = new URL(value);
       if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        patterns.add(`${parsed.origin}/*`);
+        // Match patterns have no port component; including one is rejected outright.
+        patterns.add(`${parsed.protocol}//${parsed.hostname}/*`);
       }
     } catch {
       // DOMs occasionally contain relative or malformed metadata URLs.

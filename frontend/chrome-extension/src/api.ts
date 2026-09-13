@@ -1,6 +1,6 @@
 import type { BrowserContext, DiscoveryResult, MediaCandidate, VideoJob } from "./types";
 
-export const COMPANION_URL = "http://127.0.0.1:8765";
+const COMPANION_URL = "http://127.0.0.1:8765";
 
 async function companionFetch<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
@@ -9,9 +9,26 @@ async function companionFetch<T>(path: string, init: RequestInit = {}, token?: s
   const response = await fetch(`${COMPANION_URL}${path}`, { ...init, headers });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(String(payload.detail || response.statusText));
+    throw new Error(describeDetail(payload.detail) || response.statusText);
   }
   return (await response.json()) as T;
+}
+
+/** The companion returns a plain string for policy errors and a list for 422s. */
+function describeDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const entry = item as { location?: unknown[]; message?: string };
+        const field = Array.isArray(entry.location) ? entry.location.join(".") : "";
+        return field ? `${field}: ${entry.message ?? ""}` : String(entry.message ?? "");
+      })
+      .filter(Boolean)
+      .join("; ");
+  }
+  return "";
 }
 
 export async function createSession(): Promise<string> {
