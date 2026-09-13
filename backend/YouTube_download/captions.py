@@ -1,0 +1,182 @@
+"""Reads YouTube's own caption track for a video, so that nothing has to be transcribed.
+
+Most videos already carry captions — written by the uploader, or produced by YouTube's own
+speech recognition — and reading them costs no API call, no model and no minutes of audio
+processing. That makes captions the first thing to try, and transcribing the audio the
+fallback for the videos that have none.
+
+A hand-written track wins over an automatic one for the same language: the automatic ones
+mishear names and come with no punctuation. Returning None means the video has no captions
+in any of the requested languages, which is the pipeline's signal to transcribe instead.
+"""
+
+import logging
+import re
+from pathlib import Path
+
+from yt_dlp import YoutubeDL
+
+from .downloader import build_download_options
+from .transcript import CaptionSegment
+
+SUBTITLE_FORMAT = "vtt"
+
+CUE_TIMING_SEPARATOR = "-->"
+
+# `<00:00:04.120>` word stamps and `<c>` styling, which YouTube's automatic tracks sprinkle
+# through the text and which nothing downstream wants to read.
+CUE_TAG_PATTERN = re.compile(r"<[^>]*>")
+
+# WebVTT separates one cue from the next with a blank line.
+CUE_SEPARATOR_PATTERN = re.compile(r"\n\s*\n")
+
+logger = logging.getLogger(__name__)
+
+
+def _match_language(tracks: dict, language: str) -> str | None:
+    """Find `language` among the tracks on offer, tolerating a regional tag.
+
+    Asking for `en` should still find a video whose only English captions are tagged
+    `en-US`, and asking for `he` should find `he-IL`.
+    """
+    if language in tracks:
+        return language
+
+    prefix = f"{language}-"
+    return next((code for code in sorted(tracks) if code.startswith(prefix)), None)
+
+
+def _select_track(info: dict, languages: tuple[str, ...]) -> tuple[str, bool] | None:
+    """Choose the caption track to read, as `(language code, is automatic)`.
+
+    Every hand-written track is considered before any automatic one, so a video captioned
+    by its uploader in the second-choice language is still preferred over YouTube's
+    transcription of the first.
+    """
+    manual = info.get("subtitles") or {}
+    automatic = info.get("automatic_captions") or {}
+
+    for tracks, is_automatic in ((manual, False), (automatic, True)):
+        for language in languages:
+            code = _match_language(tracks, language)
+            if code:
+                return code, is_automatic
+
+    return None
+
+
+def _parse_timestamp(value: str) -> float:
+    """Seconds from a WebVTT `HH:MM:SS.mmm` or `MM:SS.mmm` stamp."""
+    parts = value.strip().split(":")
+    seconds = float(parts[-1])
+    minutes = int(parts[-2]) if len(parts) > 1 else 0
+    hours = int(parts[-3]) if len(parts) > 2 else 0
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def parse_vtt(vtt_text: str) -> list[CaptionSegment]:
+    """Turn a WebVTT file into timed segments, dropping headers, styling and repeats.
+
+    Automatic tracks scroll: each cue repeats the lines of the one before it with a new
+    line added underneath, so a line is kept only the first time it is seen. The cost is
+    that a line genuinely said twice in a row collapses into one, which is a far smaller
+    problem than a transcript with every line doubled.
+    """
+    segments: list[CaptionSegment] = []
+    previous_line = None
+
+    for block in CUE_SEPARATOR_PATTERN.split(vtt_text.replace("\r\n", "\n")):
+        lines = block.splitlines()
+        timing_index = next(
+            (index for index, line in enumerate(lines) if CUE_TIMING_SEPARATOR in line),
+            None,
+        )
+        # A block with no timing line is the WEBVTT header, a NOTE or a style block.
+        if timing_index is None:
+            continue
+
+        start_raw, _, end_raw = lines[timing_index].partition(CUE_TIMING_SEPARATOR)
+        # Cue settings such as `align:start position:0%` ride along after the end stamp.
+        end_stamp = end_raw.split()
+        if not end_stamp:
+            continue
+
+        # Only what follows the timing line is text; a line before it is the cue's optional
+        # identifier, which is not part of what anyone said.
+        texts = []
+        for line in lines[timing_index + 1 :]:
+            cleaned = CUE_TAG_PATTERN.sub("", line).strip()
+            if not cleaned or cleaned == previous_line:
+                continue
+            texts.append(cleaned)
+            previous_line = cleaned
+
+        if not texts:
+            continue
+
+        segments.append(
+            CaptionSegment(
+                text=" ".join(texts),
+                start_seconds=_parse_timestamp(start_raw),
+                end_seconds=_parse_timestamp(end_stamp[0]),
+            )
+        )
+
+    return segments
+
+
+def fetch_captions(
+    url: str,
+    output_dir: str | Path,
+    *,
+    languages: tuple[str, ...],
+) -> list[CaptionSegment] | None:
+    """Read the best caption track YouTube has for `url` in one of `languages`.
+
+    `languages` is in preference order. The raw `.vtt` is left in `output_dir` beside the
+    video: it is the unedited original, and keeping it means a parsing change can be
+    replayed against it without going back to YouTube.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    base_options = build_download_options(output_dir) | {"skip_download": True}
+    with YoutubeDL(base_options) as reader:
+        info = reader.extract_info(url, download=False)
+
+    selection = _select_track(info, languages)
+    if selection is None:
+        logger.info("%s has no captions in any of: %s", url, ", ".join(languages))
+        return None
+
+    language_code, is_automatic = selection
+    with YoutubeDL(
+        base_options
+        | {
+            "writesubtitles": not is_automatic,
+            "writeautomaticsub": is_automatic,
+            "subtitleslangs": [language_code],
+            "subtitlesformat": SUBTITLE_FORMAT,
+        }
+    ) as downloader:
+        downloader.extract_info(url, download=True)
+
+    captions_path = output_dir / f"{info['id']}.{language_code}.{SUBTITLE_FORMAT}"
+    if not captions_path.is_file():
+        logger.warning(
+            "yt-dlp listed %s captions for %s but wrote no file to %s",
+            language_code,
+            url,
+            captions_path,
+        )
+        return None
+
+    segments = parse_vtt(captions_path.read_text(encoding="utf-8"))
+    logger.info(
+        "Read %d %s caption segments for %s (%s)",
+        len(segments),
+        language_code,
+        url,
+        "automatic" if is_automatic else "hand-written",
+    )
+    return segments or None
