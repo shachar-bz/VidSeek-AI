@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "VidSeek Authenticated Video Download",
+  "description": "Save the non-DRM video open in the active tab and create its transcript.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "120",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Download with VidSeek"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "activeTab",
+    "alarms",
+    "debugger",
+    "downloads",
+    "scripting",
+    "storage"
+  ],
+  "optional_permissions": ["cookies"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"]
+}
+

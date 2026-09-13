@@ -4,7 +4,10 @@ AGENT_LESSONS.md
 \.venv
 __pycache__/
 *.pyc
+.pytest_cache/
 .env
 \docs
 .claude/worktrees/
+frontend/chrome-extension/node_modules/
+frontend/chrome-extension/dist/
 backend/YouTube_download/downloads/

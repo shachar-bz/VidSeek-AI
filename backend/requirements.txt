@@ -64,3 +64,17 @@ yt-dlp
 requests
 python-dotenv
 # --- end YouTube_download module ---
+
+# --- Web_video_download local companion ---
+# Remove this block together with backend/Web_video_download/ and backend/app.py if the
+# authenticated Chrome download feature is dropped. FastAPI is bound to loopback and
+# yt-dlp/ffmpeg assemble direct, HLS and DASH recordings. Firecrawl uses the existing
+# requests dependency and needs FIRECRAWL_API_KEY. Transcription falls back to
+# backend/ElevenLabs_transcription (already a dependency above) and needs
+# ELEVENLABS_API_KEY.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+yt-dlp
+python-dotenv
+requests
+# --- end Web_video_download local companion ---

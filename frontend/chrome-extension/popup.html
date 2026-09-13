@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VidSeek</title>
+    <link rel="stylesheet" href="/src/popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>VidSeek</h1>
+      <p id="status">Inspect the active tab to find its video.</p>
+      <progress id="progress" max="1" value="0"></progress>
+      <div id="details"></div>
+      <button id="inspect">Inspect video</button>
+      <button id="download" hidden>Grant access and download</button>
+      <button id="capture" hidden>Capture difficult player</button>
+      <button id="stop-capture" hidden>Stop capture and retry</button>
+      <button id="cancel" class="secondary" hidden>Cancel</button>
+    </main>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>
+
