@@ -51,3 +51,16 @@ uroman
 num2words
 ffmpeg-python
 # --- end MMS_word_alignment module ---
+
+# --- YouTube_download module ---
+# Remove this block together with backend/YouTube_download/ if the module is dropped.
+# yt-dlp downloads the video and reads its native captions, and needs the ffmpeg binary
+# on PATH (already required by other modules) to mux separate video/audio streams into
+# one file. The comments call is one plain HTTP request to the YouTube Data API v3, so
+# it uses requests rather than the much larger google-api-python-client. Needs
+# YOUTUBE_API_KEY in backend/.env; falls back to backend/ElevenLabs_transcription
+# (already a dependency above) when a video has no captions.
+yt-dlp
+requests
+python-dotenv
+# --- end YouTube_download module ---

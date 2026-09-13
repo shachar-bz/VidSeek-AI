@@ -15,21 +15,29 @@ VidSeek-AI/
 │   ├── PySceneDetect_shot_detection/       # Shot boundary detection over a video file, without a GPU.
 │   │   ├── __init__.py                     # Public interface of the PySceneDetect shot detection module.
 │   │   └── shot_detector.py                # Detects each shot's frame range and timecode using PySceneDetect.
-│   └── OpenAI_transcription_pipeline/       # OpenAI transcription plus local word alignment, grouped together.
-│       ├── __init__.py                     # Groups the OpenAI transcription, alignment and pipeline modules.
-│       ├── OpenAI_transcription/           # Speech transcription over a video file.
-│       │   ├── __init__.py                 # Public interface of the OpenAI transcription module.
-│       │   ├── audio_extractor.py          # Extracts, probes and cuts a video's audio as 16 kHz mono MP3 via ffmpeg.
-│       │   ├── chunk_planner.py            # Plans split points in silence for audio too long for one request.
-│       │   ├── transcriber.py              # Transcribes audio through OpenAI's gpt-transcribe model.
-│       │   └── transcript.py               # Transcript data model shared by the transcription module.
-│       ├── MMS_word_alignment/             # Word-level timestamps for a transcript, aligned locally.
-│       │   ├── __init__.py                 # Public interface of the MMS word alignment module.
-│       │   ├── aligner.py                  # Times each word against the audio using torchaudio's MMS forced aligner.
-│       │   ├── audio_loader.py             # Decodes a media file to 16 kHz mono float samples via ffmpeg.
-│       │   └── text_normalizer.py          # Romanizes mixed Hebrew/English text and spells out digits for the aligner.
-│       └── word_timed_transcription/       # Transcription and word alignment run together as one pipeline.
-│           ├── __init__.py                 # Public interface of the word-timed transcription pipeline.
-│           └── transcription_aligner.py    # Transcribes a video and fills each chunk's words in by alignment.
+│   ├── OpenAI_transcription_pipeline/       # OpenAI transcription plus local word alignment, grouped together.
+│   │   ├── __init__.py                     # Groups the OpenAI transcription, alignment and pipeline modules.
+│   │   ├── OpenAI_transcription/           # Speech transcription over a video file.
+│   │   │   ├── __init__.py                 # Public interface of the OpenAI transcription module.
+│   │   │   ├── audio_extractor.py          # Extracts, probes and cuts a video's audio as 16 kHz mono MP3 via ffmpeg.
+│   │   │   ├── chunk_planner.py            # Plans split points in silence for audio too long for one request.
+│   │   │   ├── transcriber.py              # Transcribes audio through OpenAI's gpt-transcribe model.
+│   │   │   └── transcript.py               # Transcript data model shared by the transcription module.
+│   │   ├── MMS_word_alignment/             # Word-level timestamps for a transcript, aligned locally.
+│   │   │   ├── __init__.py                 # Public interface of the MMS word alignment module.
+│   │   │   ├── aligner.py                  # Times each word against the audio using torchaudio's MMS forced aligner.
+│   │   │   ├── audio_loader.py             # Decodes a media file to 16 kHz mono float samples via ffmpeg.
+│   │   │   └── text_normalizer.py          # Romanizes mixed Hebrew/English text and spells out digits for the aligner.
+│   │   └── word_timed_transcription/       # Transcription and word alignment run together as one pipeline.
+│   │       ├── __init__.py                 # Public interface of the word-timed transcription pipeline.
+│   │       └── transcription_aligner.py    # Transcribes a video and fills each chunk's words in by alignment.
+│   └── YouTube_download/                   # Downloads a YouTube video, its transcript and its top comments.
+│       ├── __init__.py                     # Public interface of the YouTube download module.
+│       ├── downloader.py                   # Downloads a YouTube video locally via yt-dlp.
+│       ├── captions.py                     # Reads YouTube's own caption track via yt-dlp and parses it into timed segments.
+│       ├── comments.py                     # Fetches a video's top comments from the YouTube Data API, ranked by likes.
+│       ├── transcript.py                   # Transcript data model: caption segments or a wrapped ElevenLabs result.
+│       ├── pipeline.py                     # Downloads a video, its transcript and its top comments, falling back to ElevenLabs.
+│       └── downloads/                      # Local output folder for downloaded videos, transcripts and comments (gitignored).
 └── frontend/                               # Frontend application.
 ```
