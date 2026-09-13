@@ -25,7 +25,13 @@ when captions or a published transcript are unavailable.
    ```
 
 The service intentionally refuses non-loopback deployment assumptions, YouTube, private
-network targets, live streams, and DRM-protected media. Firecrawl receives only the public
-page URL; Chrome cookies and captured request headers are kept on the machine and discarded
-after the job.
+network targets, live streams, and DRM-protected media. Firecrawl receives the page URL
+with its query string and fragment removed, so this session's signed parameters stay local;
+Chrome cookies and captured request headers are kept on the machine and discarded after the
+job.
+
+The private-network check resolves a hostname and rejects it unless every address is
+globally routable. It does not cover redirects already followed by yt-dlp, DNS rebinding,
+or HLS/DASH fragments fetched by FFmpeg. See `OPEN_TASKS.md` in the repository root for why
+that is accepted here and what closing it would take.
 

@@ -2,6 +2,7 @@
 
 ```
 VidSeek-AI/
+├── OPEN_TASKS.md                           # Known gaps in the Chrome download companion and what closing each would take.
 ├── pytest.ini                              # Backend test discovery and import path.
 ├── backend/                                # Python backend.
 │   ├── app.py                              # FastAPI entrypoint for the loopback Chrome companion.

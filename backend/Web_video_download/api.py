@@ -65,11 +65,15 @@ def create_app(
         return JSONResponse(status_code=422, content={"detail": details})
 
     def authorize(
+        request: Request,
         authorization: str | None = Header(default=None),
         origin: str | None = Header(default=None),
     ) -> None:
         token = authorization.removeprefix("Bearer ") if authorization else ""
-        if not registry.verify(token, origin):
+        # Reads may arrive without an Origin header; anything that starts, retries or
+        # cancels work may not. The loopback middleware still gates every request.
+        require_origin = request.method not in {"GET", "HEAD"}
+        if not registry.verify(token, origin, require_origin=require_origin):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
     @app.get("/health")

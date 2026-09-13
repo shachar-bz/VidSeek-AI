@@ -63,11 +63,24 @@ class SessionRegistry:
             self._tokens[token] = (origin or "", time.monotonic() + self._ttl_seconds)
         return token
 
-    def verify(self, token: str, origin: str | None) -> bool:
+    def verify(self, token: str, origin: str | None, *, require_origin: bool = True) -> bool:
+        """Check a bearer token, and its origin whenever one is available.
+
+        Chrome does not attach `Origin` to every request an extension makes, and a
+        service worker polling job status over a host permission is one of the cases
+        where it may be absent. An origin that is present must always match the one the
+        token was issued to; `require_origin` is what decides whether a missing origin
+        is fatal, so a read can proceed while anything that changes state cannot.
+        """
         with self._lock:
             self._prune_locked()
             record = self._tokens.get(token)
-            if not record or record[0] != origin:
+            if not record:
+                return False
+            if origin is None:
+                if require_origin:
+                    return False
+            elif record[0] != origin:
                 return False
             self._tokens[token] = (record[0], time.monotonic() + self._ttl_seconds)
             return True

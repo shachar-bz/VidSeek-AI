@@ -38,3 +38,40 @@ def test_job_endpoint_requires_token_bound_to_origin(tmp_path: Path) -> None:
         )
     assert response.status_code == 404
     assert wrong_origin.status_code == 401
+
+
+def test_status_polling_works_without_an_origin_header(tmp_path: Path) -> None:
+    """Chrome may omit Origin on a service-worker GET; polling must not 401 for it."""
+    registry = SessionRegistry({"allowed"})
+    app = create_app(session_registry=registry, job_manager=JobManager(tmp_path))
+    token = registry.create("chrome-extension://allowed")
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/video-jobs/unknown", headers={"Authorization": f"Bearer {token}"}
+        )
+    assert response.status_code == 404
+
+
+def test_an_origin_that_is_sent_must_still_match(tmp_path: Path) -> None:
+    registry = SessionRegistry({"allowed"})
+    app = create_app(session_registry=registry, job_manager=JobManager(tmp_path))
+    token = registry.create("chrome-extension://allowed")
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/video-jobs/unknown",
+            headers={"Authorization": f"Bearer {token}", "Origin": "https://evil.example"},
+        )
+    assert response.status_code == 401
+
+
+def test_starting_work_still_requires_the_origin_header(tmp_path: Path) -> None:
+    registry = SessionRegistry({"allowed"})
+    app = create_app(session_registry=registry, job_manager=JobManager(tmp_path))
+    token = registry.create("chrome-extension://allowed")
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/video-jobs",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"page_url": "https://example.com/watch"},
+        )
+    assert response.status_code == 401
