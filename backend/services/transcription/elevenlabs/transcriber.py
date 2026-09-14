@@ -18,15 +18,15 @@ import logging
 import os
 from pathlib import Path
 
-from dotenv import dotenv_values
 from elevenlabs.client import ElevenLabs
 from elevenlabs.core.api_error import ApiError
+
+from backend.core import config
 
 from .transcript import TranscriptAudioEvent, TranscriptionResult, TranscriptWord
 
 MODEL = "scribe_v2"
 
-ENV_FILENAME = ".env"
 API_KEY_NAME = "ELEVENLABS_API_KEY"
 
 # Pinned so that re-transcribing the same video returns the same text. Without a fixed
@@ -94,11 +94,7 @@ logger = logging.getLogger(__name__)
 
 def _load_api_key() -> str:
     """Read the ElevenLabs key from `backend/.env`, falling back to the environment."""
-    env_path = Path(__file__).resolve().parent.parent / ENV_FILENAME
-    key = dotenv_values(env_path).get(API_KEY_NAME) or os.environ.get(API_KEY_NAME)
-    if not key:
-        raise RuntimeError(f"{API_KEY_NAME} is not set in {env_path} or the environment")
-    return key
+    return config.require(API_KEY_NAME)
 
 
 def build_client(timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> ElevenLabs:

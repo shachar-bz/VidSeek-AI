@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Literal
 
 # Imported for the annotation alone. A hard import would pull the ElevenLabs SDK in every
 # time this module is touched, including for the caption path that never transcribes
-# anything, and would break this module outright if ElevenLabs_transcription is ever
+# anything, and would break this module outright if the elevenlabs service is ever
 # dropped from the project.
 if TYPE_CHECKING:
-    from ..ElevenLabs_transcription import TranscriptionResult
+    from backend.services.transcription.elevenlabs import TranscriptionResult
 
 CAPTIONS_SOURCE = "youtube_captions"
 ELEVENLABS_SOURCE = "elevenlabs"

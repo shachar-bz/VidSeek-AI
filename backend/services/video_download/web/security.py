@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ipaddress
 import json
-import os
 import secrets
 import socket
 import subprocess
@@ -13,7 +12,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from dotenv import dotenv_values
+from backend.core import config
 
 from .models import BrowserContext
 
@@ -94,19 +93,13 @@ class SessionRegistry:
 
 def configured_download_root() -> Path:
     """Return the only filesystem root jobs may read from or write into."""
-    configured = _configuration_value("VIDSEEK_DOWNLOAD_ROOT")
+    configured = config.get("VIDSEEK_DOWNLOAD_ROOT")
     return Path(configured).expanduser() if configured else Path.home() / "Downloads" / "VidSeek"
-
-
-def _configuration_value(name: str) -> str | None:
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    value = os.environ.get(name) or dotenv_values(env_path).get(name)
-    return str(value) if value else None
 
 
 def configured_extension_ids() -> set[str]:
     """Read the comma-separated internal extension allowlist."""
-    raw_ids = _configuration_value("VIDSEEK_EXTENSION_IDS") or ""
+    raw_ids = config.get("VIDSEEK_EXTENSION_IDS") or ""
     return {item.strip() for item in raw_ids.split(",") if item.strip()}
 
 

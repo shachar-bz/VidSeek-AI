@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import asdict, dataclass, field
@@ -12,9 +11,10 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
-from dotenv import dotenv_values
 
-from ..ElevenLabs_transcription import transcribe_video
+from backend.core import config
+from backend.services.transcription.elevenlabs import transcribe_video
+
 from .models import CaptionCandidate
 
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
@@ -160,10 +160,7 @@ def transcript_from_subtitle_files(paths: list[Path]) -> TranscriptArtifact | No
 
 
 def _firecrawl_api_key() -> str | None:
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    return dotenv_values(env_path).get(FIRECRAWL_API_KEY_NAME) or os.environ.get(
-        FIRECRAWL_API_KEY_NAME
-    )
+    return config.get(FIRECRAWL_API_KEY_NAME)
 
 
 def _comparable_text(value: str) -> str:

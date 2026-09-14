@@ -9,16 +9,14 @@ Needs YOUTUBE_API_KEY in backend/.env.
 """
 
 import logging
-import os
 from dataclasses import dataclass
-from pathlib import Path
 
 import requests
-from dotenv import dotenv_values
+
+from backend.core import config
 
 API_URL = "https://www.googleapis.com/youtube/v3/commentThreads"
 
-ENV_FILENAME = ".env"
 API_KEY_NAME = "YOUTUBE_API_KEY"
 
 # The API's own ceiling per request; asking for more just returns this many anyway.
@@ -48,11 +46,7 @@ class CommentEntry:
 
 def _load_api_key() -> str:
     """Read the YouTube Data API key from `backend/.env`, falling back to the environment."""
-    env_path = Path(__file__).resolve().parent.parent / ENV_FILENAME
-    key = dotenv_values(env_path).get(API_KEY_NAME) or os.environ.get(API_KEY_NAME)
-    if not key:
-        raise RuntimeError(f"{API_KEY_NAME} is not set in {env_path} or the environment")
-    return key
+    return config.require(API_KEY_NAME)
 
 
 def _error_reasons(response: requests.Response) -> list[str]:

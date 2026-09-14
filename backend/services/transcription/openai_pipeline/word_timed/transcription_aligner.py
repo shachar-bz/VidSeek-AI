@@ -1,6 +1,6 @@
 """Transcribes a video and gives every word a timestamp, by running both modules in order.
 
-`OpenAI_transcription` produces the text and `MMS_word_alignment` times it. Neither module
+`transcription` produces the text and `word_alignment` times it. Neither module
 knows about the other, and this is the only place that imports both, so deleting either one
 breaks this module alone and leaves the other working.
 
@@ -12,10 +12,10 @@ requests the transcript took.
 import logging
 from dataclasses import replace
 
-from ..MMS_word_alignment import SAMPLE_RATE_HZ, align_samples, load_samples, normalize_words
-from ..OpenAI_transcription import TranscriptChunk, TranscriptionResult, TranscriptWord
-from ..OpenAI_transcription import transcribe_video
-from ..OpenAI_transcription.transcriber import DEFAULT_LANGUAGES, DEFAULT_MAX_RETRIES
+from ..transcription import TranscriptChunk, TranscriptionResult, TranscriptWord
+from ..transcription import transcribe_video
+from ..transcription.transcriber import DEFAULT_LANGUAGES, DEFAULT_MAX_RETRIES
+from ..word_alignment import SAMPLE_RATE_HZ, align_samples, load_samples, normalize_words
 
 # Word alignment holds the whole span in memory at once, so it wants shorter chunks than
 # transcription does: transcription alone is happy with 45 minutes a request. This is a

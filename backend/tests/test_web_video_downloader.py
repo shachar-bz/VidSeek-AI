@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.Web_video_download.downloader import (
+from backend.services.video_download.web.downloader import (
     SafeYoutubeDL,
     UnsupportedMediaError,
     _download_options,
@@ -16,7 +16,7 @@ from backend.Web_video_download.downloader import (
     _write_cookie_jar,
     download_video,
 )
-from backend.Web_video_download.models import BrowserContext, BrowserCookie, MediaCandidate
+from backend.services.video_download.web.models import BrowserContext, BrowserCookie, MediaCandidate
 
 
 def test_live_and_drm_media_are_rejected() -> None:
@@ -84,8 +84,8 @@ def test_download_moves_the_media_and_its_subtitles_into_the_root(tmp_path: Path
         return {"title": "Clip"}, [temp_dir / "clip.en.vtt"]
 
     with patch(
-        "backend.Web_video_download.downloader._download_one", side_effect=fake_download_one
-    ), patch("backend.Web_video_download.downloader.probe_media_file"):
+        "backend.services.video_download.web.downloader._download_one", side_effect=fake_download_one
+    ), patch("backend.services.video_download.web.downloader.probe_media_file"):
         result = download_video(
             page_url="https://example.com/watch",
             page_title="Fallback title",
@@ -112,8 +112,8 @@ def test_a_name_collision_in_the_root_does_not_overwrite(tmp_path: Path) -> None
         return {"title": "Clip"}, []
 
     with patch(
-        "backend.Web_video_download.downloader._download_one", side_effect=fake_download_one
-    ), patch("backend.Web_video_download.downloader.probe_media_file"):
+        "backend.services.video_download.web.downloader._download_one", side_effect=fake_download_one
+    ), patch("backend.services.video_download.web.downloader.probe_media_file"):
         result = download_video(
             page_url="https://example.com/watch",
             page_title="Clip",

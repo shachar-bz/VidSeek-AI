@@ -11,7 +11,8 @@ import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ..ElevenLabs_transcription import transcribe_video
+from backend.services.transcription.elevenlabs import transcribe_video
+
 from .captions import fetch_captions
 from .comments import CommentEntry, fetch_top_comments
 from .downloader import download_video

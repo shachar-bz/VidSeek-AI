@@ -14,10 +14,10 @@ Needs `OPENAI_API_KEY_DUDU` in `backend/.env`, and the ffmpeg binary on PATH.
 import logging
 import os
 import tempfile
-from pathlib import Path
 
-from dotenv import dotenv_values
 from openai import OpenAI
+
+from backend.core import config
 
 from .audio_extractor import AUDIO_SUFFIX, cut_audio, extracted_audio, read_duration_seconds
 from .chunk_planner import detect_silence_intervals, plan_chunk_spans
@@ -37,7 +37,6 @@ DEFAULT_LANGUAGES = ("he", "en")
 # failed.
 MAX_CHUNK_SECONDS = 45 * 60
 
-ENV_FILENAME = ".env"
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 
 # The SDK retries 429s and 5xx itself with exponential backoff, so the only thing left to
@@ -57,11 +56,7 @@ logger = logging.getLogger(__name__)
 
 def _load_api_key() -> str:
     """Read the OpenAI key from `backend/.env`, falling back to the environment."""
-    env_path = Path(__file__).resolve().parent.parent / ENV_FILENAME
-    key = dotenv_values(env_path).get(API_KEY_NAME) or os.environ.get(API_KEY_NAME)
-    if not key:
-        raise RuntimeError(f"{API_KEY_NAME} is not set in {env_path} or the environment")
-    return key
+    return config.require(API_KEY_NAME)
 
 
 def build_client(max_retries: int = DEFAULT_MAX_RETRIES) -> OpenAI:
