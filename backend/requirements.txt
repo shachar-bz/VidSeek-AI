@@ -20,7 +20,7 @@ scenedetect<0.8
 # Remove this block together with backend/services/transcription/elevenlabs/ if the module is
 # dropped. Speech transcription through ElevenLabs' hosted Scribe v2 model: no GPU, no
 # model weights, and no ffmpeg either, because Scribe reads the audio out of the uploaded
-# video itself. Needs ELEVENLABS_API_KEY in backend/.env.
+# video itself. Needs ELEVENLABS_API_KEY_TRANSCRIPT in backend/.env.
 elevenlabs>=2.0
 python-dotenv
 # --- end elevenlabs transcription module ---
@@ -83,7 +83,7 @@ python-dotenv
 # yt-dlp/ffmpeg assemble direct, HLS and DASH recordings. Firecrawl uses the existing
 # requests dependency and needs FIRECRAWL_API_KEY. Transcription falls back to
 # backend/services/transcription/elevenlabs (already a dependency above) and needs
-# ELEVENLABS_API_KEY.
+# ELEVENLABS_API_KEY_TRANSCRIPT.
 fastapi>=0.115
 uvicorn[standard]>=0.30
 yt-dlp

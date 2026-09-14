@@ -11,7 +11,7 @@ response can be held open, not the API's own ceiling. Scribe can deliver to a we
 instead (`webhook=True`), which needs an endpoint to receive the result; that is the path
 to take if hour-long videos ever become normal here.
 
-Needs `ELEVENLABS_API_KEY` in `backend/.env`.
+Needs `ELEVENLABS_API_KEY_TRANSCRIPT` in `backend/.env`.
 """
 
 import logging
@@ -27,7 +27,7 @@ from .transcript import TranscriptAudioEvent, TranscriptionResult, TranscriptWor
 
 MODEL = "scribe_v2"
 
-API_KEY_NAME = "ELEVENLABS_API_KEY"
+API_KEY_NAME = "ELEVENLABS_API_KEY_TRANSCRIPT"
 
 # Pinned so that re-transcribing the same video returns the same text. Without a fixed
 # seed the model samples differently each run, and then a diff between two runs cannot
