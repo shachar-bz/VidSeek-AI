@@ -220,71 +220,28 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 11. A page transcript has no timing, so it can no longer be handed on as one
+## 11. Untimed page transcripts are demoted, not used — accepted
 
-**Status:** contained, not solved. **Problem:** every stage after transcription is now
-promised a transcript of timed segments, and one source cannot supply one. A transcript
-published on a page — scraped by Firecrawl, or read out of the player's own transcript
-panel — is text somebody wrote out, with nothing recording when any of it was said. There
-is no timing to normalize, so `normalize_caption_cues` refuses it rather than spreading the
-words evenly across the video and calling the result a timestamp.
+**Status:** accepted behavior, not a bug, nothing to close. A page transcript (scraped by
+Firecrawl, or read from a player's transcript panel) has no per-word timing, and
+`normalize_caption_cues` refuses to fabricate it rather than spread words evenly and call
+the result a timestamp.
 
-What that costs: the page transcript used to win over transcription, and no longer does.
-`_transcribe_downloaded_video` sends anything without captions to ElevenLabs, which times
-every word, and only falls back to the page text when transcription produced nothing at
-all. A job that ends there finishes `partial_success` with `untimed_transcript`, so the
-text is kept and nothing downstream mistakes it for indexable. The Firecrawl call also
-moved behind transcription, so an uncaptioned video no longer pays for a scrape it cannot
-use.
+**Behavior:** ElevenLabs is the fallback whenever there is no usable timing — no
+transcript, an untimed transcript, or (on YouTube) no captions. A transcript that already
+has valid timing (Web captions, or YouTube captions, which always carry timing) is used
+without ever calling ElevenLabs. A job left with only an untimed page transcript finishes
+`partial_success`/`untimed_transcript` — the text is kept but nothing downstream treats it
+as indexable.
 
-What it loses: page transcripts are often hand-written and read better than ASR of the
-same audio, and that quality is now only reachable when transcription fails.
-
-**To close:** nothing here. Refusing untimed text is the contract working, not a
-shortcoming to fix, and the demotion stays whatever happens next. Recovering the quality it
-costs is a separate piece of work, tracked as task 12.
+**Tradeoff accepted:** page transcripts are often hand-written and better than ASR of the
+same audio, but that quality is now only reached when transcription fails outright.
+Recovering it via forced alignment was considered and rejected as not worth the added
+complexity and dependency.
 
 ---
 
-## 12. Force-align a page transcript rather than lose what it is worth
-
-**Status:** not started. This is the follow-on to task 11, which contained the problem by
-demoting page transcripts; this one is about winning back what that demotion costs.
-
-**Problem:** a page transcript is frequently the best text available for a video — written
-or corrected by a person, punctuated, with names spelled properly — and ASR of the same
-audio is frequently worse. Task 11 means that better text is now only reached when
-transcription fails outright. The only thing wrong with it is that nobody recorded when any
-of it was said.
-
-**To close:** force-align the page text against the audio, which turns the best text into
-the best-timed transcript rather than the one that gets discarded. The aligner already
-exists and needs no new integration work in principle:
-`backend/services/transcription/openai_pipeline/word_alignment` wraps torchaudio's MMS
-forced aligner and is built for exactly this — audio plus known text in, a start and end
-per word out, no recognition involved, so it can never produce a word the transcript does
-not contain. Its output feeds `normalize_words` and comes out as `TimingFidelity.WORD`
-segments, the same as ElevenLabs'.
-
-Decide before starting:
-
-- **Cost and placement.** Alignment wants a GPU and falls back to a slow CPU run. It is the
-  one heavyweight dependency the companion does not otherwise load, and the companion is
-  something a developer runs on a laptop. It may belong behind a setting, or out of the
-  companion entirely.
-- **Whether the text is verbatim.** Alignment assumes the transcript says what the audio
-  says. A tidied-up or paraphrased page transcript aligns badly and gives confidently wrong
-  timings, which is worse than none. `scrape_public_page_transcript` already checks that
-  the extracted text is contained in the page markdown, but that establishes the text was
-  published, not that it matches the speech. An alignment score threshold, rejecting a
-  result the aligner itself is unsure of, is the obvious guard.
-- **Where it sits in precedence.** If alignment is trusted, the page transcript goes back
-  in front of ElevenLabs for videos that have one. If it is only sometimes trusted, it
-  becomes a second attempt after a low-confidence transcription instead.
-
----
-
-## 13. Chapters and memories tables are not built yet
+## 12. Chapters and memories tables are not built yet
 
 **Status:** not started, deliberately deferred. `backend/storage/supabase/` holds `videos`
 and `transcript_segments` today; `chapters` and `memories` are the two tables Supabase was
