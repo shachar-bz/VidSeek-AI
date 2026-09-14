@@ -8,13 +8,22 @@ fallback for the videos that have none.
 A hand-written track wins over an automatic one for the same language: the automatic ones
 mishear names and come with no punctuation. Returning None means the video has no captions
 in any of the requested languages, which is the pipeline's signal to transcribe instead.
+
+The two kinds of track measure timing at different granularities, and this module keeps
+whichever one a track actually offers rather than flattening both to the coarser one. A
+hand-written track only ever times whole cues. An automatic track additionally stamps when
+each word inside a cue appears — `<00:00:04.120>` — and that per-word timing is preserved
+as `TimingFidelity.WORD` instead of being discarded as styling noise.
 """
 
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
+
+from backend.services.transcripts import TimingFidelity
 
 from .downloader import build_download_options
 from .transcript import CaptionSegment
@@ -24,13 +33,24 @@ SUBTITLE_FORMAT = "vtt"
 CUE_TIMING_SEPARATOR = "-->"
 
 # `<00:00:04.120>` word stamps and `<c>` styling, which YouTube's automatic tracks sprinkle
-# through the text and which nothing downstream wants to read.
+# through the text and which nothing downstream wants to read as words.
 CUE_TAG_PATTERN = re.compile(r"<[^>]*>")
+
+# Only the word stamps among those tags, captured so a cue's text can be split on them.
+WORD_TIMESTAMP_PATTERN = re.compile(r"<(\d{2}:\d{2}:\d{2}\.\d{3})>")
 
 # WebVTT separates one cue from the next with a blank line.
 CUE_SEPARATOR_PATTERN = re.compile(r"\n\s*\n")
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class FetchedCaptions:
+    """A caption track's segments, at whatever granularity it actually measured."""
+
+    segments: list[CaptionSegment]
+    timing_fidelity: TimingFidelity
 
 
 def _match_language(tracks: dict, language: str) -> str | None:
@@ -74,24 +94,19 @@ def _parse_timestamp(value: str) -> float:
     return hours * 3600 + minutes * 60 + seconds
 
 
-def parse_vtt(vtt_text: str) -> list[CaptionSegment]:
-    """Turn a WebVTT file into timed segments, dropping headers, styling and repeats.
+def _iter_cues(vtt_text: str):
+    """Yield each cue as `(start_seconds, end_seconds, text_lines)`, skipping non-cue blocks.
 
-    Automatic tracks scroll: each cue repeats the lines of the one before it with a new
-    line added underneath, so a line is kept only the first time it is seen. The cost is
-    that a line genuinely said twice in a row collapses into one, which is a far smaller
-    problem than a transcript with every line doubled.
+    A block with no timing line is the WEBVTT header, a NOTE or a style block, and is left
+    out entirely. `text_lines` is everything after the timing line; a line before it is the
+    cue's optional identifier, which is not part of what anyone said.
     """
-    segments: list[CaptionSegment] = []
-    previous_line = None
-
     for block in CUE_SEPARATOR_PATTERN.split(vtt_text.replace("\r\n", "\n")):
         lines = block.splitlines()
         timing_index = next(
             (index for index, line in enumerate(lines) if CUE_TIMING_SEPARATOR in line),
             None,
         )
-        # A block with no timing line is the WEBVTT header, a NOTE or a style block.
         if timing_index is None:
             continue
 
@@ -101,10 +116,27 @@ def parse_vtt(vtt_text: str) -> list[CaptionSegment]:
         if not end_stamp:
             continue
 
-        # Only what follows the timing line is text; a line before it is the cue's optional
-        # identifier, which is not part of what anyone said.
+        yield (
+            _parse_timestamp(start_raw),
+            _parse_timestamp(end_stamp[0]),
+            lines[timing_index + 1 :],
+        )
+
+
+def _parse_cue_lines(cues) -> list[CaptionSegment]:
+    """One segment per cue, dropping styling tags and the lines a cue only repeats.
+
+    Automatic tracks scroll: each cue repeats the lines of the one before it with a new
+    line added underneath, so a line is kept only the first time it is seen. The cost is
+    that a line genuinely said twice in a row collapses into one, which is a far smaller
+    problem than a transcript with every line doubled.
+    """
+    segments: list[CaptionSegment] = []
+    previous_line = None
+
+    for start_seconds, end_seconds, lines in cues:
         texts = []
-        for line in lines[timing_index + 1 :]:
+        for line in lines:
             cleaned = CUE_TAG_PATTERN.sub("", line).strip()
             if not cleaned or cleaned == previous_line:
                 continue
@@ -117,12 +149,73 @@ def parse_vtt(vtt_text: str) -> list[CaptionSegment]:
         segments.append(
             CaptionSegment(
                 text=" ".join(texts),
-                start_seconds=_parse_timestamp(start_raw),
-                end_seconds=_parse_timestamp(end_stamp[0]),
+                start_seconds=start_seconds,
+                end_seconds=end_seconds,
             )
         )
 
     return segments
+
+
+def _parse_word_timings(cues) -> list[CaptionSegment]:
+    """One segment per word, from the `<HH:MM:SS.mmm>` stamps automatic tracks embed in a cue.
+
+    Only a line carrying at least one stamp is new text. An automatic track also redraws
+    each earlier cue's line once more with no stamps at all, purely so the caption reads
+    smoothly on screen as it scrolls; that repeat carries no word this has not already
+    timed, so it is skipped rather than read as those words being said a second time.
+
+    A word's end is the next word's start, which is itself a measured stamp; only the very
+    last word has no next word to borrow from, so it takes the end of the cue it was last
+    seen in — the one other boundary this track measured.
+    """
+    words: list[list] = []
+    last_cue_end: float | None = None
+
+    for start_seconds, end_seconds, lines in cues:
+        added_from_this_cue = False
+        for line in lines:
+            if not WORD_TIMESTAMP_PATTERN.search(line):
+                continue
+            word_start = start_seconds
+            for index, chunk in enumerate(WORD_TIMESTAMP_PATTERN.split(line)):
+                if index % 2 == 1:
+                    word_start = _parse_timestamp(chunk)
+                    continue
+                cleaned = CUE_TAG_PATTERN.sub("", chunk).strip()
+                if cleaned:
+                    words.append([cleaned, word_start, None])
+                    added_from_this_cue = True
+        if added_from_this_cue:
+            last_cue_end = end_seconds
+
+    for index in range(len(words) - 1):
+        words[index][2] = words[index + 1][1]
+    if words:
+        words[-1][2] = max(last_cue_end if last_cue_end is not None else words[-1][1], words[-1][1])
+
+    return [
+        CaptionSegment(text=text, start_seconds=start, end_seconds=end) for text, start, end in words
+    ]
+
+
+def parse_vtt(vtt_text: str, *, is_automatic: bool = False) -> tuple[list[CaptionSegment], TimingFidelity]:
+    """Turn a WebVTT file into timed segments, at the finest granularity it actually measured.
+
+    A hand-written track only ever times whole cues, so it always comes back as
+    `TimingFidelity.CAPTION`. An automatic track additionally stamps when each word inside
+    a cue appears, and those are read as one segment per word — `TimingFidelity.WORD` — so
+    that nothing downstream has to treat a caption-derived transcript as coarser than it
+    has to be. A track flagged automatic but carrying no word stamps (some languages, or an
+    older track) falls back to cue segments rather than being read as having no captions.
+    """
+    cues = list(_iter_cues(vtt_text))
+    if is_automatic:
+        word_segments = _parse_word_timings(cues)
+        if word_segments:
+            return word_segments, TimingFidelity.WORD
+
+    return _parse_cue_lines(cues), TimingFidelity.CAPTION
 
 
 def fetch_captions(
@@ -130,7 +223,7 @@ def fetch_captions(
     output_dir: str | Path,
     *,
     languages: tuple[str, ...],
-) -> list[CaptionSegment] | None:
+) -> FetchedCaptions | None:
     """Read the best caption track YouTube has for `url` in one of `languages`.
 
     `languages` is in preference order. The raw `.vtt` is left in `output_dir` beside the
@@ -171,12 +264,18 @@ def fetch_captions(
         )
         return None
 
-    segments = parse_vtt(captions_path.read_text(encoding="utf-8"))
+    segments, timing_fidelity = parse_vtt(
+        captions_path.read_text(encoding="utf-8"), is_automatic=is_automatic
+    )
+    if not segments:
+        return None
+
     logger.info(
-        "Read %d %s caption segments for %s (%s)",
+        "Read %d %s caption segments for %s (%s, %s)",
         len(segments),
         language_code,
         url,
         "automatic" if is_automatic else "hand-written",
+        timing_fidelity.value,
     )
-    return segments or None
+    return FetchedCaptions(segments=segments, timing_fidelity=timing_fidelity)

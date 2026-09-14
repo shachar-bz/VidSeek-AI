@@ -70,6 +70,8 @@ class VideoJobResponse(BaseModel):
     progress: float = Field(ge=0.0, le=1.0)
     message: str
     acquisition_mode: str
+    # Set only while the video still sits on this machine: cleared once it is safely in
+    # R2, which is where a finished job's video lives from then on.
     video_path: str | None = None
     transcript_text_path: str | None = None
     transcript_json_path: str | None = None

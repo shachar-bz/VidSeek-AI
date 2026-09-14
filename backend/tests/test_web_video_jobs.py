@@ -149,21 +149,11 @@ def test_a_finished_job_reports_where_its_video_was_stored(tmp_path: Path) -> No
 
     assert job.status == JobStatus.COMPLETE
     assert job.video_storage_key == STORED.key
-    assert job.video_path == str(tmp_path / "video.mp4")
+    # The video lives only in R2 once the job is done; the local copy is gone.
+    assert job.video_path is None
 
 
-def test_a_job_with_no_bucket_configured_still_completes(tmp_path: Path) -> None:
-    manager = JobManager(tmp_path)
-    try:
-        job = run_to_completion(manager, tmp_path, return_value=None)
-    finally:
-        manager.shutdown()
-
-    assert job.status == JobStatus.COMPLETE
-    assert job.video_storage_key is None
-
-
-def test_an_unreachable_bucket_costs_the_job_its_durability_not_its_result(
+def test_an_unreachable_bucket_fails_the_job_rather_than_keeping_a_local_copy(
     tmp_path: Path,
 ) -> None:
     manager = JobManager(tmp_path)
@@ -172,11 +162,10 @@ def test_an_unreachable_bucket_costs_the_job_its_durability_not_its_result(
     finally:
         manager.shutdown()
 
-    # The video and its transcript are on disk either way, so the job reports what it has
-    # rather than throwing the work away because the last step failed.
-    assert job.status == JobStatus.PARTIAL_SUCCESS
+    # R2 is the video's only home, so a storage failure fails the job instead of quietly
+    # settling for the local copy the pipeline made to transcribe it.
+    assert job.status == JobStatus.FAILED
     assert job.error_code == "upload_failed"
-    assert job.video_path == str(tmp_path / "video.mp4")
     assert job.video_storage_key is None
 
 
@@ -195,9 +184,7 @@ def test_an_untimed_transcript_still_says_so_when_the_upload_worked(tmp_path: Pa
     assert job.video_storage_key == STORED.key
 
 
-def test_both_halves_failing_reports_both_rather_than_whichever_is_checked_first(
-    tmp_path: Path,
-) -> None:
+def test_an_untimed_transcript_does_not_mask_a_storage_failure(tmp_path: Path) -> None:
     manager = JobManager(tmp_path)
     try:
         job = run_to_completion(
@@ -209,12 +196,10 @@ def test_both_halves_failing_reports_both_rather_than_whichever_is_checked_first
     finally:
         manager.shutdown()
 
-    # The code names the transcript's problem, because that is what the next stage acts
-    # on; the message is the only place the user learns the video is not in the bucket.
-    assert job.error_code == UNTIMED_TRANSCRIPT_ERROR
-    assert job.message == (
-        "Video and text saved; no timing could be measured and upload to R2 can be retried"
-    )
+    # A transcript-only problem is reported as saved-with-a-caveat; a storage failure is
+    # not -- nothing is durably saved when the video never made it into the bucket.
+    assert job.status == JobStatus.FAILED
+    assert job.error_code == "upload_failed"
 
 
 def capture_records() -> tuple[list[dict], dict]:
