@@ -12,7 +12,7 @@ when captions or a published transcript are unavailable.
 
    ```dotenv
    VIDSEEK_EXTENSION_IDS=the_extension_id
-   ELEVENLABS_API_KEY=your_key
+   ELEVENLABS_API_KEY_TRANSCRIPT=your_key
    FIRECRAWL_API_KEY=your_key
    # Optional; this must match Chrome's Downloads/VidSeek directory.
    VIDSEEK_DOWNLOAD_ROOT=C:\Users\you\Downloads\VidSeek
