@@ -75,21 +75,25 @@ def _build_transcript(video_path: str, url: str, output_dir: Path, languages: tu
 
     The two sources measure timing at different granularities — caption cues one side,
     individual words the other — and normalizing here is what makes that difference stop
-    at this function.
+    at this function. Captions that come back with no usable timing are treated the same
+    as no captions at all, so a track that measured nothing never displaces the timed
+    transcript ElevenLabs would otherwise have produced.
     """
     fetched = fetch_captions(url, output_dir, languages=languages)
     if fetched is not None:
         normalize_fn = (
             normalize_words if fetched.timing_fidelity == TimingFidelity.WORD else normalize_caption_cues
         )
-        return YouTubeTranscript(
-            source=CAPTIONS_SOURCE,
-            text=" ".join(segment.text for segment in fetched.segments),
-            segments=fetched.segments,
-            normalized=normalize_fn(fetched.segments, source=CAPTIONS_SOURCE),
-        )
+        normalized = normalize_fn(fetched.segments, source=CAPTIONS_SOURCE)
+        if normalized is not None:
+            return YouTubeTranscript(
+                source=CAPTIONS_SOURCE,
+                text=" ".join(segment.text for segment in fetched.segments),
+                segments=fetched.segments,
+                normalized=normalized,
+            )
 
-    logger.info("No YouTube captions available for %s; transcribing with ElevenLabs", url)
+    logger.info("No timed YouTube captions available for %s; transcribing with ElevenLabs", url)
     result = transcribe_video(video_path)
     return YouTubeTranscript(
         source=ELEVENLABS_SOURCE,
