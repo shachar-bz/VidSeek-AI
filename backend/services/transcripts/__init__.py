@@ -11,7 +11,7 @@ a video transcribed from YouTube captions and one transcribed by ElevenLabs ente
 next stage identically.
 """
 
-from .formatting import format_timecode, render_segments
+from .formatting import SECONDS_PER_HOUR, format_timecode, render_segments
 from .normalizer import (
     MAX_SEGMENT_SECONDS,
     TARGET_SEGMENT_SECONDS,
@@ -25,6 +25,7 @@ from .transcript import NormalizedTranscript, TimingFidelity, TranscriptSegment
 __all__ = [
     "MAX_SEGMENT_SECONDS",
     "NormalizedTranscript",
+    "SECONDS_PER_HOUR",
     "TARGET_SEGMENT_SECONDS",
     "TimedText",
     "TimingFidelity",

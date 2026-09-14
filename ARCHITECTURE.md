@@ -103,9 +103,18 @@ VidSeek-AI/
 │   │           ├── transcript.py                   # Transcript data model: caption segments or a wrapped ElevenLabs result.
 │   │           ├── pipeline.py                     # Downloads a video, its transcript and its top comments, falling back to ElevenLabs.
 │   │           └── downloads/                      # Local output folder for CLI downloads (gitignored).
+│   ├── semantic_processing/                        # Pipeline stage two: a transcript divided into semantic memories by an LLM.
+│   │   ├── __init__.py                             # Public interface of the semantic processing stage.
+│   │   ├── prompt.py                               # The segmentation instruction sent to the model, as a docstring.
+│   │   ├── segment_ids.py                          # Names each transcript segment `segment_N` and renders and resolves those IDs.
+│   │   ├── boundaries.py                           # Pydantic structured-output schema of the model's response.
+│   │   ├── validation.py                           # Checks the returned boundaries partition the transcript exactly once.
+│   │   ├── memory.py                               # Memory data model, deriving its times and text from the original segments.
+│   │   └── segmenter.py                            # Runs the stage: renders, requests, validates and builds the memories.
 │   └── tests/                                      # Automated backend companion tests.
 │       ├── conftest.py                             # Keeps the developer's download root and backend/.env out of the test run.
 │       ├── test_transcript_normalization.py        # Transcript format, segment timing and transcript store tests.
+│       ├── test_memory_segmentation.py             # Segment ID rendering, boundary validation and memory construction tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
 │       ├── test_web_video_jobs.py                  # Job lifecycle tests.
