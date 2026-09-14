@@ -1,4 +1,10 @@
-"""Tests that a transcript problem never costs the user the downloaded video."""
+"""Tests what the pipeline guarantees about the transcript it produces.
+
+Two promises, and they pull against each other. A transcript problem must never cost
+the user the video that was already downloaded, and a transcript handed on as finished
+must carry the timing the next stage needs. Between them sits text with no timing,
+which is kept but never passed off as the transcript the pipeline promised.
+"""
 
 import threading
 from pathlib import Path
@@ -10,6 +16,8 @@ from yt_dlp.utils import DownloadCancelled
 from backend.services.video_download.web.downloader import DownloadedVideo
 from backend.schemas.video_jobs import CreateVideoJobRequest
 from backend.services.video_download.web.pipeline import process_downloaded_video
+from backend.services.transcription.elevenlabs import TranscriptWord
+from backend.services.transcripts import normalize_words
 from backend.services.video_download.web.transcript import TranscriptArtifact
 
 
@@ -94,3 +102,62 @@ def test_cancelling_during_transcription_writes_no_transcript(tmp_path: Path) ->
                 progress_callback=lambda *_: None,
             )
     persist.assert_not_called()
+
+
+def _timed_artifact() -> TranscriptArtifact:
+    words = [
+        TranscriptWord(
+            text=word, start_seconds=index, end_seconds=index + 1, speaker_id="s0", logprob=-0.1
+        )
+        for index, word in enumerate(["hello", "there"])
+    ]
+    return TranscriptArtifact(
+        source="elevenlabs",
+        text="hello there",
+        normalized=normalize_words(words, source="elevenlabs"),
+    )
+
+
+def test_a_page_transcript_no_longer_outranks_timed_transcription(tmp_path: Path) -> None:
+    """Untimed text cannot meet the contract, so it is not raced against transcription."""
+    with patch(
+        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
+        return_value=_timed_artifact(),
+    ), patch(
+        "backend.services.video_download.web.pipeline.scrape_public_page_transcript",
+        return_value="a published transcript with no timing whatsoever",
+    ) as scrape:
+        result = process_downloaded_video(
+            video=_video(tmp_path),
+            request=_request(),
+            cancel_event=threading.Event(),
+            progress_callback=lambda *_: None,
+        )
+
+    scrape.assert_not_called()
+    assert result.transcript_source == "elevenlabs"
+    assert result.transcript_error is None
+    assert result.transcript_text_path.read_text(encoding="utf-8") == "[00:00-00:02] hello there"
+
+
+def test_text_with_no_timing_is_saved_but_not_reported_as_a_finished_transcript(
+    tmp_path: Path,
+) -> None:
+    page_text = "a published transcript with no timing whatsoever"
+    with patch(
+        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
+        side_effect=RuntimeError("hosted API is down"),
+    ), patch(
+        "backend.services.video_download.web.pipeline.scrape_public_page_transcript",
+        return_value=page_text,
+    ):
+        result = process_downloaded_video(
+            video=_video(tmp_path),
+            request=_request(),
+            cancel_event=threading.Event(),
+            progress_callback=lambda *_: None,
+        )
+
+    assert result.transcript_source == "page_transcript"
+    assert result.transcript_error == "untimed_transcript"
+    assert result.transcript_text_path.read_text(encoding="utf-8") == page_text

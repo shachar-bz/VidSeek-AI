@@ -13,8 +13,14 @@ from urllib.parse import urlsplit, urlunsplit
 import requests
 
 from backend.core import config
+from backend.db import transcript_store
 from backend.schemas.browser import CaptionCandidate
 from backend.services.transcription.elevenlabs import transcribe_video
+from backend.services.transcripts import (
+    NormalizedTranscript,
+    normalize_caption_cues,
+    normalize_words,
+)
 
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
 FIRECRAWL_API_KEY_NAME = "FIRECRAWL_API_KEY"
@@ -32,13 +38,26 @@ class CaptionSegment:
 
 @dataclass(frozen=True)
 class TranscriptArtifact:
-    """One chosen transcript and the fidelity supplied by its source."""
+    """One chosen transcript, as its source gave it and as the pipeline passes it on.
+
+    `segments` and `details` are the source's own record, kept because only the source
+    knows what it measured. `normalized` is the single shape every later stage reads, and
+    it is None for exactly one kind of source: a page transcript, which is text somebody
+    published with no timing attached. A None here is what tells the pipeline this
+    transcript cannot be handed on as it stands.
+    """
 
     source: str
     text: str
     language: str | None = None
     segments: list[CaptionSegment] = field(default_factory=list)
     details: dict = field(default_factory=dict)
+    normalized: NormalizedTranscript | None = None
+
+    @property
+    def is_timed(self) -> bool:
+        """Whether this transcript carries the timing the next stage requires."""
+        return self.normalized is not None
 
 
 def _timestamp_seconds(value: str) -> float:
@@ -119,11 +138,25 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
         return None
     if not segments:
         return None
+    normalized = normalize_caption_cues(
+        segments, source="captions", language=candidate.language
+    )
+    # A track whose cues carry no times at all — TTML written with no `begin` attributes —
+    # parses into text that cannot be placed in the video. It is no better than a page
+    # transcript, so it is offered as one: still worth keeping as a last resort, but not
+    # something the pipeline may hand on as a timed transcript.
+    if normalized is None:
+        return TranscriptArtifact(
+            source="page_transcript",
+            text=" ".join(segment.text for segment in segments),
+            language=candidate.language,
+        )
     return TranscriptArtifact(
         source="captions",
-        text=" ".join(segment.text for segment in segments),
+        text=normalized.text,
         language=candidate.language,
         segments=segments,
+        normalized=normalized,
     )
 
 
@@ -222,31 +255,60 @@ def scrape_public_page_transcript(page_url: str, timeout_seconds: float = 65.0) 
 
 
 def transcribe_with_elevenlabs(video_path: Path) -> TranscriptArtifact:
-    """Use the existing Scribe integration and preserve its full timed result."""
+    """Use the existing Scribe integration and preserve its full timed result.
+
+    Scribe's own words, speakers and audio events stay in `details`; `normalized` holds
+    those same words gathered into readable segments. Audio events are left out of the
+    segments deliberately — `[music]` is not speech, and a search index that treats it as
+    speech reports a song as something somebody said.
+    """
     result = transcribe_video(str(video_path))
     return TranscriptArtifact(
         source="elevenlabs",
         text=result.speech_text,
         language=result.language_code,
         details=asdict(result),
+        normalized=normalize_words(
+            result.words, source="elevenlabs", language=result.language_code
+        ),
     )
 
 
 def persist_transcript(
     video_path: Path, artifact: TranscriptArtifact
 ) -> tuple[Path, Path]:
-    """Write human-readable and structured transcript artifacts beside the video."""
+    """Write the transcript beside the video, and store it for the next stage.
+
+    Three things are written, and they are for three different readers. The `.txt` is the
+    normalized `[MM:SS-MM:SS] text` transcript, which is what a person opens and what the
+    next stage consumes. The `.json` beside it adds the machine-readable segments and the
+    source's own untouched record, so a change to the normalizer can be replayed against
+    what the service actually returned. The store — keyed by the video's own id rather
+    than by a path — is where the pipeline looks the transcript up later, and is the part
+    a database will take over.
+
+    An untimed transcript is still written out, because text is better than nothing and
+    the caller may have nowhere else to get it, but it is deliberately not stored: the
+    store holds normalized transcripts, and a stage reading one must never have to ask
+    whether the timings in it are real.
+    """
     text_path = video_path.with_suffix(".transcript.txt")
     json_path = video_path.with_suffix(".transcript.json")
-    text_path.write_text(artifact.text, encoding="utf-8")
+    normalized = artifact.normalized
+    text_path.write_text(
+        normalized.formatted_text if normalized else artifact.text, encoding="utf-8"
+    )
     payload = {
         "source": artifact.source,
         "language": artifact.language,
         "text": artifact.text,
-        "segments": [asdict(segment) for segment in artifact.segments],
-        "details": artifact.details,
         "video_path": str(video_path),
+        "normalized": normalized.to_payload() if normalized else None,
+        "source_segments": [asdict(segment) for segment in artifact.segments],
+        "details": artifact.details,
     }
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    if normalized:
+        transcript_store.save(video_path.stem, normalized)
     return text_path, json_path
 
