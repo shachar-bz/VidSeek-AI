@@ -37,6 +37,18 @@ python-dotenv
 ffmpeg-python
 # --- end openai transcription module ---
 
+# --- memory segmentation module ---
+# Remove this block together with backend/semantic_processing/ if the module is dropped.
+# Divides a transcript into semantic memories through OpenAI's hosted gpt-5.6-sol: one
+# request per video, no GPU and no ffmpeg. The response schema is enforced with Structured
+# Outputs, so pydantic is a hard requirement rather than an incidental one; it already
+# arrives with FastAPI and is listed here so this block stands on its own. Needs
+# OPENAI_API_KEY_DUDU in backend/.env.
+openai>=2.0
+pydantic>=2.0
+python-dotenv
+# --- end memory segmentation module ---
+
 # --- word alignment module ---
 # Remove this block together with backend/services/transcription/openai_pipeline/word_alignment/ if
 # the module is dropped.
