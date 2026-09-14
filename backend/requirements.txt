@@ -88,3 +88,14 @@ requests
 boto3>=1.36
 python-dotenv
 # --- end cloudflare r2 storage module ---
+
+# --- supabase database module ---
+# Remove this block together with backend/storage/supabase/ if the module is dropped.
+# The official client wraps Supabase's PostgREST API over HTTP, so no Postgres driver and
+# no database port are needed. 2.0 is the floor because everything here uses the v2 API
+# shape (`create_client(...).table(...)` returning a response with `.data`). Needs
+# SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) in backend/.env, and
+# the tables from backend/storage/supabase/migrations/ applied to the project.
+supabase>=2.0
+python-dotenv
+# --- end supabase database module ---

@@ -32,6 +32,7 @@ from backend.schemas.video_jobs import (
 )
 from backend.storage.r2 import StoredVideo
 
+from .video_record import record_job_video
 from .video_upload import upload_job_video
 from .web.downloader import DownloadedVideo
 from .web.pipeline import (
@@ -43,6 +44,7 @@ from .youtube_job import run_youtube_job
 
 TRANSCRIPTION_FAILED = "transcription_failed"
 UPLOAD_FAILED = "upload_failed"
+RECORD_FAILED = "record_failed"
 
 # What a partially successful job says it kept, and what went wrong with the rest.
 SAVED_BY_TRANSCRIPT_PROBLEM = {
@@ -54,6 +56,7 @@ PROBLEM_DESCRIPTIONS = {
     UNTIMED_TRANSCRIPT_ERROR: "no timing could be measured",
     TRANSCRIPTION_FAILED: "transcription can be retried",
     UPLOAD_FAILED: "upload to R2 can be retried",
+    RECORD_FAILED: "the video is in R2 but was not recorded in Supabase",
 }
 
 logger = logging.getLogger(__name__)
@@ -71,11 +74,14 @@ def _transcript_problem(transcript_error: str | None) -> str | None:
     return TRANSCRIPTION_FAILED if transcript_error else None
 
 
-def _partial_success_message(transcript_problem: str | None, upload_failed: bool) -> str:
-    """What a job that produced something, but not everything, tells the extension."""
-    problems = [transcript_problem] if transcript_problem else []
-    if upload_failed:
-        problems.append(UPLOAD_FAILED)
+def _partial_success_message(transcript_problem: str | None, storage_problem: str | None) -> str:
+    """What a job that produced something, but not everything, tells the extension.
+
+    At most two problems can arrive here. The transcript's half and the storage half fail
+    independently, but the storage half fails in only one way per job: recording a video
+    is attempted only once its upload has returned an object key.
+    """
+    problems = [problem for problem in (transcript_problem, storage_problem) if problem]
     described = " and ".join(PROBLEM_DESCRIPTIONS[problem] for problem in problems)
     return f"{SAVED_BY_TRANSCRIPT_PROBLEM[transcript_problem]}; {described}"
 
@@ -348,9 +354,16 @@ class JobManager:
             self._discard_secrets(job_id)
 
     def _store_and_finish(self, job_id: str, result) -> None:
-        """Upload the video the job produced, then record what the job ended up with."""
-        stored_video, upload_error = self._upload_video(job_id, result.video_path)
-        self._finish(job_id, result, stored_video=stored_video, upload_error=upload_error)
+        """Put the video in the bucket, describe it in Supabase, then finish the job.
+
+        The row is written only when there is an object for it to point at, so an upload
+        that was skipped or that failed leaves nothing to record and the storage problem
+        stays the upload's.
+        """
+        stored_video, storage_problem = self._upload_video(job_id, result.video_path)
+        if stored_video is not None:
+            storage_problem = self._record_video(job_id, result, stored_video)
+        self._finish(job_id, result, stored_video=stored_video, storage_problem=storage_problem)
 
     def _upload_video(self, job_id: str, video_path: Path) -> tuple[StoredVideo | None, str | None]:
         """Put the video in the bucket, reporting a failure rather than raising it.
@@ -371,10 +384,36 @@ class JobManager:
                     job_id, phase, value, message
                 ),
             )
-        except Exception as error:
+        except Exception:
             logger.exception("Uploading %s to R2 failed", video_path)
-            return None, type(error).__name__
+            return None, UPLOAD_FAILED
         return stored_video, None
+
+    def _record_video(self, job_id: str, result, stored_video: StoredVideo) -> str | None:
+        """Describe the uploaded video in Supabase, reporting a failure rather than raising.
+
+        The row can be written again later from the object key alone, so a database that
+        is unreachable is worth reporting but not worth throwing a finished download away
+        over. Nothing here is retried: the upload has already happened, and a second
+        attempt against a project that just refused one is unlikely to be answered
+        differently within the life of the job.
+        """
+        with self._lock:
+            job = self._require(job_id)
+            request, acquisition_mode = job.request, job.acquisition_mode
+        try:
+            record_job_video(
+                stored_video=stored_video,
+                request=request,
+                job_id=job_id,
+                acquisition_mode=acquisition_mode,
+                transcript_source=result.transcript_source,
+                transcript=result.normalized_transcript,
+            )
+        except Exception:
+            logger.exception("Recording %s in Supabase failed", stored_video.key)
+            return RECORD_FAILED
+        return None
 
     def _finish(
         self,
@@ -382,7 +421,7 @@ class JobManager:
         result,
         *,
         stored_video: StoredVideo | None = None,
-        upload_error: str | None = None,
+        storage_problem: str | None = None,
     ) -> None:
         with self._lock:
             job = self._require(job_id)
@@ -399,15 +438,15 @@ class JobManager:
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
             transcript_problem = _transcript_problem(result.transcript_error)
-            if transcript_problem or upload_error:
+            if transcript_problem or storage_problem:
                 # Two halves of a job can fail on their own, and either leaves something
-                # worth keeping: a transcript with no timing is still text, and a bucket
+                # worth keeping: a transcript with no timing is still text, and storage
                 # that could not be reached costs the job its durability, not its result.
                 # The code names the transcript's problem first because that is what the
                 # next stage cares about; the message carries both.
                 job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = transcript_problem or UPLOAD_FAILED
-                job.message = _partial_success_message(transcript_problem, bool(upload_error))
+                job.error_code = transcript_problem or storage_problem
+                job.message = _partial_success_message(transcript_problem, storage_problem)
             else:
                 job.status = JobStatus.COMPLETE
                 job.message = (

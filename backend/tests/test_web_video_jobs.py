@@ -17,6 +17,11 @@ from backend.schemas.video_jobs import (
     CreateVideoJobRequest,
     JobStatus,
 )
+from backend.services.transcripts import (
+    NormalizedTranscript,
+    TimingFidelity,
+    TranscriptSegment,
+)
 from backend.services.video_download.jobs import JobManager
 from backend.services.video_download.web.pipeline import (
     UNTIMED_TRANSCRIPT_ERROR,
@@ -29,6 +34,12 @@ STORED = StoredVideo(
     key="videos/job-42/video.mp4",
     size_bytes=5,
     content_type="video/mp4",
+)
+
+TRANSCRIPT = NormalizedTranscript(
+    source="captions",
+    timing_fidelity=TimingFidelity.CAPTION,
+    segments=[TranscriptSegment(index=0, start_seconds=0.0, end_seconds=1.0, text="hello")],
 )
 
 
@@ -81,12 +92,20 @@ def test_drm_is_rejected_before_job_creation(tmp_path: Path) -> None:
 
 
 def run_to_completion(
-    manager: JobManager, download_root: Path, *, transcript_error: str | None = None, **upload
+    manager: JobManager,
+    download_root: Path,
+    *,
+    transcript_error: str | None = None,
+    transcript: NormalizedTranscript | None = None,
+    record: dict | None = None,
+    **upload,
 ):
     """Drive one job from a Chrome download through to its recorded result.
 
     The file Chrome "downloaded" is the shortest way into the pipeline that still goes
-    through the job manager's own completion path, which is what the upload hangs off.
+    through the job manager's own completion path, which is what the upload and the
+    Supabase row both hang off. `upload` and `record` are the mock keywords — `return_value`
+    or `side_effect` — applied to each of those two steps.
     """
     video_path = download_root / "video.mp4"
     video_path.write_bytes(b"video")
@@ -96,6 +115,7 @@ def run_to_completion(
         transcript_json_path=None,
         transcript_source="page_transcript",
         transcript_error=transcript_error,
+        normalized_transcript=transcript,
     )
     with patch("backend.services.video_download.jobs.validate_remote_url"):
         created = manager.create(direct_request())
@@ -108,6 +128,10 @@ def run_to_completion(
         ),
         patch("backend.services.video_download.jobs.process_downloaded_video", return_value=result),
         patch("backend.services.video_download.jobs.upload_job_video", **upload),
+        patch(
+            "backend.services.video_download.jobs.record_job_video",
+            **(record or {"return_value": None}),
+        ),
     ):
         manager.complete_browser_download(
             created.job_id, BrowserDownloadCompleteRequest(local_path=str(video_path))
@@ -190,4 +214,82 @@ def test_both_halves_failing_reports_both_rather_than_whichever_is_checked_first
     assert job.error_code == UNTIMED_TRANSCRIPT_ERROR
     assert job.message == (
         "Video and text saved; no timing could be measured and upload to R2 can be retried"
+    )
+
+
+def capture_records() -> tuple[list[dict], dict]:
+    """A `record` argument for `run_to_completion` that keeps what it was called with."""
+    written: list[dict] = []
+    return written, {"side_effect": lambda **kwargs: written.append(kwargs)}
+
+
+def test_an_uploaded_video_is_described_in_supabase_before_the_job_reports_done(
+    tmp_path: Path,
+) -> None:
+    written, record = capture_records()
+    manager = JobManager(tmp_path)
+    try:
+        job = run_to_completion(manager, tmp_path, return_value=STORED, record=record)
+    finally:
+        manager.shutdown()
+
+    assert job.status == JobStatus.COMPLETE
+    assert written[0]["stored_video"] == STORED
+    assert written[0]["acquisition_mode"] == "browser_download"
+    assert written[0]["transcript_source"] == "page_transcript"
+    assert written[0]["job_id"] == job.job_id
+
+
+def test_the_transcript_reaches_supabase_from_the_pipeline_not_from_the_json_on_disk(
+    tmp_path: Path,
+) -> None:
+    # Re-reading the file the pipeline just wrote would be a second chance to read it
+    # differently, and the segments are already in hand.
+    written, record = capture_records()
+    manager = JobManager(tmp_path)
+    try:
+        run_to_completion(
+            manager, tmp_path, return_value=STORED, record=record, transcript=TRANSCRIPT
+        )
+    finally:
+        manager.shutdown()
+
+    assert written[0]["transcript"] is TRANSCRIPT
+
+
+def test_a_video_that_never_reached_the_bucket_is_not_described_as_if_it_had(
+    tmp_path: Path,
+) -> None:
+    # r2_object_key is the whole point of the row, and a skipped upload produced none.
+    written, record = capture_records()
+    manager = JobManager(tmp_path)
+    try:
+        run_to_completion(manager, tmp_path, return_value=None, record=record)
+    finally:
+        manager.shutdown()
+
+    assert written == []
+
+
+def test_an_unreachable_database_leaves_the_uploaded_video_flagged_as_unrecorded(
+    tmp_path: Path,
+) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        job = run_to_completion(
+            manager,
+            tmp_path,
+            return_value=STORED,
+            record={"side_effect": OSError("supabase unreachable")},
+        )
+    finally:
+        manager.shutdown()
+
+    # The video is in R2 and on disk, so the job keeps its result; what it lost is the
+    # row that would let anything find the object again.
+    assert job.status == JobStatus.PARTIAL_SUCCESS
+    assert job.error_code == "record_failed"
+    assert job.video_storage_key == STORED.key
+    assert job.message == (
+        "Video and transcript saved; the video is in R2 but was not recorded in Supabase"
     )

@@ -10,6 +10,7 @@ import requests
 from yt_dlp.utils import DownloadCancelled
 
 from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
+from backend.services.transcripts import NormalizedTranscript
 
 from .downloader import DownloadedVideo, download_video
 from .transcript import (
@@ -42,6 +43,12 @@ class PipelineResult:
     transcript_source: str | None
     transcript_error: str | None = None
     comments_path: Path | None = None
+
+    # The transcript itself, carried rather than re-read from the `.json` beside the
+    # video, so that whatever records the job in Supabase writes the same segments the
+    # pipeline produced instead of a round trip through disk. None whenever the pipeline
+    # produced no timed transcript, which is exactly when `transcript_error` is set.
+    normalized_transcript: NormalizedTranscript | None = None
 
 
 def process_downloaded_video(
@@ -152,6 +159,7 @@ def _transcribe_downloaded_video(
         transcript_json_path=json_path,
         transcript_source=artifact.source,
         transcript_error=None if artifact.is_timed else UNTIMED_TRANSCRIPT_ERROR,
+        normalized_transcript=artifact.normalized,
     )
 
 
