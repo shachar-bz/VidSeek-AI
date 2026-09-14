@@ -16,6 +16,13 @@ when captions or a published transcript are unavailable.
    FIRECRAWL_API_KEY=your_key
    # Optional; this must match Chrome's Downloads/VidSeek directory.
    VIDSEEK_DOWNLOAD_ROOT=C:\Users\you\Downloads\VidSeek
+   # Optional; where a finished video is uploaded. Without these a job downloads and
+   # transcribes as before and the video stays on this machine only. See
+   # backend/.env.example for the full set.
+   R2_ACCESS_KEY_ID=your_key_id
+   R2_ACCESS_KEY=your_secret
+   R2_ENDPOINT_URL=https://your_account_id.r2.cloudflarestorage.com
+   R2_BUCKET_NAME=your_bucket
    ```
 
 4. From the repository root, start the loopback service:

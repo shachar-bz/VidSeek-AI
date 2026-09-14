@@ -60,6 +60,22 @@ def load_r2_settings() -> R2Settings:
     )
 
 
+def is_r2_configured() -> bool:
+    """Whether there is an R2 bucket to talk to at all.
+
+    A job asks this before uploading, so that a checkout with no R2 credentials still
+    downloads and transcribes videos instead of failing at the last step. Half a
+    configuration counts as none: the missing half is then reported by
+    `load_r2_settings`, which names it.
+    """
+    return all(
+        config.get(name)
+        for name in (ACCESS_KEY_ID_NAME, ENDPOINT_URL_NAME, BUCKET_NAME)
+    ) and bool(
+        config.get(SECRET_ACCESS_KEY_NAME) or config.get(ALTERNATE_SECRET_ACCESS_KEY_NAME)
+    )
+
+
 def _account_endpoint(endpoint_url: str) -> str:
     """Reject a bucket-scoped endpoint, which boto3 would silently turn into a bad key.
 
