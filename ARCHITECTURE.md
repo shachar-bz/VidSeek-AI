@@ -120,22 +120,21 @@ VidSeek-AI/
 │       ├── test_supabase_video_records.py          # Supabase settings and videos table read/write tests.
 │       ├── test_supabase_transcript_segments.py    # Transcript segment batching, paging and replacement tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
-└── frontend/                                       # Frontend applications.
-    └── chrome-extension/                           # Internal Manifest V3 video download extension.
-        ├── public/                                 # Static files copied into the extension build.
-        │   └── manifest.json                       # Chrome permissions and service-worker manifest.
-        ├── src/                                    # Extension discovery, API, background and popup source.
-        │   ├── api.ts                              # Typed companion HTTP client and session handling.
-        │   ├── background.ts                       # Service worker: job tracking, Chrome downloads and debugger capture.
-        │   ├── discovery.ts                        # Media and caption discovery injected into the active tab.
-        │   ├── popup.css                           # Popup styling.
-        │   ├── popup.ts                            # Popup controller: inspect, download, cancel and capture.
-        │   └── types.ts                            # Shared wire types mirroring the companion API models.
-        ├── tests/                                  # Extension helper unit tests.
-        │   └── discovery.test.ts                   # Media classification and origin pattern tests.
-        ├── package.json                            # Extension build and test dependencies.
-        ├── popup.html                              # User interface entrypoint.
-        ├── README.md                               # Build, load and capture instructions.
-        ├── tsconfig.json                           # Strict TypeScript configuration.
-        └── vite.config.ts                          # Deterministic extension bundle configuration.
+└── chrome-extension/                               # Internal Manifest V3 video download extension.
+    ├── public/                                     # Static files copied into the extension build.
+    │   └── manifest.json                           # Chrome permissions and service-worker manifest.
+    ├── src/                                        # Extension discovery, API, background and popup source.
+    │   ├── api.ts                                  # Typed companion HTTP client and session handling.
+    │   ├── background.ts                           # Service worker: job tracking, Chrome downloads and debugger capture.
+    │   ├── discovery.ts                            # Media and caption discovery injected into the active tab.
+    │   ├── popup.css                               # Popup styling.
+    │   ├── popup.ts                                # Popup controller: inspect, download, cancel and capture.
+    │   └── types.ts                                # Shared wire types mirroring the companion API models.
+    ├── tests/                                      # Extension helper unit tests.
+    │   └── discovery.test.ts                       # Media classification and origin pattern tests.
+    ├── package.json                                # Extension build and test dependencies.
+    ├── popup.html                                  # User interface entrypoint.
+    ├── README.md                                   # Build, load and capture instructions.
+    ├── tsconfig.json                               # Strict TypeScript configuration.
+    └── vite.config.ts                              # Deterministic extension bundle configuration.
 ```

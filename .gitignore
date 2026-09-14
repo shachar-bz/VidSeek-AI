@@ -8,6 +8,6 @@ __pycache__/
 .env
 \docs
 .claude/worktrees/
-frontend/chrome-extension/node_modules/
-frontend/chrome-extension/dist/
+chrome-extension/node_modules/
+chrome-extension/dist/
 backend/services/video_download/youtube/downloads/

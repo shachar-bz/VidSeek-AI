@@ -1,6 +1,6 @@
 # Open tasks
 
-Known gaps in `backend/services/video_download/` and `frontend/chrome-extension/`, left open
+Known gaps in `backend/services/video_download/` and `chrome-extension/`, left open
 deliberately. Each entry says where it stands, what actually goes wrong, and what closing
 it would take.
 

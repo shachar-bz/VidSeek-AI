@@ -7,7 +7,7 @@ when captions or a published transcript are unavailable.
 ## Setup
 
 1. Install Python 3.11 or newer, FFmpeg, and the packages in `backend/requirements.txt`.
-2. Build and load `frontend/chrome-extension/dist` as an unpacked Chrome extension.
+2. Build and load `chrome-extension/dist` as an unpacked Chrome extension.
 3. Copy the extension ID from `chrome://extensions` into `backend/.env`:
 
    ```dotenv
