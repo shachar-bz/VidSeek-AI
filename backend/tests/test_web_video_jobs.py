@@ -1,5 +1,6 @@
 """Tests for authenticated download job lifecycle decisions."""
 
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from backend.schemas.browser import (
 )
 from backend.schemas.video_jobs import (
     BrowserDownloadCompleteRequest,
+    CaptureRetryRequest,
     CreateVideoJobRequest,
     JobStatus,
 )
@@ -77,6 +79,82 @@ def test_cancel_discards_browser_secrets(tmp_path: Path) -> None:
         cancelled = manager.cancel(created.job_id)
         assert cancelled.status == JobStatus.CANCELLED
         assert manager._jobs[created.job_id].request.browser_context.cookies == []
+    finally:
+        manager.shutdown()
+
+
+def test_a_capture_retry_cannot_interleave_with_the_previous_runs_cleanup(tmp_path: Path) -> None:
+    """A retry racing a failed run's cleanup must not have its fresh secrets wiped by it.
+
+    `_fail` publishes FAILED and discards the *stale* request's secrets under one lock
+    acquisition. Previously those were two separate steps, and a `retry_with_capture` call
+    from another thread that landed between them would install freshly captured
+    cookies/headers just in time for the trailing cleanup to wipe those instead of the
+    stale ones it was meant to discard. This drives a real concurrent retry against a
+    `_fail` call that is deliberately held inside its cleanup step, and asserts the retry
+    stays blocked until cleanup is done, and that its fresh secrets survive.
+    """
+    manager = JobManager(tmp_path)
+    try:
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
+            created = manager.create(direct_request())
+        job_id = created.job_id
+
+        fresh_context = BrowserContext(
+            cookies=[BrowserCookie(name="session", value="fresh", domain=".example.com")]
+        )
+        fresh_candidates = [
+            MediaCandidate(kind=MediaKind.DIRECT, url="https://cdn.example.com/retry.mp4")
+        ]
+
+        real_discard = manager._discard_secrets
+        entered_discard = threading.Event()
+        release_discard = threading.Event()
+
+        def blocking_discard(discarded_job_id: str) -> None:
+            entered_discard.set()
+            assert release_discard.wait(timeout=5), "test deadlocked waiting to release cleanup"
+            real_discard(discarded_job_id)
+
+        retry_returned = threading.Event()
+
+        def do_retry() -> None:
+            with (
+                patch("backend.services.video_download.jobs.validate_remote_url"),
+                patch.object(manager, "_run_download"),
+            ):
+                manager.retry_with_capture(
+                    job_id,
+                    CaptureRetryRequest(
+                        media_candidates=fresh_candidates, browser_context=fresh_context
+                    ),
+                )
+            retry_returned.set()
+
+        with patch.object(manager, "_discard_secrets", side_effect=blocking_discard):
+            fail_thread = threading.Thread(
+                target=manager._fail,
+                args=(job_id, "download_failed", "boom"),
+                kwargs={"can_capture": True},
+            )
+            fail_thread.start()
+            assert entered_discard.wait(timeout=5), "_fail never reached cleanup"
+
+            retry_thread = threading.Thread(target=do_retry)
+            retry_thread.start()
+            # The retry is blocked on the same lock `_fail` is still holding inside
+            # cleanup; it must not be able to run ahead of it.
+            assert not retry_returned.wait(timeout=0.2)
+
+            release_discard.set()
+            fail_thread.join(timeout=5)
+            retry_thread.join(timeout=5)
+            assert retry_returned.is_set()
+
+        job = manager._jobs[job_id]
+        assert job.status == JobStatus.QUEUED
+        assert job.request.browser_context.cookies[0].value == "fresh"
+        assert job.request.media_candidates == fresh_candidates
     finally:
         manager.shutdown()
 

@@ -286,8 +286,6 @@ class JobManager:
                 f"YouTube download failed ({type(error).__name__})",
                 can_capture=False,
             )
-        finally:
-            self._discard_secrets(job_id)
 
     def _run_download(self, job_id: str) -> None:
         with self._lock:
@@ -317,8 +315,6 @@ class JobManager:
                 f"Authenticated download failed ({type(error).__name__})",
                 can_capture=True,
             )
-        finally:
-            self._discard_secrets(job_id)
 
     def _run_existing_file(self, job_id: str, path: Path) -> None:
         with self._lock:
@@ -349,8 +345,6 @@ class JobManager:
                 can_capture=False,
                 partial=True,
             )
-        finally:
-            self._discard_secrets(job_id)
 
     def _store_and_finish(self, job_id: str, result) -> None:
         """Store the video in R2, describe it in Supabase, then finish the job.
@@ -444,6 +438,7 @@ class JobManager:
             else:
                 job.status = JobStatus.COMPLETE
                 job.message = "Video uploaded; transcript saved"
+            self._discard_secrets(job_id)
 
     def _fail(
         self,
@@ -463,6 +458,7 @@ class JobManager:
             if partial:
                 job.phase = JobPhase.COMPLETE
                 job.progress = 1.0
+            self._discard_secrets(job_id)
 
     def _mark_cancelled(self, job_id: str) -> None:
         with self._lock:
@@ -470,8 +466,19 @@ class JobManager:
             job.status = JobStatus.CANCELLED
             job.message = "Cancelled"
             job.can_capture = False
+            self._discard_secrets(job_id)
 
     def _discard_secrets(self, job_id: str) -> None:
+        """Clear this job's browser-supplied secrets.
+
+        Always called from inside the same lock acquisition that publishes the job's
+        terminal status (`_fail`, `_mark_cancelled`, `_finish`, and `cancel`'s own inline
+        transition to CANCELLED) rather than afterwards. Otherwise a `retry_with_capture`
+        call landing between the status write and this cleanup would install fresh
+        captured cookies/headers just in time for this call to wipe them instead of the
+        stale ones it was meant to discard. `self._lock` is reentrant, so nesting here is
+        safe.
+        """
         with self._lock:
             job = self._require(job_id)
             job.request.browser_context.cookies.clear()
