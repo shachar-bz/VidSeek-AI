@@ -240,12 +240,44 @@ use.
 What it loses: page transcripts are often hand-written and read better than ASR of the
 same audio, and that quality is now only reachable when transcription fails.
 
-**To close:** force-align the page text against the audio, which turns it into the
-best-timed transcript available rather than the worst. The aligner already exists —
+**To close:** nothing here. Refusing untimed text is the contract working, not a
+shortcoming to fix, and the demotion stays whatever happens next. Recovering the quality it
+costs is a separate piece of work, tracked as task 12.
+
+---
+
+## 12. Force-align a page transcript rather than lose what it is worth
+
+**Status:** not started. This is the follow-on to task 11, which contained the problem by
+demoting page transcripts; this one is about winning back what that demotion costs.
+
+**Problem:** a page transcript is frequently the best text available for a video — written
+or corrected by a person, punctuated, with names spelled properly — and ASR of the same
+audio is frequently worse. Task 11 means that better text is now only reached when
+transcription fails outright. The only thing wrong with it is that nobody recorded when any
+of it was said.
+
+**To close:** force-align the page text against the audio, which turns the best text into
+the best-timed transcript rather than the one that gets discarded. The aligner already
+exists and needs no new integration work in principle:
 `backend/services/transcription/openai_pipeline/word_alignment` wraps torchaudio's MMS
-forced aligner and is built for exactly this: audio plus known text in, a start and end per
-word out, no recognition involved. It would produce `TimingFidelity.WORD` segments from the
-better text. The open questions are cost and placement: alignment wants a GPU, it is the
-one heavyweight dependency the companion does not otherwise load, and the accuracy of the
-result depends on the page transcript being verbatim rather than a tidied-up paraphrase —
-which `scrape_public_page_transcript`'s containment check only partly establishes.
+forced aligner and is built for exactly this — audio plus known text in, a start and end
+per word out, no recognition involved, so it can never produce a word the transcript does
+not contain. Its output feeds `normalize_words` and comes out as `TimingFidelity.WORD`
+segments, the same as ElevenLabs'.
+
+Decide before starting:
+
+- **Cost and placement.** Alignment wants a GPU and falls back to a slow CPU run. It is the
+  one heavyweight dependency the companion does not otherwise load, and the companion is
+  something a developer runs on a laptop. It may belong behind a setting, or out of the
+  companion entirely.
+- **Whether the text is verbatim.** Alignment assumes the transcript says what the audio
+  says. A tidied-up or paraphrased page transcript aligns badly and gives confidently wrong
+  timings, which is worse than none. `scrape_public_page_transcript` already checks that
+  the extracted text is contained in the page markdown, but that establishes the text was
+  published, not that it matches the speech. An alignment score threshold, rejecting a
+  result the aligner itself is unsure of, is the obvious guard.
+- **Where it sits in precedence.** If alignment is trusted, the page transcript goes back
+  in front of ElevenLabs for videos that have one. If it is only sometimes trusted, it
+  becomes a second attempt after a low-confidence transcription instead.
