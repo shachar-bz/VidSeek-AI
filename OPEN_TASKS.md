@@ -145,14 +145,14 @@ the companion clears everything today, which is why this has not bitten anyone.
 
 ## 6. Race between a capture retry and the previous run's cleanup
 
-**Status:** open, narrow. **Problem:** `_run_download` publishes `FAILED` and only then
-runs `finally: _discard_secrets(job_id)`. `POST /capture` is accepted as soon as the status
-is `FAILED`, so a retry that lands inside that window has its freshly captured cookies and
-headers wiped by the previous run's cleanup, and fails again identically.
-
-**To close:** give each attempt a generation counter and have `_discard_secrets` skip a job
-whose generation has moved on, or move the cleanup inside the same lock that publishes the
-terminal status.
+**Status:** closed. `_fail`, `_mark_cancelled`, and `_finish` now call `_discard_secrets`
+inside the same lock acquisition that publishes the terminal status, instead of the
+runner methods doing it afterwards in a separate `finally` block. `retry_with_capture`
+takes the same lock, so it can no longer land in the gap between a status flip to
+`FAILED`/`CANCELLED`/a finished state and the cleanup that follows it, and can no longer
+have its freshly captured cookies/headers wiped by the previous run's cleanup. Covered by
+`test_a_capture_retry_cannot_interleave_with_the_previous_runs_cleanup` in
+`backend/tests/test_web_video_jobs.py`.
 
 ---
 
