@@ -25,6 +25,18 @@ elevenlabs>=2.0
 python-dotenv
 # --- end elevenlabs transcription module ---
 
+# --- forced alignment module ---
+# Remove this block together with backend/services/forced_alignment/ if the module is
+# dropped. Times an already-known transcript against a video through ElevenLabs' hosted
+# forced aligner: no GPU, no model weights, no ffmpeg, the same as the elevenlabs
+# transcription module above (already a dependency). langdetect gates every call, since
+# the aligner is English-only and has no language check of its own. Needs
+# ELEVENLABS_API_KEY_FORCED_ALIGNMENT in backend/.env.
+elevenlabs>=2.0
+langdetect
+python-dotenv
+# --- end forced alignment module ---
+
 # --- openai transcription module ---
 # Remove this block together with backend/services/transcription/openai_pipeline/transcription/ if
 # the module is dropped.

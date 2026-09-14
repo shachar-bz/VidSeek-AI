@@ -15,6 +15,7 @@ from backend.services.transcripts import NormalizedTranscript
 from .downloader import DownloadedVideo, download_video
 from .transcript import (
     TranscriptArtifact,
+    align_supplied_transcript,
     choose_supplied_transcript,
     persist_transcript,
     scrape_public_page_transcript,
@@ -117,12 +118,13 @@ def _transcribe_downloaded_video(
     """Produce a timed transcript, and settle for untimed text only when there is none.
 
     Captions that the page or the download already supplied come first: they are free and
-    already timed. Anything else goes to ElevenLabs, which times every word, rather than
-    to a source that would hand back text with no timing at all — the next stage needs a
-    timestamp on every segment, and a transcript without one is a transcript it cannot
-    take. When neither produces timing, the text is still written and the job is reported
-    as untimed rather than as complete, so that nothing downstream mistakes it for a
-    transcript it can index.
+    already timed. Text that was supplied but never timed is not thrown away either: it is
+    handed to forced alignment, which fits those same words onto the video's audio rather
+    than transcribing it from scratch. Only once both come up empty does anything go to
+    ElevenLabs to be transcribed outright — the next stage needs a timestamp on every
+    segment, and a transcript without one is a transcript it cannot take. When nothing
+    produces timing, the text is still written and the job is reported as untimed rather
+    than as complete, so that nothing downstream mistakes it for a transcript it can index.
     """
     progress_callback(JobPhase.TRANSCRIPT_LOOKUP, 0.8, "Looking for existing captions")
     supplied = choose_supplied_transcript(
@@ -131,6 +133,10 @@ def _transcribe_downloaded_video(
     _raise_if_cancelled(cancel_event)
 
     artifact = supplied if supplied and supplied.is_timed else None
+    if artifact is None and supplied is not None:
+        progress_callback(JobPhase.TRANSCRIPTION, 0.82, "Timing the existing transcript")
+        artifact = align_supplied_transcript(video.video_path, supplied)
+
     if artifact is None:
         progress_callback(JobPhase.TRANSCRIPTION, 0.85, "Transcribing with ElevenLabs")
         transcription_failure: Exception | None = None

@@ -68,6 +68,11 @@ VidSeek-AI/
 │   │   │       └── word_timed/                     # Transcription and word alignment run together as one pipeline.
 │   │   │           ├── __init__.py                 # Public interface of the word-timed transcription pipeline.
 │   │   │           └── transcription_aligner.py    # Transcribes a video and fills each chunk's words in by alignment.
+│   │   ├── forced_alignment/                       # Times an already-known transcript against a video via ElevenLabs' hosted forced aligner.
+│   │   │   ├── __init__.py                         # Public interface of the forced alignment module.
+│   │   │   ├── aligner.py                          # Aligns supplied text to a video's audio via the ElevenLabs forced-alignment API.
+│   │   │   ├── language.py                         # Checks whether a transcript's text is English before it is aligned.
+│   │   │   └── transcript.py                       # Forced alignment data model: aligned words and the whole result.
 │   │   ├── transcripts/                            # The normalized timestamped transcript every source is converted into.
 │   │   │   ├── __init__.py                         # Public interface of the transcript normalization package.
 │   │   │   ├── transcript.py                       # Normalized transcript data model: ordered segments and their timing fidelity.
@@ -93,7 +98,7 @@ VidSeek-AI/
 │   │       │   ├── downloader.py                   # Cookie-aware yt-dlp and FFmpeg video acquisition.
 │   │       │   ├── headers.py                      # Chooses which browser request headers may be replayed.
 │   │       │   ├── pipeline.py                     # Download and transcript orchestration, and the shared result type.
-│   │       │   ├── transcript.py                   # Caption parsing, Firecrawl lookup and ElevenLabs fallback.
+│   │       │   ├── transcript.py                   # Caption parsing, Firecrawl lookup, forced alignment and ElevenLabs fallback.
 │   │       │   └── README.md                       # Local companion setup and security notes.
 │   │       └── youtube/                            # Downloads a YouTube video, its transcript and its top comments.
 │   │           ├── __init__.py                     # Public interface of the YouTube download module.

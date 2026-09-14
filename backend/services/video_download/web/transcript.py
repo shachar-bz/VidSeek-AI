@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import logging
 import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import asdict, dataclass, field
@@ -15,6 +16,7 @@ import requests
 from backend.core import config
 from backend.storage import transcript_store
 from backend.schemas.browser import CaptionCandidate
+from backend.services.forced_alignment import align_text_to_media, is_english_text
 from backend.services.transcription.elevenlabs import transcribe_video
 from backend.services.transcripts import (
     NormalizedTranscript,
@@ -25,6 +27,9 @@ from backend.services.transcripts import (
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
 FIRECRAWL_API_KEY_NAME = "FIRECRAWL_API_KEY"
 MIN_VISIBLE_TRANSCRIPT_CHARACTERS = 80
+FORCED_ALIGNMENT_SOURCE = "forced_alignment"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -271,6 +276,39 @@ def transcribe_with_elevenlabs(video_path: Path) -> TranscriptArtifact:
         normalized=normalize_words(
             result.words, source="elevenlabs", language=result.language_code
         ),
+    )
+
+
+def align_supplied_transcript(
+    video_path: Path, supplied: TranscriptArtifact
+) -> TranscriptArtifact | None:
+    """Time a transcript already in hand against the video, instead of retranscribing it.
+
+    Forced alignment fits the exact words already supplied onto the video's audio, which
+    is cheaper than throwing that text away and transcribing from scratch, and keeps
+    whatever the original text got right that a fresh transcription might not. It
+    understands only English, so a transcript in any other language is left for the
+    caller to send to full transcription instead — and so is any failure calling it, since
+    that same fallback is still there to catch it.
+    """
+    if not is_english_text(supplied.text):
+        return None
+    try:
+        result = align_text_to_media(str(video_path), supplied.text)
+    except Exception:
+        logger.warning(
+            "Forced alignment failed for %s; falling back to transcription", video_path
+        )
+        return None
+    normalized = normalize_words(result.words, source=FORCED_ALIGNMENT_SOURCE, language="en")
+    if normalized is None:
+        return None
+    return TranscriptArtifact(
+        source=FORCED_ALIGNMENT_SOURCE,
+        text=supplied.text,
+        language="en",
+        details=asdict(result),
+        normalized=normalized,
     )
 
 

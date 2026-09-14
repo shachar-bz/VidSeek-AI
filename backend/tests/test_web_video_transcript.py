@@ -1,7 +1,13 @@
 """Tests for deterministic transcript parsing and precedence."""
 
+from pathlib import Path
+from unittest.mock import patch
+
 from backend.schemas.browser import CaptionCandidate
+from backend.services.forced_alignment import AlignedWord, ForcedAlignmentResult
 from backend.services.video_download.web.transcript import (
+    TranscriptArtifact,
+    align_supplied_transcript,
     choose_supplied_transcript,
     parse_ttml,
     parse_webvtt_or_srt,
@@ -46,4 +52,59 @@ def test_active_caption_beats_visible_page_transcript() -> None:
     assert transcript is not None
     assert transcript.source == "captions"
     assert transcript.text == "Spoken caption"
+
+
+def _untimed_english_artifact() -> TranscriptArtifact:
+    return TranscriptArtifact(
+        source="page_transcript",
+        text="This is an ordinary English transcript with no timing of its own.",
+    )
+
+
+def test_forced_alignment_times_an_untimed_english_transcript(tmp_path: Path) -> None:
+    supplied = _untimed_english_artifact()
+    aligned = ForcedAlignmentResult(
+        media_path="video.mp4",
+        text=supplied.text,
+        loss=0.1,
+        words=[
+            AlignedWord(text=word, start_seconds=index, end_seconds=index + 1, loss=0.05)
+            for index, word in enumerate(supplied.text.split())
+        ],
+    )
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media",
+        return_value=aligned,
+    ) as align:
+        result = align_supplied_transcript(tmp_path / "video.mp4", supplied)
+
+    align.assert_called_once_with(str(tmp_path / "video.mp4"), supplied.text)
+    assert result is not None
+    assert result.source == "forced_alignment"
+    assert result.is_timed
+    assert result.text == supplied.text
+
+
+def test_forced_alignment_is_skipped_for_non_english_text(tmp_path: Path) -> None:
+    supplied = TranscriptArtifact(
+        source="page_transcript", text="שלום עולם זהו טקסט בעברית לגמרי וארוך מספיק לזיהוי"
+    )
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media"
+    ) as align:
+        result = align_supplied_transcript(tmp_path / "video.mp4", supplied)
+
+    align.assert_not_called()
+    assert result is None
+
+
+def test_forced_alignment_failure_falls_through_to_none(tmp_path: Path) -> None:
+    supplied = _untimed_english_artifact()
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media",
+        side_effect=RuntimeError("hosted API is down"),
+    ):
+        result = align_supplied_transcript(tmp_path / "video.mp4", supplied)
+
+    assert result is None
 

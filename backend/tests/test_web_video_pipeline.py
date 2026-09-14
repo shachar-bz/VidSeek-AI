@@ -14,7 +14,9 @@ import pytest
 from yt_dlp.utils import DownloadCancelled
 
 from backend.services.video_download.web.downloader import DownloadedVideo
+from backend.schemas.browser import CaptionCandidate
 from backend.schemas.video_jobs import CreateVideoJobRequest
+from backend.services.forced_alignment import AlignedWord, ForcedAlignmentResult
 from backend.services.video_download.web.pipeline import process_downloaded_video
 from backend.services.transcription.elevenlabs import TranscriptWord
 from backend.services.transcripts import normalize_words
@@ -161,3 +163,94 @@ def test_text_with_no_timing_is_saved_but_not_reported_as_a_finished_transcript(
     assert result.transcript_source == "page_transcript"
     assert result.transcript_error == "untimed_transcript"
     assert result.transcript_text_path.read_text(encoding="utf-8") == page_text
+
+
+def _request_with_visible_transcript(text: str) -> CreateVideoJobRequest:
+    return CreateVideoJobRequest(
+        page_url="https://example.com/watch",
+        caption_candidates=[
+            CaptionCandidate(text=text, format="text", is_visible_transcript=True)
+        ],
+    )
+
+
+ENGLISH_PAGE_TRANSCRIPT = (
+    "This is an ordinary English transcript with no timing of its own, published on the "
+    "page rather than measured against the video."
+)
+HEBREW_PAGE_TRANSCRIPT = (
+    "זהו תמליל בעברית שפורסם בעמוד עצמו וללא כל תזמון מדוד מול הווידאו, ארוך דיו למעבר הסינון."
+)
+
+
+def _forced_alignment_result(text: str) -> ForcedAlignmentResult:
+    return ForcedAlignmentResult(
+        media_path="video.mp4",
+        text=text,
+        loss=0.1,
+        words=[
+            AlignedWord(text=word, start_seconds=index, end_seconds=index + 1, loss=0.05)
+            for index, word in enumerate(text.split())
+        ],
+    )
+
+
+def test_supplied_untimed_english_text_is_aligned_instead_of_retranscribed(
+    tmp_path: Path,
+) -> None:
+    """Forced alignment is tried before a full retranscription, and wins when it succeeds."""
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media",
+        return_value=_forced_alignment_result(ENGLISH_PAGE_TRANSCRIPT),
+    ), patch(
+        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs"
+    ) as transcribe:
+        result = process_downloaded_video(
+            video=_video(tmp_path),
+            request=_request_with_visible_transcript(ENGLISH_PAGE_TRANSCRIPT),
+            cancel_event=threading.Event(),
+            progress_callback=lambda *_: None,
+        )
+
+    transcribe.assert_not_called()
+    assert result.transcript_source == "forced_alignment"
+    assert result.transcript_error is None
+
+
+def test_supplied_untimed_non_english_text_still_falls_back_to_transcription(
+    tmp_path: Path,
+) -> None:
+    """Forced alignment cannot align non-English text, so full transcription still runs."""
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media"
+    ) as align, patch(
+        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
+        return_value=_timed_artifact(),
+    ):
+        result = process_downloaded_video(
+            video=_video(tmp_path),
+            request=_request_with_visible_transcript(HEBREW_PAGE_TRANSCRIPT),
+            cancel_event=threading.Event(),
+            progress_callback=lambda *_: None,
+        )
+
+    align.assert_not_called()
+    assert result.transcript_source == "elevenlabs"
+
+
+def test_a_failed_forced_alignment_still_falls_back_to_transcription(tmp_path: Path) -> None:
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media",
+        side_effect=RuntimeError("hosted API is down"),
+    ), patch(
+        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
+        return_value=_timed_artifact(),
+    ):
+        result = process_downloaded_video(
+            video=_video(tmp_path),
+            request=_request_with_visible_transcript(ENGLISH_PAGE_TRANSCRIPT),
+            cancel_event=threading.Event(),
+            progress_callback=lambda *_: None,
+        )
+
+    assert result.transcript_source == "elevenlabs"

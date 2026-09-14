@@ -220,24 +220,26 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 11. Untimed page transcripts are demoted, not used — accepted
+## 11. Untimed page transcripts are recovered via forced alignment — closed
 
-**Status:** accepted behavior, not a bug, nothing to close. A page transcript (scraped by
-Firecrawl, or read from a player's transcript panel) has no per-word timing, and
-`normalize_caption_cues` refuses to fabricate it rather than spread words evenly and call
-the result a timestamp.
+**Status:** closed. A page transcript (scraped by Firecrawl, or read from a player's
+transcript panel) still has no per-word timing of its own, and `normalize_caption_cues`
+still refuses to fabricate it rather than spread words evenly and call the result a
+timestamp — but the text is no longer thrown away just because of that.
 
-**Behavior:** ElevenLabs is the fallback whenever there is no usable timing — no
-transcript, an untimed transcript, or (on YouTube) no captions. A transcript that already
-has valid timing (Web captions, or YouTube captions, which always carry timing) is used
-without ever calling ElevenLabs. A job left with only an untimed page transcript finishes
+**Behavior:** `backend/services/forced_alignment/` times that text against the video's
+own audio through ElevenLabs' hosted forced aligner, on the web download pipeline, before
+anything is retranscribed. The aligner only understands English, so `is_english_text`
+gates every call; a transcript in another language, or an alignment call that fails, still
+falls through to a full ElevenLabs transcription exactly as before. A transcript that
+already has valid timing (Web captions, or YouTube captions, which always carry timing) is
+used without calling either. A job left with no timing at all still finishes
 `partial_success`/`untimed_transcript` — the text is kept but nothing downstream treats it
 as indexable.
 
-**Tradeoff accepted:** page transcripts are often hand-written and better than ASR of the
-same audio, but that quality is now only reached when transcription fails outright.
-Recovering it via forced alignment was considered and rejected as not worth the added
-complexity and dependency.
+**Not covered:** the YouTube pipeline has no equivalent untimed-text-with-video state to
+recover — its captions either carry usable timing or are treated as absent — so this path
+exists only in `services/video_download/web/`.
 
 ---
 
