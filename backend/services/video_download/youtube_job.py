@@ -7,8 +7,10 @@ both routes through one code path rather than branching on which pipeline ran.
 
 The transcript is rewritten through the web pipeline's `persist_transcript`, so a YouTube
 job produces the same `.transcript.txt` and `.transcript.json` pair beside the video that
-the extension already knows how to display. The YouTube module's own `{id}.transcript.txt`
-is left alone: it is what a CLI run produces and nothing here needs to remove it.
+the extension already knows how to display. That `.txt` is the same path the YouTube
+module already wrote for a CLI run — the video is `{id}.mp4`, so both resolve to
+`{id}.transcript.txt` — and both now write the same normalized transcript, so whichever
+runs last leaves the same file behind.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from pathlib import Path
 
 from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
 
-from .web.pipeline import PipelineResult
+from .web.pipeline import UNTIMED_TRANSCRIPT_ERROR, PipelineResult
 from .web.transcript import CaptionSegment, TranscriptArtifact, persist_transcript
 from .youtube.pipeline import YouTubeDownloadResult, download_youtube_video
 from .youtube.transcript import CAPTIONS_SOURCE
@@ -42,7 +44,9 @@ def _artifact(result: YouTubeDownloadResult) -> TranscriptArtifact:
     """Turn the YouTube transcript into the artifact `persist_transcript` writes.
 
     `transcript_source` passes through unchanged, so the extension sees the same
-    `youtube_captions` or `elevenlabs` value the YouTube module decided on.
+    `youtube_captions` or `elevenlabs` value the YouTube module decided on, and so does
+    the normalized transcript: the YouTube pipeline already built it, and rebuilding it
+    here would be a second chance to build it differently.
     """
     transcript = result.transcript
     if transcript.source == CAPTIONS_SOURCE:
@@ -57,6 +61,7 @@ def _artifact(result: YouTubeDownloadResult) -> TranscriptArtifact:
                 )
                 for segment in transcript.segments
             ],
+            normalized=transcript.normalized,
         )
 
     scribe = transcript.elevenlabs_result
@@ -65,6 +70,7 @@ def _artifact(result: YouTubeDownloadResult) -> TranscriptArtifact:
         text=transcript.text,
         language=scribe.language_code if scribe else None,
         details=asdict(scribe) if scribe else {},
+        normalized=transcript.normalized,
     )
 
 
@@ -99,11 +105,16 @@ def run_youtube_job(
 
     progress_callback(JobPhase.TRANSCRIPT_LOOKUP, 0.9, "Saving transcript")
     video_path = Path(result.video_path)
-    text_path, json_path = persist_transcript(video_path, _artifact(result))
+    artifact = _artifact(result)
+    text_path, json_path = persist_transcript(video_path, artifact)
     return PipelineResult(
         video_path=video_path,
         transcript_text_path=text_path,
         transcript_json_path=json_path,
         transcript_source=result.transcript.source,
+        # A YouTube job has nowhere left to look for timing: captions and Scribe are both
+        # already behind it. Reporting it as untimed is what stops a transcript the next
+        # stage cannot use from being handed on as a finished one.
+        transcript_error=None if artifact.is_timed else UNTIMED_TRANSCRIPT_ERROR,
         comments_path=Path(result.comments_path) if result.comments_path else None,
     )

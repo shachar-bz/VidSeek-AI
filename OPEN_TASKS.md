@@ -217,3 +217,35 @@ remaining hole is an install with `ffprobe` but no usable `ffmpeg`.
 
 **To close:** check for an audio stream after a merge was requested, and fail the job with
 an actionable message rather than shipping a silent video.
+
+---
+
+## 11. A page transcript has no timing, so it can no longer be handed on as one
+
+**Status:** contained, not solved. **Problem:** every stage after transcription is now
+promised a transcript of timed segments, and one source cannot supply one. A transcript
+published on a page — scraped by Firecrawl, or read out of the player's own transcript
+panel — is text somebody wrote out, with nothing recording when any of it was said. There
+is no timing to normalize, so `normalize_caption_cues` refuses it rather than spreading the
+words evenly across the video and calling the result a timestamp.
+
+What that costs: the page transcript used to win over transcription, and no longer does.
+`_transcribe_downloaded_video` sends anything without captions to ElevenLabs, which times
+every word, and only falls back to the page text when transcription produced nothing at
+all. A job that ends there finishes `partial_success` with `untimed_transcript`, so the
+text is kept and nothing downstream mistakes it for indexable. The Firecrawl call also
+moved behind transcription, so an uncaptioned video no longer pays for a scrape it cannot
+use.
+
+What it loses: page transcripts are often hand-written and read better than ASR of the
+same audio, and that quality is now only reachable when transcription fails.
+
+**To close:** force-align the page text against the audio, which turns it into the
+best-timed transcript available rather than the worst. The aligner already exists —
+`backend/services/transcription/openai_pipeline/word_alignment` wraps torchaudio's MMS
+forced aligner and is built for exactly this: audio plus known text in, a start and end per
+word out, no recognition involved. It would produce `TimingFidelity.WORD` segments from the
+better text. The open questions are cost and placement: alignment wants a GPU, it is the
+one heavyweight dependency the companion does not otherwise load, and the accuracy of the
+result depends on the page transcript being verbatim rather than a tidied-up paraphrase —
+which `scrape_public_page_transcript`'s containment check only partly establishes.

@@ -5,7 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from backend.schemas.video_jobs import CreateVideoJobRequest
-from backend.services.transcription.elevenlabs import TranscriptionResult
+from backend.services.transcription.elevenlabs import TranscriptionResult, TranscriptWord
+from backend.services.transcripts import normalize_caption_cues, normalize_words
 from backend.services.video_download import youtube_job
 from backend.services.video_download.youtube.pipeline import YouTubeDownloadResult
 from backend.services.video_download.youtube.transcript import (
@@ -41,16 +42,20 @@ def _run(tmp_path: Path, result: YouTubeDownloadResult, **kwargs):
 
 
 def test_caption_transcript_is_written_where_the_extension_looks(tmp_path: Path) -> None:
+    segments = [CaptionSegment(text="hello there", start_seconds=0.0, end_seconds=1.5)]
     transcript = YouTubeTranscript(
         source="youtube_captions",
         text="hello there",
-        segments=[CaptionSegment(text="hello there", start_seconds=0.0, end_seconds=1.5)],
+        segments=segments,
+        normalized=normalize_caption_cues(segments, source="youtube_captions"),
     )
     result, _ = _run(tmp_path, _result(tmp_path, transcript, str(tmp_path / "abc.comments.json")))
 
     assert result.transcript_text_path == tmp_path / "abc.transcript.txt"
     assert result.transcript_json_path == tmp_path / "abc.transcript.json"
-    assert result.transcript_text_path.read_text(encoding="utf-8") == "hello there"
+    # The written transcript is the normalized format, not the bare words, so a YouTube
+    # video and a non-YouTube one leave the same thing on disk.
+    assert result.transcript_text_path.read_text(encoding="utf-8") == "[00:00-00:02] hello there"
     # transcript_source passes through untranslated, so the extension sees what YouTube
     # actually supplied rather than a companion-invented label.
     assert result.transcript_source == "youtube_captions"
@@ -65,14 +70,38 @@ def test_elevenlabs_transcript_keeps_its_language_and_full_result(tmp_path: Path
         language_probability=0.9,
         duration_seconds=1.0,
         model="scribe_v1",
+        words=[
+            TranscriptWord(
+                text="shalom",
+                start_seconds=0.2,
+                end_seconds=1.0,
+                speaker_id="speaker_0",
+                logprob=-0.1,
+            )
+        ],
     )
-    transcript = YouTubeTranscript(source="elevenlabs", text="shalom", elevenlabs_result=scribe)
+    transcript = YouTubeTranscript(
+        source="elevenlabs",
+        text="shalom",
+        elevenlabs_result=scribe,
+        normalized=normalize_words(scribe.words, source="elevenlabs", language="he"),
+    )
     result, _ = _run(tmp_path, _result(tmp_path, transcript, None))
 
     assert result.transcript_source == "elevenlabs"
+    assert result.transcript_error is None
     payload = result.transcript_json_path.read_text(encoding="utf-8")
     assert "shalom" in payload
     assert '"language": "he"' in payload
+
+
+def test_a_transcript_with_no_timing_is_not_reported_as_a_finished_one(tmp_path: Path) -> None:
+    """The text is kept, but a job that measured no timing has not met the contract."""
+    transcript = YouTubeTranscript(source="youtube_captions", text="hello there")
+    result, _ = _run(tmp_path, _result(tmp_path, transcript, None))
+
+    assert result.transcript_text_path.read_text(encoding="utf-8") == "hello there"
+    assert result.transcript_error == "untimed_transcript"
 
 
 def test_the_video_is_downloaded_into_the_companion_root(tmp_path: Path) -> None:

@@ -6,12 +6,16 @@ Scribe comes as individually timed words. Neither converts into the other withou
 inventing timings that were never measured, so both are kept exactly as they arrived and
 `source` says which one is in hand.
 
-`text` is the one field every consumer can rely on regardless of where the transcript
-came from.
+`normalized` is what every consumer outside this module should read: the same timed
+segments whichever of the two produced them, so that nothing downstream has to know which
+did. `text` is the transcript as one unstamped string, kept for the places that only want
+the words.
 """
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
+
+from backend.services.transcripts import NormalizedTranscript
 
 # Imported for the annotation alone. A hard import would pull the ElevenLabs SDK in every
 # time this module is touched, including for the caption path that never transcribes
@@ -52,7 +56,23 @@ class YouTubeTranscript:
     text: str
     segments: list[CaptionSegment] = field(default_factory=list)
     elevenlabs_result: "TranscriptionResult | None" = None
+    normalized: NormalizedTranscript | None = None
 
     @property
     def is_from_captions(self) -> bool:
         return self.source == CAPTIONS_SOURCE
+
+    @property
+    def is_timed(self) -> bool:
+        """Whether this transcript carries the timing the next stage requires."""
+        return self.normalized is not None
+
+    @property
+    def timestamped_text(self) -> str:
+        """The transcript as it is written out: `[MM:SS-MM:SS] text` lines when timed.
+
+        A transcript with no timing falls back to the plain words. That only happens when
+        a source returned text it measured nothing about, which is worth keeping but is
+        not what the next stage is promised.
+        """
+        return self.normalized.formatted_text if self.normalized else self.text

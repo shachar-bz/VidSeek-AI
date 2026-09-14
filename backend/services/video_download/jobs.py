@@ -31,7 +31,11 @@ from backend.schemas.video_jobs import (
 )
 
 from .web.downloader import DownloadedVideo
-from .web.pipeline import download_and_transcribe, process_downloaded_video
+from .web.pipeline import (
+    UNTIMED_TRANSCRIPT_ERROR,
+    download_and_transcribe,
+    process_downloaded_video,
+)
 from .youtube_job import run_youtube_job
 
 
@@ -314,7 +318,13 @@ class JobManager:
             job.comments_path = str(result.comments_path) if result.comments_path else None
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
-            if result.transcript_error:
+            if result.transcript_error == UNTIMED_TRANSCRIPT_ERROR:
+                # The text is there and worth keeping, but with no timing on it the job
+                # has not produced what the next stage is promised, so it is not complete.
+                job.status = JobStatus.PARTIAL_SUCCESS
+                job.error_code = UNTIMED_TRANSCRIPT_ERROR
+                job.message = "Video and text saved; no timing could be measured"
+            elif result.transcript_error:
                 job.status = JobStatus.PARTIAL_SUCCESS
                 job.error_code = "transcription_failed"
                 job.message = "Video saved; transcription can be retried"

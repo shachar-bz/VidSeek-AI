@@ -27,8 +27,9 @@ VidSeek-AI/
 │   │   ├── config.py                               # The only reader of backend/.env, and the derived settings.
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
 │   │   └── security.py                             # Session tokens, URL/path guards and YouTube URL classification.
-│   ├── db/                                         # Placeholder for future persistence; empty today.
-│   │   └── __init__.py                             # Explains why there is no database yet.
+│   ├── db/                                         # Persistence, standing in until the project has a database.
+│   │   ├── __init__.py                             # Explains what persistence exists today, and what does not.
+│   │   └── transcript_store.py                     # Saves and loads a video's normalized transcript as JSON under the download root.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -53,6 +54,11 @@ VidSeek-AI/
 │   │   │       └── word_timed/                     # Transcription and word alignment run together as one pipeline.
 │   │   │           ├── __init__.py                 # Public interface of the word-timed transcription pipeline.
 │   │   │           └── transcription_aligner.py    # Transcribes a video and fills each chunk's words in by alignment.
+│   │   ├── transcripts/                            # The normalized timestamped transcript every source is converted into.
+│   │   │   ├── __init__.py                         # Public interface of the transcript normalization package.
+│   │   │   ├── transcript.py                       # Normalized transcript data model: ordered segments and their timing fidelity.
+│   │   │   ├── normalizer.py                       # Gathers a source's timed words or caption cues into readable segments.
+│   │   │   └── formatting.py                       # Renders segments as the `[MM:SS-MM:SS] text` transcript.
 │   │   ├── shot_detection/                         # Shot boundary detection services.
 │   │   │   ├── __init__.py                         # Groups the shot detection services.
 │   │   │   ├── omni/                               # Shot boundary detection over a video file, on a GPU.
@@ -82,10 +88,12 @@ VidSeek-AI/
 │   │           ├── pipeline.py                     # Downloads a video, its transcript and its top comments, falling back to ElevenLabs.
 │   │           └── downloads/                      # Local output folder for CLI downloads (gitignored).
 │   └── tests/                                      # Automated backend companion tests.
+│       ├── conftest.py                             # Keeps a test run's writes out of the developer's own download root.
+│       ├── test_transcript_normalization.py        # Transcript format, segment timing and transcript store tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
 │       ├── test_web_video_jobs.py                  # Job lifecycle tests.
-│       ├── test_web_video_pipeline.py              # Transcript-failure and cancellation pipeline tests.
+│       ├── test_web_video_pipeline.py              # Transcript precedence, transcript-failure and cancellation pipeline tests.
 │       ├── test_web_video_security.py              # Security boundary tests.
 │       ├── test_web_video_transcript.py            # Transcript parsing and precedence tests.
 │       ├── test_youtube_routing.py                 # YouTube hostname classification and pipeline selection tests.
