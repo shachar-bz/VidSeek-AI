@@ -115,6 +115,7 @@ VidSeek-AI/
 │       ├── test_youtube_routing.py                 # YouTube hostname classification and pipeline selection tests.
 │       ├── test_youtube_job_adapter.py             # YouTube result to pipeline result mapping tests.
 │       ├── test_youtube_cancellation.py            # YouTube download progress and cancellation tests.
+│       ├── test_youtube_transcript_fallback.py     # YouTube untimed-caption-to-ElevenLabs fallback tests.
 │       ├── test_r2_video_storage.py                # R2 settings, object key and bucket operation tests.
 │       ├── test_video_upload.py                    # Job video upload, progress and skip-when-unconfigured tests.
 │       ├── test_supabase_video_records.py          # Supabase settings and videos table read/write tests.
