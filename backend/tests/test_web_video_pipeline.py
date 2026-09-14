@@ -13,6 +13,23 @@ from backend.Web_video_download.pipeline import process_downloaded_video
 from backend.Web_video_download.transcript import TranscriptArtifact
 
 
+@pytest.fixture(autouse=True)
+def no_firecrawl_lookup():
+    """Keep the Firecrawl page-transcript lookup out of these tests.
+
+    Every case here drives the precedence chain past the supplied captions, so without
+    this the real Firecrawl endpoint is called with the project's live API key. That
+    costs quota on every run and makes the outcome depend on what the service happens to
+    return for the placeholder URL, which is what the transcript source is patched to
+    decide.
+    """
+    with patch(
+        "backend.Web_video_download.pipeline.scrape_public_page_transcript",
+        return_value=None,
+    ):
+        yield
+
+
 def _request() -> CreateVideoJobRequest:
     return CreateVideoJobRequest(page_url="https://example.com/watch")
 
