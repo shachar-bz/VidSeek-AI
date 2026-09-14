@@ -143,20 +143,7 @@ the companion clears everything today, which is why this has not bitten anyone.
 
 ---
 
-## 6. Race between a capture retry and the previous run's cleanup
-
-**Status:** closed. `_fail`, `_mark_cancelled`, and `_finish` now call `_discard_secrets`
-inside the same lock acquisition that publishes the terminal status, instead of the
-runner methods doing it afterwards in a separate `finally` block. `retry_with_capture`
-takes the same lock, so it can no longer land in the gap between a status flip to
-`FAILED`/`CANCELLED`/a finished state and the cleanup that follows it, and can no longer
-have its freshly captured cookies/headers wiped by the previous run's cleanup. Covered by
-`test_a_capture_retry_cannot_interleave_with_the_previous_runs_cleanup` in
-`backend/tests/test_web_video_jobs.py`.
-
----
-
-## 7. Firecrawl's containment check may reject valid transcripts
+## 6. Firecrawl's containment check may reject valid transcripts
 
 **Status:** unverified. **Problem:** `scrape_public_page_transcript` accepts the extracted
 transcript only if it appears verbatim inside the returned markdown. With
@@ -171,7 +158,7 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 8. Caption parsing is duplicated between the two download pipelines
+## 7. Caption parsing is duplicated between the two download pipelines
 
 **Status:** open. **Problem:** `services/video_download/web/transcript.py` and
 `services/video_download/youtube/captions.py` each carry their own WebVTT parser,
@@ -184,7 +171,7 @@ have to be fixed twice.
 
 ---
 
-## 9. `discoverPage` has no automated test
+## 8. `discoverPage` has no automated test
 
 **Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers
 `classifyMediaUrl`, `originPatterns` and `chooseDirectCandidate`, but not `discoverPage`
@@ -202,7 +189,7 @@ scope — so a test also guards against the two copies drifting apart.
 
 ---
 
-## 10. A missing FFmpeg can yield a silent video
+## 9. A missing FFmpeg can yield a silent video
 
 **Status:** partly handled. **Problem:** `_download_options` sets
 `merge_output_format: "mp4/mkv"` with `no_warnings: True`. If ffmpeg is absent, yt-dlp
@@ -220,7 +207,7 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 11. Untimed page transcripts are demoted, not used — accepted
+## 10. Untimed page transcripts are demoted, not used — accepted
 
 **Status:** accepted behavior, not a bug, nothing to close. A page transcript (scraped by
 Firecrawl, or read from a player's transcript panel) has no per-word timing, and
@@ -241,7 +228,7 @@ complexity and dependency.
 
 ---
 
-## 12. Chapters and memories tables are not built yet
+## 11. Chapters and memories tables are not built yet
 
 **Status:** not started, deliberately deferred. `backend/storage/supabase/` holds `videos`
 and `transcript_segments` today; `chapters` and `memories` are the two tables Supabase was
