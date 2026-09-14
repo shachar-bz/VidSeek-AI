@@ -32,14 +32,12 @@ class FakeVideoStorage:
         return STORED
 
 
-def _upload(tmp_path: Path, storage: FakeVideoStorage, *, configured: bool = True):
+def _upload(tmp_path: Path, storage: FakeVideoStorage, *, video_path: Path | None = None):
     reported: list[tuple[JobPhase, float, str]] = []
-    video_path = tmp_path / "clip.mp4"
-    video_path.write_bytes(b"video-bytes")
-    with (
-        patch.object(video_upload, "is_r2_configured", return_value=configured),
-        patch.object(video_upload, "R2VideoStorage", return_value=storage),
-    ):
+    video_path = video_path or tmp_path / "clip.mp4"
+    if not video_path.exists():
+        video_path.write_bytes(b"video-bytes")
+    with patch.object(video_upload, "R2VideoStorage", return_value=storage):
         stored = video_upload.upload_job_video(
             video_path=video_path,
             job_id="job-42",
@@ -58,15 +56,29 @@ def test_the_video_is_stored_under_the_job_that_produced_it(tmp_path: Path) -> N
     assert storage.uploaded[0][1] == "job-42"
 
 
-def test_without_a_bucket_the_video_is_left_alone_rather_than_the_job_failing(
+def test_the_local_copy_is_deleted_once_it_is_safely_in_the_bucket(tmp_path: Path) -> None:
+    video_path = tmp_path / "clip.mp4"
+    _upload(tmp_path, FakeVideoStorage(), video_path=video_path)
+
+    assert not video_path.exists()
+
+
+def test_a_missing_bucket_configuration_fails_the_upload_rather_than_skipping_it(
     tmp_path: Path,
 ) -> None:
-    storage = FakeVideoStorage()
-    stored, reported = _upload(tmp_path, storage, configured=False)
-
-    assert stored is None
-    assert storage.uploaded == []
-    assert reported == []
+    video_path = tmp_path / "clip.mp4"
+    video_path.write_bytes(b"video-bytes")
+    with (
+        patch.object(
+            video_upload, "R2VideoStorage", side_effect=RuntimeError("R2_BUCKET_NAME is not set")
+        ),
+        pytest.raises(RuntimeError, match="R2_BUCKET_NAME"),
+    ):
+        video_upload.upload_job_video(
+            video_path=video_path, job_id="job-42", progress_callback=lambda *_: None
+        )
+    # A failed upload leaves the only copy of the video where it is.
+    assert video_path.exists()
 
 
 def test_upload_progress_stays_inside_the_slice_of_the_bar_it_owns(tmp_path: Path) -> None:
