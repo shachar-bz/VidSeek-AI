@@ -15,7 +15,7 @@ from pathlib import Path
 from yt_dlp.utils import DownloadCancelled
 
 from backend.services.transcription.elevenlabs import transcribe_video
-from backend.services.transcripts import normalize_caption_cues, normalize_words
+from backend.services.transcripts import TimingFidelity, normalize_caption_cues, normalize_words
 
 from .captions import fetch_captions
 from .comments import CommentEntry, fetch_top_comments
@@ -77,13 +77,16 @@ def _build_transcript(video_path: str, url: str, output_dir: Path, languages: tu
     individual words the other — and normalizing here is what makes that difference stop
     at this function.
     """
-    segments = fetch_captions(url, output_dir, languages=languages)
-    if segments is not None:
+    fetched = fetch_captions(url, output_dir, languages=languages)
+    if fetched is not None:
+        normalize_fn = (
+            normalize_words if fetched.timing_fidelity == TimingFidelity.WORD else normalize_caption_cues
+        )
         return YouTubeTranscript(
             source=CAPTIONS_SOURCE,
-            text=" ".join(segment.text for segment in segments),
-            segments=segments,
-            normalized=normalize_caption_cues(segments, source=CAPTIONS_SOURCE),
+            text=" ".join(segment.text for segment in fetched.segments),
+            segments=fetched.segments,
+            normalized=normalize_fn(fetched.segments, source=CAPTIONS_SOURCE),
         )
 
     logger.info("No YouTube captions available for %s; transcribing with ElevenLabs", url)
