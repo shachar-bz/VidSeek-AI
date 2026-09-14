@@ -121,7 +121,7 @@ VidSeek-AI/
 │       ├── test_supabase_video_records.py          # Supabase settings and videos table read/write tests.
 │       ├── test_supabase_transcript_segments.py    # Transcript segment batching, paging and replacement tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
-└── chrome-extension/                               # Internal Manifest V3 video download extension.
+├── chrome-extension/                               # Internal Manifest V3 video download extension.
     ├── public/                                     # Static files copied into the extension build.
     │   └── manifest.json                           # Chrome permissions and service-worker manifest.
     ├── src/                                        # Extension discovery, API, background and popup source.
@@ -138,4 +138,6 @@ VidSeek-AI/
     ├── README.md                                   # Build, load and capture instructions.
     ├── tsconfig.json                               # Strict TypeScript configuration.
     └── vite.config.ts                              # Deterministic extension bundle configuration.
+└── frontend/                                       # Reserved for future web frontend applications.
+    └── README.md                                   # Notes that this folder is a placeholder.
 ```
