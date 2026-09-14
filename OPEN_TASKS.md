@@ -158,20 +158,7 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 7. Caption parsing is duplicated between the two download pipelines
-
-**Status:** open. **Problem:** `services/video_download/web/transcript.py` and
-`services/video_download/youtube/captions.py` each carry their own WebVTT parser,
-timestamp parser, cue tag stripper and `CaptionSegment` dataclass. They can drift, and a
-fix to one will not reach the other.
-
-**To close:** promote one parser into `backend/core/captions.py` and have both pipelines
-use it. Not urgent — both are covered by their own tests — but the next caption bug will
-have to be fixed twice.
-
----
-
-## 8. `discoverPage` has no automated test
+## 7. `discoverPage` has no automated test
 
 **Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers
 `classifyMediaUrl`, `originPatterns` and `chooseDirectCandidate`, but not `discoverPage`
@@ -189,7 +176,7 @@ scope — so a test also guards against the two copies drifting apart.
 
 ---
 
-## 9. A missing FFmpeg can yield a silent video
+## 8. A missing FFmpeg can yield a silent video
 
 **Status:** partly handled. **Problem:** `_download_options` sets
 `merge_output_format: "mp4/mkv"` with `no_warnings: True`. If ffmpeg is absent, yt-dlp
@@ -207,7 +194,7 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 10. Untimed page transcripts are recovered via forced alignment — closed
+## 9. Untimed page transcripts are recovered via forced alignment — closed
 
 **Status:** closed. A page transcript (scraped by Firecrawl, or read from a player's
 transcript panel) still has no per-word timing of its own, and `normalize_caption_cues`
@@ -230,7 +217,7 @@ exists only in `services/video_download/web/`.
 
 ---
 
-## 11. Chapters and memories tables are not built yet
+## 10. Chapters and memories tables are not built yet
 
 **Status:** not started, deliberately deferred. `backend/storage/supabase/` holds `videos`
 and `transcript_segments` today; `chapters` and `memories` are the two tables Supabase was
