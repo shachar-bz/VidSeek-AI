@@ -9,8 +9,9 @@ from pathlib import Path
 import requests
 from yt_dlp.utils import DownloadCancelled
 
+from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
+
 from .downloader import DownloadedVideo, download_video
-from .models import CreateVideoJobRequest, JobPhase
 from .transcript import (
     TranscriptArtifact,
     choose_supplied_transcript,

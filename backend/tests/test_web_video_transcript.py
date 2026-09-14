@@ -1,6 +1,6 @@
 """Tests for deterministic transcript parsing and precedence."""
 
-from backend.services.video_download.web.models import CaptionCandidate
+from backend.schemas.browser import CaptionCandidate
 from backend.services.video_download.web.transcript import (
     choose_supplied_transcript,
     parse_ttml,

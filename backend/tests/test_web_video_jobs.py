@@ -5,16 +5,15 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.services.video_download.web.downloader import UnsupportedMediaError
-from backend.services.video_download.web.jobs import JobManager
-from backend.services.video_download.web.models import (
+from backend.core.errors import UnsupportedMediaError
+from backend.schemas.browser import (
     BrowserContext,
     BrowserCookie,
-    CreateVideoJobRequest,
-    JobStatus,
     MediaCandidate,
     MediaKind,
 )
+from backend.schemas.video_jobs import CreateVideoJobRequest, JobStatus
+from backend.services.video_download.jobs import JobManager
 
 
 def direct_request(**overrides) -> CreateVideoJobRequest:
@@ -35,7 +34,7 @@ def direct_request(**overrides) -> CreateVideoJobRequest:
 def test_direct_file_waits_for_cookie_aware_chrome_download(tmp_path: Path) -> None:
     manager = JobManager(tmp_path)
     try:
-        with patch("backend.services.video_download.web.jobs.validate_remote_url"):
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
             job = manager.create(direct_request())
         assert job.status == JobStatus.AWAITING_BROWSER_DOWNLOAD
         assert job.acquisition_mode == "browser_download"
@@ -46,7 +45,7 @@ def test_direct_file_waits_for_cookie_aware_chrome_download(tmp_path: Path) -> N
 def test_cancel_discards_browser_secrets(tmp_path: Path) -> None:
     manager = JobManager(tmp_path)
     try:
-        with patch("backend.services.video_download.web.jobs.validate_remote_url"):
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
             created = manager.create(direct_request())
         cancelled = manager.cancel(created.job_id)
         assert cancelled.status == JobStatus.CANCELLED
@@ -58,7 +57,7 @@ def test_cancel_discards_browser_secrets(tmp_path: Path) -> None:
 def test_drm_is_rejected_before_job_creation(tmp_path: Path) -> None:
     manager = JobManager(tmp_path)
     try:
-        with patch("backend.services.video_download.web.jobs.validate_remote_url"):
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
             with pytest.raises(UnsupportedMediaError, match="DRM"):
                 manager.create(direct_request(drm_detected=True))
     finally:

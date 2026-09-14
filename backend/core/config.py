@@ -47,3 +47,15 @@ def require(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is not set in {ENV_PATH} or the environment")
     return value
+
+
+def download_root() -> Path:
+    """The only filesystem root jobs may read from or write into."""
+    configured = get("VIDSEEK_DOWNLOAD_ROOT")
+    return Path(configured).expanduser() if configured else Path.home() / "Downloads" / "VidSeek"
+
+
+def extension_ids() -> set[str]:
+    """The comma-separated allowlist of extension ids permitted to open a session."""
+    raw_ids = get("VIDSEEK_EXTENSION_IDS") or ""
+    return {item.strip() for item in raw_ids.split(",") if item.strip()}

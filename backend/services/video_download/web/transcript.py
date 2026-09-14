@@ -13,9 +13,8 @@ from urllib.parse import urlsplit, urlunsplit
 import requests
 
 from backend.core import config
+from backend.schemas.browser import CaptionCandidate
 from backend.services.transcription.elevenlabs import transcribe_video
-
-from .models import CaptionCandidate
 
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
 FIRECRAWL_API_KEY_NAME = "FIRECRAWL_API_KEY"

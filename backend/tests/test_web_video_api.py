@@ -4,9 +4,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from backend.services.video_download.web.api import create_app
-from backend.services.video_download.web.jobs import JobManager
-from backend.services.video_download.web.security import SessionRegistry
+from backend.api import create_app
+from backend.services.video_download.jobs import JobManager
+from backend.core.security import SessionRegistry
 
 
 def test_session_rejects_web_page_origin(tmp_path: Path) -> None:

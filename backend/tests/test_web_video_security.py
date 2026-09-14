@@ -5,14 +5,14 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.services.video_download.web.models import BrowserContext
-from backend.services.video_download.web.security import (
+from backend.core.security import (
     SessionRegistry,
-    filtered_headers,
-    reject_youtube,
     validate_local_media_path,
     validate_remote_url,
 )
+from backend.schemas.browser import BrowserContext
+from backend.services.video_download.web.downloader import reject_youtube
+from backend.services.video_download.web.headers import filtered_headers
 
 
 def test_session_is_bound_to_allowed_extension_origin() -> None:
@@ -43,12 +43,12 @@ def test_local_media_path_must_be_inside_download_root(tmp_path: Path) -> None:
     root.mkdir()
     media = root / "recording.mp4"
     media.write_bytes(b"video")
-    with patch("backend.services.video_download.web.security.probe_media_file"):
+    with patch("backend.core.security.probe_media_file"):
         assert validate_local_media_path(str(media), root) == media.resolve()
 
     outside = tmp_path / "outside.mp4"
     outside.write_bytes(b"video")
-    with patch("backend.services.video_download.web.security.probe_media_file"):
+    with patch("backend.core.security.probe_media_file"):
         with pytest.raises(ValueError, match="outside"):
             validate_local_media_path(str(outside), root)
 

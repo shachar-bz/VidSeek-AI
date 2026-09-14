@@ -7,16 +7,16 @@ from unittest.mock import patch
 
 import pytest
 
+from backend.core.errors import UnsupportedMediaError
+from backend.schemas.browser import BrowserContext, BrowserCookie, MediaCandidate
 from backend.services.video_download.web.downloader import (
     SafeYoutubeDL,
-    UnsupportedMediaError,
     _download_options,
     _origin,
     _validate_info,
     _write_cookie_jar,
     download_video,
 )
-from backend.services.video_download.web.models import BrowserContext, BrowserCookie, MediaCandidate
 
 
 def test_live_and_drm_media_are_rejected() -> None:

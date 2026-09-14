@@ -8,7 +8,7 @@ import pytest
 from yt_dlp.utils import DownloadCancelled
 
 from backend.services.video_download.web.downloader import DownloadedVideo
-from backend.services.video_download.web.models import CreateVideoJobRequest
+from backend.schemas.video_jobs import CreateVideoJobRequest
 from backend.services.video_download.web.pipeline import process_downloaded_video
 from backend.services.video_download.web.transcript import TranscriptArtifact
 

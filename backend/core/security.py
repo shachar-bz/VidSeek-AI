@@ -1,4 +1,10 @@
-"""Security boundaries for loopback sessions, URLs, headers, and local paths."""
+"""Session tokens and the boundary guards applied before anything external is opened.
+
+Everything here is generic: it validates a URL, a local path or a media file without
+knowing which service asked. The one guard that is not generic — header filtering, which
+reads a `BrowserContext` — lives with the web downloader instead, so that `core` never has
+to import `backend.schemas`.
+"""
 
 from __future__ import annotations
 
@@ -12,24 +18,16 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from backend.core import config
-
-from .models import BrowserContext
+from . import config
+from .errors import MissingDependencyError
 
 SESSION_TTL_SECONDS = 30 * 60
-ALLOWED_REQUEST_HEADERS = frozenset(
-    {"accept", "accept-language", "authorization", "origin", "referer", "user-agent"}
-)
 SUPPORTED_LOCAL_MEDIA_SUFFIXES = frozenset(
     {
         ".3gp", ".avi", ".flv", ".m4v", ".mkv", ".mov", ".mp4",
         ".mpeg", ".mpg", ".ogg", ".webm", ".wmv",
     }
 )
-
-
-class MissingDependencyError(RuntimeError):
-    """A required external binary is not installed, so no job can ever succeed."""
 
 
 class SessionRegistry:
@@ -43,7 +41,7 @@ class SessionRegistry:
 
     @classmethod
     def from_environment(cls) -> "SessionRegistry":
-        return cls(configured_extension_ids())
+        return cls(config.extension_ids())
 
     def is_allowed_origin(self, origin: str | None) -> bool:
         if not origin or not origin.startswith("chrome-extension://"):
@@ -91,16 +89,21 @@ class SessionRegistry:
             self._tokens.pop(token, None)
 
 
-def configured_download_root() -> Path:
-    """Return the only filesystem root jobs may read from or write into."""
-    configured = config.get("VIDSEEK_DOWNLOAD_ROOT")
-    return Path(configured).expanduser() if configured else Path.home() / "Downloads" / "VidSeek"
+def is_youtube_url(url: str) -> bool:
+    """Whether `url` belongs to YouTube, including its mobile and music subdomains.
 
-
-def configured_extension_ids() -> set[str]:
-    """Read the comma-separated internal extension allowlist."""
-    raw_ids = config.get("VIDSEEK_EXTENSION_IDS") or ""
-    return {item.strip() for item in raw_ids.split(",") if item.strip()}
+    This is the classifier the job router uses to choose a pipeline. It has to be decided
+    on the server: the extension sends the page URL, and the companion cannot take the
+    client's word for which pipeline should run.
+    """
+    hostname = (urlsplit(url).hostname or "").lower().removeprefix("www.")
+    return (
+        hostname == "youtu.be"
+        or hostname == "youtube.com"
+        or hostname.endswith(".youtube.com")
+        or hostname == "youtube-nocookie.com"
+        or hostname.endswith(".youtube-nocookie.com")
+    )
 
 
 def validate_remote_url(url: str) -> str:
@@ -121,44 +124,6 @@ def validate_remote_url(url: str) -> str:
         if not ip.is_global:
             raise ValueError("Private, loopback, and link-local media addresses are blocked")
     return url
-
-
-def reject_youtube(url: str) -> None:
-    """Keep YouTube owned by the project's dedicated YouTube module."""
-    hostname = (urlsplit(url).hostname or "").lower().removeprefix("www.")
-    if (
-        hostname == "youtu.be"
-        or hostname == "youtube.com"
-        or hostname.endswith(".youtube.com")
-        or hostname == "youtube-nocookie.com"
-        or hostname.endswith(".youtube-nocookie.com")
-    ):
-        raise ValueError("YouTube URLs must use the YouTube download pipeline")
-
-
-def filtered_headers(
-    context: BrowserContext,
-    candidate_headers: dict[str, str] | None = None,
-) -> dict[str, str]:
-    """Copy only request headers needed to reproduce a media request.
-
-    Chrome's debugger reports header names lowercased, so names are folded to one
-    canonical spelling here; otherwise a captured `user-agent` and the popup's own
-    `User-Agent` would both be sent and yt-dlp would pick between them arbitrarily.
-    """
-    combined: dict[str, tuple[str, str]] = {}
-    for name, value in {**context.headers, **(candidate_headers or {})}.items():
-        combined[name.lower()] = (name, value)
-    if context.user_agent:
-        combined.setdefault("user-agent", ("User-Agent", context.user_agent))
-
-    return {
-        name: value
-        for lowered, (name, value) in combined.items()
-        if lowered in ALLOWED_REQUEST_HEADERS
-        and "\r" not in value
-        and "\n" not in value
-    }
 
 
 def validate_local_media_path(path_value: str, download_root: Path) -> Path:

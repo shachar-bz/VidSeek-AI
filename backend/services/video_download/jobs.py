@@ -10,18 +10,24 @@ from pathlib import Path
 
 from yt_dlp.utils import DownloadCancelled
 
-from .downloader import DownloadedVideo, UnsupportedMediaError
-from .models import (
+from backend.core.errors import (
+    JobNotFoundError,
+    JobStateConflictError,
+    UnsupportedMediaError,
+)
+from backend.core.security import validate_local_media_path, validate_remote_url
+from backend.schemas.browser import MediaKind
+from backend.schemas.video_jobs import (
     BrowserDownloadCompleteRequest,
     CaptureRetryRequest,
     CreateVideoJobRequest,
     JobPhase,
     JobStatus,
-    MediaKind,
     VideoJobResponse,
 )
-from .pipeline import download_and_transcribe, process_downloaded_video
-from .security import reject_youtube, validate_local_media_path, validate_remote_url
+
+from .web.downloader import DownloadedVideo, reject_youtube
+from .web.pipeline import download_and_transcribe, process_downloaded_video
 
 
 @dataclass
@@ -111,12 +117,12 @@ class JobManager:
     ) -> VideoJobResponse:
         with self._lock:
             if self._require(job_id).status != JobStatus.AWAITING_BROWSER_DOWNLOAD:
-                raise ValueError("Job is not waiting for a Chrome download")
+                raise JobStateConflictError("Job is not waiting for a Chrome download")
         path = validate_local_media_path(payload.local_path, self.download_root)
         with self._lock:
             job = self._require(job_id)
             if job.status != JobStatus.AWAITING_BROWSER_DOWNLOAD:
-                raise ValueError("Job is not waiting for a Chrome download")
+                raise JobStateConflictError("Job is not waiting for a Chrome download")
             job.status = JobStatus.QUEUED
             job.message = "Chrome download complete; queued for transcript processing"
         self._executor.submit(self._run_existing_file, job_id, path)
@@ -128,7 +134,7 @@ class JobManager:
         with self._lock:
             job = self._require(job_id)
             if job.status not in {JobStatus.FAILED, JobStatus.AWAITING_BROWSER_DOWNLOAD}:
-                raise ValueError("Job is not eligible for captured-request retry")
+                raise JobStateConflictError("Job is not eligible for captured-request retry")
             job.request.media_candidates = payload.media_candidates
             job.request.browser_context = payload.browser_context
             job.status = JobStatus.QUEUED
@@ -165,7 +171,7 @@ class JobManager:
         try:
             return self._jobs[job_id]
         except KeyError as error:
-            raise KeyError("Video job was not found") from error
+            raise JobNotFoundError("Video job was not found") from error
 
     def _progress(self, job_id: str, phase: JobPhase, value: float, message: str) -> None:
         with self._lock:

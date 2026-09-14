@@ -15,22 +15,26 @@ from urllib.parse import urlsplit
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadCancelled, DownloadError
 
-from .models import BrowserContext, MediaCandidate, MediaKind
-from .security import (
-    MissingDependencyError,
-    filtered_headers,
-    probe_media_file,
-    reject_youtube,
-    validate_remote_url,
-)
+from backend.core.errors import MissingDependencyError, UnsupportedMediaError
+from backend.core.security import is_youtube_url, probe_media_file, validate_remote_url
+from backend.schemas.browser import BrowserContext, MediaCandidate, MediaKind
+
+from .headers import filtered_headers
 
 FORMAT_SELECTOR = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b"
 MEDIA_SUFFIXES = {".3gp", ".avi", ".flv", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm"}
 SUBTITLE_SUFFIXES = {".srt", ".ttml", ".vtt"}
 
 
-class UnsupportedMediaError(RuntimeError):
-    """The URL points to media deliberately outside the v1 scope."""
+def reject_youtube(url: str) -> None:
+    """Keep YouTube out of the web downloader, which cannot serve it.
+
+    The router already sends a YouTube page to the YouTube pipeline, so this is defense in
+    depth rather than the routing decision: a captured request can hand this downloader a
+    googlevideo URL that never passed through the router at all.
+    """
+    if is_youtube_url(url):
+        raise ValueError("YouTube URLs must use the YouTube download pipeline")
 
 
 @dataclass(frozen=True)

@@ -1,32 +1,18 @@
-"""Public interface for authenticated non-YouTube browser video downloads."""
+"""Authenticated non-YouTube browser video downloads.
 
-from .api import create_app
-from .downloader import DownloadedVideo, UnsupportedMediaError, download_video
-from .models import (
-    BrowserContext,
-    BrowserCookie,
-    CaptionCandidate,
-    CreateVideoJobRequest,
-    JobPhase,
-    JobStatus,
-    MediaCandidate,
-    MediaKind,
-    VideoJobResponse,
-)
+This package no longer exports `create_app`. Serving it from here is what made the whole
+backend import FastAPI just to reach the downloader, and removing that export is what lets
+`backend.services` stay importable from a script or a CLI. The app is built by
+`backend.api.create_app`.
+"""
+
+from .downloader import DownloadedVideo, download_video
+from .pipeline import PipelineResult, download_and_transcribe, process_downloaded_video
 
 __all__ = [
-    "BrowserContext",
-    "BrowserCookie",
-    "CaptionCandidate",
-    "CreateVideoJobRequest",
     "DownloadedVideo",
-    "JobPhase",
-    "JobStatus",
-    "MediaCandidate",
-    "MediaKind",
-    "UnsupportedMediaError",
-    "VideoJobResponse",
-    "create_app",
+    "PipelineResult",
+    "download_and_transcribe",
     "download_video",
+    "process_downloaded_video",
 ]
-
