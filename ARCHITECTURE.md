@@ -24,6 +24,7 @@ VidSeek-AI/
 │   │   └── video_jobs.py                           # Job request, lifecycle enums and the response the extension polls.
 │   ├── core/                                       # Cross-cutting foundations, depending on nothing above them.
 │   │   ├── __init__.py                             # Public interface of the core layer.
+│   │   ├── captions.py                              # Shared CaptionSegment type and generic WebVTT/SRT/TTML parsing.
 │   │   ├── config.py                               # The only reader of backend/.env, and the derived settings.
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
 │   │   └── security.py                             # Session tokens, URL/path guards and YouTube URL classification.

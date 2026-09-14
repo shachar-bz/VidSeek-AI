@@ -51,9 +51,9 @@ SENTENCE_END_PATTERN = re.compile("[.!?…;:][\"'”’)\\]]?$")
 class TimedText(Protocol):
     """What every source's piece of transcript has in common.
 
-    Structural rather than nominal on purpose: ElevenLabs' `TranscriptWord`, the YouTube
-    module's `CaptionSegment` and the web module's `CaptionSegment` already expose these
-    three names, and none of them should have to import from here to be normalizable.
+    Structural rather than nominal on purpose: ElevenLabs' `TranscriptWord` and
+    `backend.core.captions.CaptionSegment` already expose these three names, and neither
+    should have to import from here to be normalizable.
     """
 
     text: str

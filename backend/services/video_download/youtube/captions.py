@@ -23,20 +23,17 @@ from pathlib import Path
 
 from yt_dlp import YoutubeDL
 
+from backend.core.captions import CaptionSegment, clean_caption_text, parse_timestamp_seconds
 from backend.services.transcripts import TimingFidelity
 
 from .downloader import build_download_options
-from .transcript import CaptionSegment
 
 SUBTITLE_FORMAT = "vtt"
 
 CUE_TIMING_SEPARATOR = "-->"
 
-# `<00:00:04.120>` word stamps and `<c>` styling, which YouTube's automatic tracks sprinkle
-# through the text and which nothing downstream wants to read as words.
-CUE_TAG_PATTERN = re.compile(r"<[^>]*>")
-
-# Only the word stamps among those tags, captured so a cue's text can be split on them.
+# Only the word stamps among the tags a cue may carry, captured so its text can be split
+# on them. `<c>` styling tags are left to `clean_caption_text`.
 WORD_TIMESTAMP_PATTERN = re.compile(r"<(\d{2}:\d{2}:\d{2}\.\d{3})>")
 
 # WebVTT separates one cue from the next with a blank line.
@@ -85,15 +82,6 @@ def _select_track(info: dict, languages: tuple[str, ...]) -> tuple[str, bool] | 
     return None
 
 
-def _parse_timestamp(value: str) -> float:
-    """Seconds from a WebVTT `HH:MM:SS.mmm` or `MM:SS.mmm` stamp."""
-    parts = value.strip().split(":")
-    seconds = float(parts[-1])
-    minutes = int(parts[-2]) if len(parts) > 1 else 0
-    hours = int(parts[-3]) if len(parts) > 2 else 0
-    return hours * 3600 + minutes * 60 + seconds
-
-
 def _iter_cues(vtt_text: str):
     """Yield each cue as `(start_seconds, end_seconds, text_lines)`, skipping non-cue blocks.
 
@@ -117,8 +105,8 @@ def _iter_cues(vtt_text: str):
             continue
 
         yield (
-            _parse_timestamp(start_raw),
-            _parse_timestamp(end_stamp[0]),
+            parse_timestamp_seconds(start_raw),
+            parse_timestamp_seconds(end_stamp[0]),
             lines[timing_index + 1 :],
         )
 
@@ -137,7 +125,7 @@ def _parse_cue_lines(cues) -> list[CaptionSegment]:
     for start_seconds, end_seconds, lines in cues:
         texts = []
         for line in lines:
-            cleaned = CUE_TAG_PATTERN.sub("", line).strip()
+            cleaned = clean_caption_text(line)
             if not cleaned or cleaned == previous_line:
                 continue
             texts.append(cleaned)
@@ -180,9 +168,9 @@ def _parse_word_timings(cues) -> list[CaptionSegment]:
             word_start = start_seconds
             for index, chunk in enumerate(WORD_TIMESTAMP_PATTERN.split(line)):
                 if index % 2 == 1:
-                    word_start = _parse_timestamp(chunk)
+                    word_start = parse_timestamp_seconds(chunk)
                     continue
-                cleaned = CUE_TAG_PATTERN.sub("", chunk).strip()
+                cleaned = clean_caption_text(chunk)
                 if cleaned:
                     words.append([cleaned, word_start, None])
                     added_from_this_cue = True

@@ -171,19 +171,6 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 8. Caption parsing is duplicated between the two download pipelines
-
-**Status:** open. **Problem:** `services/video_download/web/transcript.py` and
-`services/video_download/youtube/captions.py` each carry their own WebVTT parser,
-timestamp parser, cue tag stripper and `CaptionSegment` dataclass. They can drift, and a
-fix to one will not reach the other.
-
-**To close:** promote one parser into `backend/core/captions.py` and have both pipelines
-use it. Not urgent — both are covered by their own tests — but the next caption bug will
-have to be fixed twice.
-
----
-
 ## 9. `discoverPage` has no automated test
 
 **Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers

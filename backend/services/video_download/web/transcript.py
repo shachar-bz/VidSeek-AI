@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import json
 import logging
 import re
@@ -14,6 +13,7 @@ from urllib.parse import urlsplit, urlunsplit
 import requests
 
 from backend.core import config
+from backend.core.captions import CaptionSegment, parse_ttml, parse_webvtt_or_srt
 from backend.storage import transcript_store
 from backend.schemas.browser import CaptionCandidate
 from backend.services.forced_alignment import align_text_to_media, is_english_text
@@ -30,15 +30,6 @@ MIN_VISIBLE_TRANSCRIPT_CHARACTERS = 80
 FORCED_ALIGNMENT_SOURCE = "forced_alignment"
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class CaptionSegment:
-    """One timed caption cue."""
-
-    text: str
-    start_seconds: float | None = None
-    end_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -63,64 +54,6 @@ class TranscriptArtifact:
     def is_timed(self) -> bool:
         """Whether this transcript carries the timing the next stage requires."""
         return self.normalized is not None
-
-
-def _timestamp_seconds(value: str) -> float:
-    parts = value.replace(",", ".").split(":")
-    if len(parts) == 2:
-        parts.insert(0, "0")
-    hours, minutes, seconds = parts
-    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-
-
-def _clean_caption_text(value: str) -> str:
-    value = re.sub(r"<[^>]+>", "", value)
-    return html.unescape(value).replace("\u200e", "").replace("\u200f", "").strip()
-
-
-def parse_webvtt_or_srt(content: str) -> list[CaptionSegment]:
-    """Parse ordinary WebVTT or SRT cues without retaining formatting tags."""
-    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
-    timing = re.compile(
-        r"(?P<start>\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3})\s+-->\s+"
-        r"(?P<end>\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3})[^\n]*\n"
-        r"(?P<text>.*?)(?=\n\s*\n|\Z)",
-        re.DOTALL,
-    )
-    segments = []
-    for match in timing.finditer(normalized):
-        cue_text = _clean_caption_text(" ".join(match.group("text").splitlines()))
-        if cue_text:
-            segments.append(
-                CaptionSegment(
-                    text=cue_text,
-                    start_seconds=_timestamp_seconds(match.group("start")),
-                    end_seconds=_timestamp_seconds(match.group("end")),
-                )
-            )
-    return segments
-
-
-def parse_ttml(content: str) -> list[CaptionSegment]:
-    """Parse TTML paragraph cues and ignore presentation-only XML."""
-    root = ElementTree.fromstring(content)
-    segments = []
-    for element in root.iter():
-        if element.tag.rsplit("}", 1)[-1] != "p":
-            continue
-        text = _clean_caption_text(" ".join("".join(element.itertext()).split()))
-        if not text:
-            continue
-        begin = element.attrib.get("begin")
-        end = element.attrib.get("end")
-        segments.append(
-            CaptionSegment(
-                text=text,
-                start_seconds=_timestamp_seconds(begin) if begin and ":" in begin else None,
-                end_seconds=_timestamp_seconds(end) if end and ":" in end else None,
-            )
-        )
-    return segments
 
 
 def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact | None:
