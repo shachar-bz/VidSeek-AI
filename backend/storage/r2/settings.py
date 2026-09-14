@@ -20,7 +20,6 @@ SECRET_ACCESS_KEY_NAME = "R2_ACCESS_KEY"
 ALTERNATE_SECRET_ACCESS_KEY_NAME = "R2_SECRET_ACCESS_KEY"
 ENDPOINT_URL_NAME = "R2_ENDPOINT_URL"
 BUCKET_NAME = "R2_BUCKET_NAME"
-PUBLIC_BASE_URL_NAME = "R2_PUBLIC_BASE_URL"
 
 # R2 is one global namespace with no regions, but the S3 protocol requires a region in
 # the request signature, and "auto" is the value Cloudflare documents for it.
@@ -35,10 +34,6 @@ class R2Settings:
     secret_access_key: str
     endpoint_url: str
     bucket: str
-    # Set only when the bucket is served publicly, either through an r2.dev subdomain or
-    # a custom domain. Without it, a stored object is reachable only through a presigned
-    # URL, which is the safer default and the one this project assumes.
-    public_base_url: str | None = None
 
 
 def load_r2_settings() -> R2Settings:
@@ -56,7 +51,6 @@ def load_r2_settings() -> R2Settings:
         secret_access_key=secret_access_key,
         endpoint_url=_account_endpoint(config.require(ENDPOINT_URL_NAME)),
         bucket=config.require(BUCKET_NAME),
-        public_base_url=(config.get(PUBLIC_BASE_URL_NAME) or "").rstrip("/") or None,
     )
 
 

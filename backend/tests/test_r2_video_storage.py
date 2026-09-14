@@ -120,20 +120,10 @@ def test_a_rejected_object_lookup_is_raised_rather_than_read_as_absence() -> Non
         _storage(FakeR2Client(head_error=_client_error("403"))).video_exists("videos/a/b")
 
 
-def test_a_private_bucket_hands_out_an_expiring_link_and_no_permanent_one() -> None:
+def test_a_video_is_handed_out_as_an_expiring_link() -> None:
     storage = _storage(FakeR2Client())
 
-    assert storage.public_url("videos/a/b.mp4") is None
     assert "expires=3600" in storage.presigned_download_url("videos/a/b.mp4")
-
-
-def test_a_public_bucket_links_videos_from_its_own_origin() -> None:
-    settings = R2Settings(**{**SETTINGS.__dict__, "public_base_url": "https://media.example.com"})
-
-    assert (
-        _storage(FakeR2Client(), settings).public_url("videos/a/b.mp4")
-        == "https://media.example.com/videos/a/b.mp4"
-    )
 
 
 def _set_r2_env(monkeypatch: pytest.MonkeyPatch, **overrides: str | None) -> None:
@@ -143,7 +133,6 @@ def _set_r2_env(monkeypatch: pytest.MonkeyPatch, **overrides: str | None) -> Non
         "R2_ENDPOINT_URL": "https://account.r2.cloudflarestorage.com",
         "R2_BUCKET_NAME": "vidseek-videos",
         "R2_SECRET_ACCESS_KEY": None,
-        "R2_PUBLIC_BASE_URL": None,
         **overrides,
     }
     for name, value in values.items():
