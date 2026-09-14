@@ -42,9 +42,11 @@ VidSeek-AI/
 │   │       ├── client.py                           # Builds the Supabase client the tables are reached through.
 │   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the R2 object it describes.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
+│   │       ├── video_comments.py                   # Reads and writes a YouTube video's top comments.
 │   │       └── migrations/                         # SQL applied by hand to the Supabase project, in order.
 │   │           ├── 0001_videos.sql                 # Creates the videos table, its indexes and its row level security.
-│   │           └── 0002_transcript_segments.sql    # Creates the transcript_segments table linked to a video.
+│   │           ├── 0002_transcript_segments.sql    # Creates the transcript_segments table linked to a video.
+│   │           └── 0003_video_comments.sql         # Creates the video_comments table linked to a video.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -137,6 +139,7 @@ VidSeek-AI/
 │       ├── test_video_upload.py                    # Job video upload, progress and skip-when-unconfigured tests.
 │       ├── test_supabase_video_records.py          # Supabase settings and videos table read/write tests.
 │       ├── test_supabase_transcript_segments.py    # Transcript segment batching, paging and replacement tests.
+│       ├── test_supabase_video_comments.py         # Video comment batching and replacement tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
 ├── chrome-extension/                               # Internal Manifest V3 video download extension.
     ├── public/                                     # Static files copied into the extension build.

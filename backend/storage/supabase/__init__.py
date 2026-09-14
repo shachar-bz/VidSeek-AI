@@ -3,12 +3,14 @@
 from .client import build_client, shared_client
 from .settings import SupabaseSettings, is_supabase_configured, load_supabase_settings
 from .transcript_segments import SupabaseTranscriptSegments
+from .video_comments import SupabaseVideoComments
 from .video_records import StoredVideoRecord, SupabaseVideoRecords, VideoRecord
 
 __all__ = [
     "StoredVideoRecord",
     "SupabaseSettings",
     "SupabaseTranscriptSegments",
+    "SupabaseVideoComments",
     "SupabaseVideoRecords",
     "VideoRecord",
     "build_client",

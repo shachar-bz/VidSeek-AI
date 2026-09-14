@@ -9,6 +9,7 @@ from backend.services.transcripts import (
     TranscriptSegment,
 )
 from backend.services.video_download import video_record
+from backend.services.video_download.youtube.comments import CommentEntry
 from backend.storage.r2 import StoredVideo
 from backend.storage.supabase import StoredVideoRecord, VideoRecord
 
@@ -35,6 +36,17 @@ TRANSCRIPT = NormalizedTranscript(
         TranscriptSegment(index=1, start_seconds=1.5, end_seconds=3.0, text="and welcome"),
     ],
 )
+
+COMMENTS = [
+    CommentEntry(
+        id="comment-1",
+        author="A Viewer",
+        text="great video",
+        like_count=5,
+        reply_count=1,
+        published_at="2026-09-14T10:00:00+00:00",
+    ),
+]
 
 
 class FakeVideoRecords:
@@ -64,12 +76,25 @@ class FakeTranscriptSegments:
         return len(self.replaced[-1][1])
 
 
+class FakeVideoComments:
+    """Stands in for the `video_comments` table."""
+
+    def __init__(self):
+        self.replaced: list[tuple[str, list[CommentEntry]]] = []
+
+    def replace(self, video_id: str, comments) -> int:
+        self.replaced.append((video_id, list(comments)))
+        return len(self.replaced[-1][1])
+
+
 def _record(
     records: FakeVideoRecords,
     segments: FakeTranscriptSegments | None = None,
+    comments_store: FakeVideoComments | None = None,
     *,
     configured: bool = True,
     transcript: NormalizedTranscript | None = None,
+    comments: list[CommentEntry] | None = None,
 ):
     with (
         patch.object(video_record, "is_supabase_configured", return_value=configured),
@@ -79,6 +104,11 @@ def _record(
             "SupabaseTranscriptSegments",
             return_value=segments or FakeTranscriptSegments(),
         ),
+        patch.object(
+            video_record,
+            "SupabaseVideoComments",
+            return_value=comments_store or FakeVideoComments(),
+        ),
     ):
         return video_record.record_job_video(
             stored_video=STORED,
@@ -87,6 +117,7 @@ def _record(
             acquisition_mode="companion_download",
             transcript_source="page_transcript",
             transcript=transcript,
+            comments=comments,
         )
 
 
@@ -160,3 +191,30 @@ def test_without_a_project_the_video_stays_unrecorded_rather_than_the_job_failin
     assert stored is None
     assert records.upserted == []
     assert segments.replaced == []
+
+
+def test_comments_are_stored_against_the_video_row_the_upsert_returned() -> None:
+    # Same reasoning as the transcript: comments carry a foreign key to `videos.id`, which
+    # only exists once the video row has been written.
+    records, comments_store = FakeVideoRecords(), FakeVideoComments()
+    _record(records, comments_store=comments_store, comments=COMMENTS)
+
+    assert comments_store.replaced == [(VIDEO_ROW_ID, COMMENTS)]
+
+
+def test_no_comments_argument_means_nothing_is_written_for_a_non_youtube_video() -> None:
+    # Only the YouTube pipeline ever fetches comments; every other pipeline leaves the
+    # argument unset, and that should leave the table alone rather than clearing it.
+    records, comments_store = FakeVideoRecords(), FakeVideoComments()
+    _record(records, comments_store=comments_store)
+
+    assert comments_store.replaced == []
+
+
+def test_an_empty_comments_list_still_clears_out_a_previous_fetch() -> None:
+    # Comments disabled, or none found, is a real answer from the YouTube pipeline and
+    # distinct from never having asked -- it should overwrite whatever was stored before.
+    records, comments_store = FakeVideoRecords(), FakeVideoComments()
+    _record(records, comments_store=comments_store, comments=[])
+
+    assert comments_store.replaced == [(VIDEO_ROW_ID, [])]

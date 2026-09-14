@@ -398,6 +398,7 @@ class JobManager:
                 acquisition_mode=acquisition_mode,
                 transcript_source=result.transcript_source,
                 transcript=result.normalized_transcript,
+                comments=result.comments,
             )
         except Exception:
             logger.exception("Recording %s in Supabase failed", stored_video.key)

@@ -11,6 +11,7 @@ from yt_dlp.utils import DownloadCancelled
 
 from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
 from backend.services.transcripts import NormalizedTranscript
+from backend.services.video_download.youtube.comments import CommentEntry
 
 from .downloader import DownloadedVideo, download_video
 from .transcript import (
@@ -33,9 +34,9 @@ UNTIMED_TRANSCRIPT_ERROR = "untimed_transcript"
 class PipelineResult:
     """Paths and transcript source produced by a completed pipeline.
 
-    `comments_path` is only ever set by the YouTube pipeline; the web route has no source
-    of comments and leaves it None. Both routes return this one shape so that the job
-    manager keeps a single completion path.
+    `comments_path` and `comments` are only ever set by the YouTube pipeline; the web
+    route has no source of comments and leaves both None. Both routes return this one
+    shape so that the job manager keeps a single completion path.
     """
 
     video_path: Path
@@ -50,6 +51,13 @@ class PipelineResult:
     # pipeline produced instead of a round trip through disk. None whenever the pipeline
     # produced no timed transcript, which is exactly when `transcript_error` is set.
     normalized_transcript: NormalizedTranscript | None = None
+
+    # The comments themselves, carried the same way and for the same reason: whatever
+    # records the job in Supabase writes what the YouTube pipeline actually fetched
+    # instead of re-reading `comments_path` off disk. Empty rather than None whenever the
+    # YouTube pipeline ran, since it always attempts the fetch and treats a failure or a
+    # video with comments disabled the same way: nothing found, not nothing attempted.
+    comments: tuple[CommentEntry, ...] | None = None
 
 
 def process_downloaded_video(
