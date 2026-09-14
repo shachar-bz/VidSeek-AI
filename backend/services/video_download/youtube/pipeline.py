@@ -15,6 +15,7 @@ from pathlib import Path
 from yt_dlp.utils import DownloadCancelled
 
 from backend.services.transcription.elevenlabs import transcribe_video
+from backend.services.transcripts import normalize_caption_cues, normalize_words
 
 from .captions import fetch_captions
 from .comments import CommentEntry, fetch_top_comments
@@ -70,12 +71,19 @@ def _write_comments(video_id: str, output_dir: Path, limit: int) -> tuple[list[C
 
 
 def _build_transcript(video_path: str, url: str, output_dir: Path, languages: tuple[str, ...]) -> YouTubeTranscript:
+    """Read the captions or transcribe, and normalize whichever timing came back.
+
+    The two sources measure timing at different granularities — caption cues one side,
+    individual words the other — and normalizing here is what makes that difference stop
+    at this function.
+    """
     segments = fetch_captions(url, output_dir, languages=languages)
     if segments is not None:
         return YouTubeTranscript(
             source=CAPTIONS_SOURCE,
             text=" ".join(segment.text for segment in segments),
             segments=segments,
+            normalized=normalize_caption_cues(segments, source=CAPTIONS_SOURCE),
         )
 
     logger.info("No YouTube captions available for %s; transcribing with ElevenLabs", url)
@@ -84,6 +92,9 @@ def _build_transcript(video_path: str, url: str, output_dir: Path, languages: tu
         source=ELEVENLABS_SOURCE,
         text=result.speech_text,
         elevenlabs_result=result,
+        normalized=normalize_words(
+            result.words, source=ELEVENLABS_SOURCE, language=result.language_code
+        ),
     )
 
 
@@ -128,7 +139,7 @@ def download_youtube_video(
     _raise_if_cancelled(cancel_event)
 
     transcript_path = output_dir / f"{video.video_id}.transcript.txt"
-    transcript_path.write_text(transcript.text, encoding="utf-8")
+    transcript_path.write_text(transcript.timestamped_text, encoding="utf-8")
 
     comments, comments_path = _write_comments(video.video_id, output_dir, comment_limit)
 

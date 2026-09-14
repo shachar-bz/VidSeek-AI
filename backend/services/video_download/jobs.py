@@ -34,10 +34,50 @@ from backend.storage.r2 import StoredVideo
 
 from .video_upload import upload_job_video
 from .web.downloader import DownloadedVideo
-from .web.pipeline import download_and_transcribe, process_downloaded_video
+from .web.pipeline import (
+    UNTIMED_TRANSCRIPT_ERROR,
+    download_and_transcribe,
+    process_downloaded_video,
+)
 from .youtube_job import run_youtube_job
 
+TRANSCRIPTION_FAILED = "transcription_failed"
+UPLOAD_FAILED = "upload_failed"
+
+# What a partially successful job says it kept, and what went wrong with the rest.
+SAVED_BY_TRANSCRIPT_PROBLEM = {
+    UNTIMED_TRANSCRIPT_ERROR: "Video and text saved",
+    TRANSCRIPTION_FAILED: "Video saved",
+    None: "Video and transcript saved",
+}
+PROBLEM_DESCRIPTIONS = {
+    UNTIMED_TRANSCRIPT_ERROR: "no timing could be measured",
+    TRANSCRIPTION_FAILED: "transcription can be retried",
+    UPLOAD_FAILED: "upload to R2 can be retried",
+}
+
 logger = logging.getLogger(__name__)
+
+
+def _transcript_problem(transcript_error: str | None) -> str | None:
+    """Which transcript problem a pipeline reported, in the extension's vocabulary.
+
+    The pipeline names the one case it can describe precisely — text with no timing on it
+    — and reports every other failure as the exception that caused it, which is the
+    companion's business rather than the tab's.
+    """
+    if transcript_error == UNTIMED_TRANSCRIPT_ERROR:
+        return UNTIMED_TRANSCRIPT_ERROR
+    return TRANSCRIPTION_FAILED if transcript_error else None
+
+
+def _partial_success_message(transcript_problem: str | None, upload_failed: bool) -> str:
+    """What a job that produced something, but not everything, tells the extension."""
+    problems = [transcript_problem] if transcript_problem else []
+    if upload_failed:
+        problems.append(UPLOAD_FAILED)
+    described = " and ".join(PROBLEM_DESCRIPTIONS[problem] for problem in problems)
+    return f"{SAVED_BY_TRANSCRIPT_PROBLEM[transcript_problem]}; {described}"
 
 
 @dataclass
@@ -358,18 +398,16 @@ class JobManager:
             job.video_storage_key = stored_video.key if stored_video else None
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
-            if result.transcript_error and upload_error:
+            transcript_problem = _transcript_problem(result.transcript_error)
+            if transcript_problem or upload_error:
+                # Two halves of a job can fail on their own, and either leaves something
+                # worth keeping: a transcript with no timing is still text, and a bucket
+                # that could not be reached costs the job its durability, not its result.
+                # The code names the transcript's problem first because that is what the
+                # next stage cares about; the message carries both.
                 job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = "transcription_and_upload_failed"
-                job.message = "Video saved locally; transcription and upload can be retried"
-            elif result.transcript_error:
-                job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = "transcription_failed"
-                job.message = "Video saved; transcription can be retried"
-            elif upload_error:
-                job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = "upload_failed"
-                job.message = "Video and transcript saved; upload to R2 can be retried"
+                job.error_code = transcript_problem or UPLOAD_FAILED
+                job.message = _partial_success_message(transcript_problem, bool(upload_error))
             else:
                 job.status = JobStatus.COMPLETE
                 job.message = (

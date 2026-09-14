@@ -22,6 +22,11 @@ from .transcript import (
 )
 
 
+# Reported when a video came out of the pipeline with text but no timing, which is the one
+# way a job can finish with a transcript the next stage still cannot use.
+UNTIMED_TRANSCRIPT_ERROR = "untimed_transcript"
+
+
 @dataclass(frozen=True)
 class PipelineResult:
     """Paths and transcript source produced by a completed pipeline.
@@ -71,6 +76,30 @@ def process_downloaded_video(
         )
 
 
+def _raise_if_cancelled(cancel_event: threading.Event) -> None:
+    """Abort between stages; each one runs to completion once started."""
+    if cancel_event.is_set():
+        raise DownloadCancelled("Job cancelled")
+
+
+def _untimed_text(page_url: str, parked: TranscriptArtifact | None) -> TranscriptArtifact | None:
+    """The best untimed text still available, for when no timing could be produced.
+
+    A transcript published on the page is text somebody wrote out, with nothing saying
+    when any of it was said. It cannot meet the pipeline's contract, so it is no longer
+    raced against the captions: it is what is left to save when the captions were untimed
+    and transcription came back with nothing, and it costs a Firecrawl call only then
+    rather than on every uncaptioned video.
+    """
+    if parked is not None:
+        return parked
+    try:
+        page_text = scrape_public_page_transcript(page_url)
+    except (requests.RequestException, ValueError):
+        return None
+    return TranscriptArtifact(source="page_transcript", text=page_text) if page_text else None
+
+
 def _transcribe_downloaded_video(
     *,
     video: DownloadedVideo,
@@ -78,37 +107,51 @@ def _transcribe_downloaded_video(
     cancel_event: threading.Event,
     progress_callback,
 ) -> PipelineResult:
-    """Apply the caption/page/ElevenLabs precedence and write the chosen transcript."""
+    """Produce a timed transcript, and settle for untimed text only when there is none.
+
+    Captions that the page or the download already supplied come first: they are free and
+    already timed. Anything else goes to ElevenLabs, which times every word, rather than
+    to a source that would hand back text with no timing at all — the next stage needs a
+    timestamp on every segment, and a transcript without one is a transcript it cannot
+    take. When neither produces timing, the text is still written and the job is reported
+    as untimed rather than as complete, so that nothing downstream mistakes it for a
+    transcript it can index.
+    """
     progress_callback(JobPhase.TRANSCRIPT_LOOKUP, 0.8, "Looking for existing captions")
-    artifact: TranscriptArtifact | None = choose_supplied_transcript(request.caption_candidates)
-    if not artifact:
-        artifact = transcript_from_subtitle_files(video.subtitle_paths)
-    if cancel_event.is_set():
-        raise DownloadCancelled("Job cancelled")
+    supplied = choose_supplied_transcript(
+        request.caption_candidates
+    ) or transcript_from_subtitle_files(video.subtitle_paths)
+    _raise_if_cancelled(cancel_event)
 
-    if not artifact:
-        try:
-            page_text = scrape_public_page_transcript(request.page_url)
-            if page_text:
-                artifact = TranscriptArtifact(source="page_transcript", text=page_text)
-        except (requests.RequestException, ValueError):
-            artifact = None
-
-    if cancel_event.is_set():
-        raise DownloadCancelled("Job cancelled")
-    if not artifact:
+    artifact = supplied if supplied and supplied.is_timed else None
+    if artifact is None:
         progress_callback(JobPhase.TRANSCRIPTION, 0.85, "Transcribing with ElevenLabs")
-        artifact = transcribe_with_elevenlabs(video.video_path)
+        transcription_failure: Exception | None = None
+        try:
+            artifact = transcribe_with_elevenlabs(video.video_path)
+        except DownloadCancelled:
+            raise
+        except Exception as error:
+            artifact, transcription_failure = None, error
+
+        if artifact is None or not artifact.is_timed:
+            # Transcription either failed or measured nothing. Whatever untimed text is
+            # left is still worth writing, and is looked for exactly once.
+            artifact = _untimed_text(request.page_url, supplied) or artifact
+        if artifact is None:
+            # Nothing was transcribed and there is no text to fall back on, so the
+            # transcription failure is the whole story and belongs to the caller.
+            raise transcription_failure
 
     # Transcription can run for many minutes, so re-check before writing anything.
-    if cancel_event.is_set():
-        raise DownloadCancelled("Job cancelled")
+    _raise_if_cancelled(cancel_event)
     text_path, json_path = persist_transcript(video.video_path, artifact)
     return PipelineResult(
         video_path=video.video_path,
         transcript_text_path=text_path,
         transcript_json_path=json_path,
         transcript_source=artifact.source,
+        transcript_error=None if artifact.is_timed else UNTIMED_TRANSCRIPT_ERROR,
     )
 
 

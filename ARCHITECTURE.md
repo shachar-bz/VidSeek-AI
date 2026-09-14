@@ -27,8 +27,9 @@ VidSeek-AI/
 │   │   ├── config.py                               # The only reader of backend/.env, and the derived settings.
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
 │   │   └── security.py                             # Session tokens, URL/path guards and YouTube URL classification.
-│   ├── storage/                                    # Where a video's bytes and, later, its records are kept.
-│   │   ├── __init__.py                             # Public interface of the storage layer, and what Supabase will add to it.
+│   ├── storage/                                    # Where a video's bytes and its records are kept.
+│   │   ├── __init__.py                             # What the storage layer holds today, and what Supabase will add to it.
+│   │   ├── transcript_store.py                     # Saves and loads a video's normalized transcript as JSON under the download root.
 │   │   └── r2/                                     # Video files stored in a Cloudflare R2 bucket.
 │   │       ├── __init__.py                         # Public interface of the R2 video storage module.
 │   │       ├── settings.py                         # Reads the R2 credentials, endpoint and bucket from the environment.
@@ -58,6 +59,11 @@ VidSeek-AI/
 │   │   │       └── word_timed/                     # Transcription and word alignment run together as one pipeline.
 │   │   │           ├── __init__.py                 # Public interface of the word-timed transcription pipeline.
 │   │   │           └── transcription_aligner.py    # Transcribes a video and fills each chunk's words in by alignment.
+│   │   ├── transcripts/                            # The normalized timestamped transcript every source is converted into.
+│   │   │   ├── __init__.py                         # Public interface of the transcript normalization package.
+│   │   │   ├── transcript.py                       # Normalized transcript data model: ordered segments and their timing fidelity.
+│   │   │   ├── normalizer.py                       # Gathers a source's timed words or caption cues into readable segments.
+│   │   │   └── formatting.py                       # Renders segments as the `[MM:SS-MM:SS] text` transcript.
 │   │   ├── shot_detection/                         # Shot boundary detection services.
 │   │   │   ├── __init__.py                         # Groups the shot detection services.
 │   │   │   ├── omni/                               # Shot boundary detection over a video file, on a GPU.
@@ -88,11 +94,12 @@ VidSeek-AI/
 │   │           ├── pipeline.py                     # Downloads a video, its transcript and its top comments, falling back to ElevenLabs.
 │   │           └── downloads/                      # Local output folder for CLI downloads (gitignored).
 │   └── tests/                                      # Automated backend companion tests.
-│       ├── conftest.py                             # Keeps a developer's backend/.env out of the test run.
+│       ├── conftest.py                             # Keeps the developer's download root and backend/.env out of the test run.
+│       ├── test_transcript_normalization.py        # Transcript format, segment timing and transcript store tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
 │       ├── test_web_video_jobs.py                  # Job lifecycle tests.
-│       ├── test_web_video_pipeline.py              # Transcript-failure and cancellation pipeline tests.
+│       ├── test_web_video_pipeline.py              # Transcript precedence, transcript-failure and cancellation pipeline tests.
 │       ├── test_web_video_security.py              # Security boundary tests.
 │       ├── test_web_video_transcript.py            # Transcript parsing and precedence tests.
 │       ├── test_youtube_routing.py                 # YouTube hostname classification and pipeline selection tests.

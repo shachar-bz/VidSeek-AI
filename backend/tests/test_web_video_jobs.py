@@ -18,7 +18,10 @@ from backend.schemas.video_jobs import (
     JobStatus,
 )
 from backend.services.video_download.jobs import JobManager
-from backend.services.video_download.web.pipeline import PipelineResult
+from backend.services.video_download.web.pipeline import (
+    UNTIMED_TRANSCRIPT_ERROR,
+    PipelineResult,
+)
 from backend.storage.r2 import StoredVideo
 
 STORED = StoredVideo(
@@ -77,7 +80,9 @@ def test_drm_is_rejected_before_job_creation(tmp_path: Path) -> None:
         manager.shutdown()
 
 
-def run_to_completion(manager: JobManager, download_root: Path, **upload):
+def run_to_completion(
+    manager: JobManager, download_root: Path, *, transcript_error: str | None = None, **upload
+):
     """Drive one job from a Chrome download through to its recorded result.
 
     The file Chrome "downloaded" is the shortest way into the pipeline that still goes
@@ -90,6 +95,7 @@ def run_to_completion(manager: JobManager, download_root: Path, **upload):
         transcript_text_path=None,
         transcript_json_path=None,
         transcript_source="page_transcript",
+        transcript_error=transcript_error,
     )
     with patch("backend.services.video_download.jobs.validate_remote_url"):
         created = manager.create(direct_request())
@@ -148,3 +154,40 @@ def test_an_unreachable_bucket_costs_the_job_its_durability_not_its_result(
     assert job.error_code == "upload_failed"
     assert job.video_path == str(tmp_path / "video.mp4")
     assert job.video_storage_key is None
+
+
+def test_an_untimed_transcript_still_says_so_when_the_upload_worked(tmp_path: Path) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        job = run_to_completion(
+            manager, tmp_path, transcript_error=UNTIMED_TRANSCRIPT_ERROR, return_value=STORED
+        )
+    finally:
+        manager.shutdown()
+
+    assert job.status == JobStatus.PARTIAL_SUCCESS
+    assert job.error_code == UNTIMED_TRANSCRIPT_ERROR
+    assert job.message == "Video and text saved; no timing could be measured"
+    assert job.video_storage_key == STORED.key
+
+
+def test_both_halves_failing_reports_both_rather_than_whichever_is_checked_first(
+    tmp_path: Path,
+) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        job = run_to_completion(
+            manager,
+            tmp_path,
+            transcript_error=UNTIMED_TRANSCRIPT_ERROR,
+            side_effect=OSError("bucket unreachable"),
+        )
+    finally:
+        manager.shutdown()
+
+    # The code names the transcript's problem, because that is what the next stage acts
+    # on; the message is the only place the user learns the video is not in the bucket.
+    assert job.error_code == UNTIMED_TRANSCRIPT_ERROR
+    assert job.message == (
+        "Video and text saved; no timing could be measured and upload to R2 can be retried"
+    )
