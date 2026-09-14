@@ -220,33 +220,24 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 11. A page transcript has no timing, so it can no longer be handed on as one
+## 11. Untimed page transcripts are demoted, not used — accepted
 
-**Status:** contained, not solved. **Problem:** every stage after transcription is now
-promised a transcript of timed segments, and one source cannot supply one. A transcript
-published on a page — scraped by Firecrawl, or read out of the player's own transcript
-panel — is text somebody wrote out, with nothing recording when any of it was said. There
-is no timing to normalize, so `normalize_caption_cues` refuses it rather than spreading the
-words evenly across the video and calling the result a timestamp.
+**Status:** accepted behavior, not a bug, nothing to close. A page transcript (scraped by
+Firecrawl, or read from a player's transcript panel) has no per-word timing, and
+`normalize_caption_cues` refuses to fabricate it rather than spread words evenly and call
+the result a timestamp.
 
-What that costs: the page transcript used to win over transcription, and no longer does.
-`_transcribe_downloaded_video` sends anything without captions to ElevenLabs, which times
-every word, and only falls back to the page text when transcription produced nothing at
-all. A job that ends there finishes `partial_success` with `untimed_transcript`, so the
-text is kept and nothing downstream mistakes it for indexable. The Firecrawl call also
-moved behind transcription, so an uncaptioned video no longer pays for a scrape it cannot
-use.
+**Behavior:** ElevenLabs is the fallback whenever there is no usable timing — no
+transcript, an untimed transcript, or (on YouTube) no captions. A transcript that already
+has valid timing (Web captions, or YouTube captions, which always carry timing) is used
+without ever calling ElevenLabs. A job left with only an untimed page transcript finishes
+`partial_success`/`untimed_transcript` — the text is kept but nothing downstream treats it
+as indexable.
 
-What it loses: page transcripts are often hand-written and read better than ASR of the
-same audio, and that quality is now only reachable when transcription fails.
-
-**To close:** nothing here. Refusing untimed text is the contract working, not a
-shortcoming to fix, and the demotion stays whatever happens next. ElevenLabs stays the
-fallback for every untimed case (Web with no transcript, Web with an untimed transcript,
-and YouTube with no captions); a Web or YouTube transcript with valid timing is already used
-without calling ElevenLabs at all. Recovering page-transcript quality via forced alignment
-was considered and rejected — not worth the added complexity and the heavyweight
-dependency it would bring in.
+**Tradeoff accepted:** page transcripts are often hand-written and better than ASR of the
+same audio, but that quality is now only reached when transcription fails outright.
+Recovering it via forced alignment was considered and rejected as not worth the added
+complexity and dependency.
 
 ---
 
