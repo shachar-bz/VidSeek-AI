@@ -8,6 +8,7 @@ from backend.schemas.video_jobs import CreateVideoJobRequest
 from backend.services.transcription.elevenlabs import TranscriptionResult, TranscriptWord
 from backend.services.transcripts import normalize_caption_cues, normalize_words
 from backend.services.video_download import youtube_job
+from backend.services.video_download.youtube.comments import CommentEntry
 from backend.services.video_download.youtube.pipeline import YouTubeDownloadResult
 from backend.services.video_download.youtube.transcript import (
     CaptionSegment,
@@ -15,7 +16,9 @@ from backend.services.video_download.youtube.transcript import (
 )
 
 
-def _result(tmp_path: Path, transcript: YouTubeTranscript, comments_path) -> YouTubeDownloadResult:
+def _result(
+    tmp_path: Path, transcript: YouTubeTranscript, comments_path, comments=None
+) -> YouTubeDownloadResult:
     video_path = tmp_path / "abc.mp4"
     video_path.write_bytes(b"video")
     return YouTubeDownloadResult(
@@ -25,7 +28,7 @@ def _result(tmp_path: Path, transcript: YouTubeTranscript, comments_path) -> You
         video_path=str(video_path),
         transcript=transcript,
         transcript_path=str(tmp_path / "abc.transcript.txt"),
-        comments=[],
+        comments=comments or [],
         comments_path=comments_path,
     )
 
@@ -123,5 +126,27 @@ def test_a_missing_comments_file_is_reported_as_no_comments(tmp_path: Path) -> N
     transcript = YouTubeTranscript(source="youtube_captions", text="x")
     result, _ = _run(tmp_path, _result(tmp_path, transcript, None))
     assert result.comments_path is None
+    assert result.comments == ()
     assert result.video_path == tmp_path / "abc.mp4"
     assert result.transcript_text_path is not None
+
+
+def test_fetched_comments_are_carried_through_rather_than_re_read_from_disk(
+    tmp_path: Path,
+) -> None:
+    transcript = YouTubeTranscript(source="youtube_captions", text="x")
+    comments = [
+        CommentEntry(
+            id="c1",
+            author="A Viewer",
+            text="nice video",
+            like_count=3,
+            reply_count=0,
+            published_at="2026-09-14T10:00:00+00:00",
+        )
+    ]
+    result, _ = _run(
+        tmp_path,
+        _result(tmp_path, transcript, str(tmp_path / "abc.comments.json"), comments=comments),
+    )
+    assert result.comments == tuple(comments)

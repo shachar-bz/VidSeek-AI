@@ -2,10 +2,10 @@
 
 This is the layer that outlives one machine, or is meant to. `r2` holds the video files
 themselves in a Cloudflare R2 bucket. `supabase` holds what describes them: `videos`, one
-row per stored object, `transcript_segments` hanging off it, and — once something produces
-them — the `chapters` and `memories` that will hang off it too. The split between the two
-databases is the obvious one: bytes in R2, everything else in Postgres, joined by
-`videos.r2_object_key`.
+row per stored object, `transcript_segments` and `video_comments` hanging off it (the
+latter only ever populated for YouTube videos), and — once something produces them — the
+`chapters` and `memories` that will hang off it too. The split between the two databases is
+the obvious one: bytes in R2, everything else in Postgres, joined by `videos.r2_object_key`.
 
 `transcript_store` keeps the same normalized transcript as a JSON file under the download
 root. It is not yet redundant: it is keyed by the video's own id and needs no network,

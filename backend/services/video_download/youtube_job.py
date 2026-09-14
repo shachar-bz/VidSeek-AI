@@ -118,4 +118,5 @@ def run_youtube_job(
         transcript_error=None if artifact.is_timed else UNTIMED_TRANSCRIPT_ERROR,
         comments_path=Path(result.comments_path) if result.comments_path else None,
         normalized_transcript=artifact.normalized,
+        comments=tuple(result.comments),
     )
