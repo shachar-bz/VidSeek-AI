@@ -161,12 +161,6 @@ class R2VideoStorage:
             ExpiresIn=expires_in_seconds,
         )
 
-    def public_url(self, key: str) -> str | None:
-        """The permanent link to a stored video, or None when the bucket is private."""
-        if not self._settings.public_base_url:
-            return None
-        return f"{self._settings.public_base_url}/{key}"
-
 
 def guess_content_type(local_path: Path) -> str:
     known = CONTENT_TYPES_BY_SUFFIX.get(local_path.suffix.lower())
