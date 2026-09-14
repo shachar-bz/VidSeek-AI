@@ -171,16 +171,17 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 8. Caption parsing is duplicated between the two download pipelines
+## 8. Caption parsing is duplicated between the two download pipelines — closed
 
-**Status:** open. **Problem:** `services/video_download/web/transcript.py` and
-`services/video_download/youtube/captions.py` each carry their own WebVTT parser,
-timestamp parser, cue tag stripper and `CaptionSegment` dataclass. They can drift, and a
-fix to one will not reach the other.
+**Status:** closed. `CaptionSegment`, timestamp parsing, cue-text cleaning and the generic
+WebVTT/SRT/TTML parsers were promoted into `backend/core/captions.py`; both
+`services/video_download/web/transcript.py` and `services/video_download/youtube/captions.py`
+now import from there instead of keeping their own copies.
 
-**To close:** promote one parser into `backend/core/captions.py` and have both pipelines
-use it. Not urgent — both are covered by their own tests — but the next caption bug will
-have to be fixed twice.
+YouTube's scrolling-caption line dedup and per-word timestamp extraction
+(`services/video_download/youtube/captions.py`) stay where they are — that logic is
+genuinely YouTube-specific, not duplicated elsewhere — but they now build on the shared
+timestamp parser and text cleaner rather than their own copies.
 
 ---
 

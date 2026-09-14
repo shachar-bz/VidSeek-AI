@@ -15,6 +15,7 @@ the words.
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from backend.core.captions import CaptionSegment
 from backend.services.transcripts import NormalizedTranscript
 
 # Imported for the annotation alone. A hard import would pull the ElevenLabs SDK in every
@@ -28,19 +29,6 @@ CAPTIONS_SOURCE = "youtube_captions"
 ELEVENLABS_SOURCE = "elevenlabs"
 
 TranscriptSource = Literal["youtube_captions", "elevenlabs"]
-
-
-@dataclass(frozen=True)
-class CaptionSegment:
-    """One timed line of a YouTube caption track."""
-
-    text: str
-    start_seconds: float
-    end_seconds: float
-
-    @property
-    def duration_seconds(self) -> float:
-        return self.end_seconds - self.start_seconds
 
 
 @dataclass(frozen=True)
