@@ -27,9 +27,14 @@ VidSeek-AI/
 │   │   ├── config.py                               # The only reader of backend/.env, and the derived settings.
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
 │   │   └── security.py                             # Session tokens, URL/path guards and YouTube URL classification.
-│   ├── db/                                         # Persistence, standing in until the project has a database.
-│   │   ├── __init__.py                             # Explains what persistence exists today, and what does not.
-│   │   └── transcript_store.py                     # Saves and loads a video's normalized transcript as JSON under the download root.
+│   ├── storage/                                    # Where a video's bytes and its records are kept.
+│   │   ├── __init__.py                             # What the storage layer holds today, and what Supabase will add to it.
+│   │   ├── transcript_store.py                     # Saves and loads a video's normalized transcript as JSON under the download root.
+│   │   └── r2/                                     # Video files stored in a Cloudflare R2 bucket.
+│   │       ├── __init__.py                         # Public interface of the R2 video storage module.
+│   │       ├── settings.py                         # Reads the R2 credentials, endpoint and bucket from the environment.
+│   │       ├── client.py                           # Builds the S3-compatible boto3 client R2 is addressed through.
+│   │       └── video_storage.py                    # Uploads, fetches, links and deletes the video objects in the bucket.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -72,6 +77,7 @@ VidSeek-AI/
 │   │       ├── __init__.py                         # Groups the download services.
 │   │       ├── jobs.py                             # Single-worker job lifecycle, cancellation and pipeline routing.
 │   │       ├── youtube_job.py                      # Adapts a YouTube result into the shared pipeline result shape.
+│   │       ├── video_upload.py                     # Uploads a finished job's video to the R2 bucket.
 │   │       ├── web/                                # Authenticated non-YouTube download and transcript pipeline.
 │   │       │   ├── __init__.py                     # Public interface of the web video download module.
 │   │       │   ├── downloader.py                   # Cookie-aware yt-dlp and FFmpeg video acquisition.
@@ -88,7 +94,7 @@ VidSeek-AI/
 │   │           ├── pipeline.py                     # Downloads a video, its transcript and its top comments, falling back to ElevenLabs.
 │   │           └── downloads/                      # Local output folder for CLI downloads (gitignored).
 │   └── tests/                                      # Automated backend companion tests.
-│       ├── conftest.py                             # Keeps a test run's writes out of the developer's own download root.
+│       ├── conftest.py                             # Keeps the developer's download root and backend/.env out of the test run.
 │       ├── test_transcript_normalization.py        # Transcript format, segment timing and transcript store tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
@@ -98,7 +104,9 @@ VidSeek-AI/
 │       ├── test_web_video_transcript.py            # Transcript parsing and precedence tests.
 │       ├── test_youtube_routing.py                 # YouTube hostname classification and pipeline selection tests.
 │       ├── test_youtube_job_adapter.py             # YouTube result to pipeline result mapping tests.
-│       └── test_youtube_cancellation.py            # YouTube download progress and cancellation tests.
+│       ├── test_youtube_cancellation.py            # YouTube download progress and cancellation tests.
+│       ├── test_r2_video_storage.py                # R2 settings, object key and bucket operation tests.
+│       └── test_video_upload.py                    # Job video upload, progress and skip-when-unconfigured tests.
 └── frontend/                                       # Frontend applications.
     └── chrome-extension/                           # Internal Manifest V3 video download extension.
         ├── public/                                 # Static files copied into the extension build.

@@ -218,7 +218,12 @@ let capturing = false;
 
 function renderJob(job: VideoJob): void {
   progressElement.value = job.progress;
-  setStatus(job.message, [job.video_path, job.transcript_text_path].filter(Boolean).join("\n"));
+  const artifacts = [
+    job.video_path,
+    job.transcript_text_path,
+    job.video_storage_key && `R2: ${job.video_storage_key}`
+  ];
+  setStatus(job.message, artifacts.filter(Boolean).join("\n"));
   // While capturing, the capture buttons are driven by the capture flow, not by the
   // job status, which stays "failed" until the captured request is submitted.
   if (!capturing) captureButton.hidden = !job.can_capture;

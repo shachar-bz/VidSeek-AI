@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -29,7 +30,9 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
+from backend.storage.r2 import StoredVideo
 
+from .video_upload import upload_job_video
 from .web.downloader import DownloadedVideo
 from .web.pipeline import (
     UNTIMED_TRANSCRIPT_ERROR,
@@ -37,6 +40,44 @@ from .web.pipeline import (
     process_downloaded_video,
 )
 from .youtube_job import run_youtube_job
+
+TRANSCRIPTION_FAILED = "transcription_failed"
+UPLOAD_FAILED = "upload_failed"
+
+# What a partially successful job says it kept, and what went wrong with the rest.
+SAVED_BY_TRANSCRIPT_PROBLEM = {
+    UNTIMED_TRANSCRIPT_ERROR: "Video and text saved",
+    TRANSCRIPTION_FAILED: "Video saved",
+    None: "Video and transcript saved",
+}
+PROBLEM_DESCRIPTIONS = {
+    UNTIMED_TRANSCRIPT_ERROR: "no timing could be measured",
+    TRANSCRIPTION_FAILED: "transcription can be retried",
+    UPLOAD_FAILED: "upload to R2 can be retried",
+}
+
+logger = logging.getLogger(__name__)
+
+
+def _transcript_problem(transcript_error: str | None) -> str | None:
+    """Which transcript problem a pipeline reported, in the extension's vocabulary.
+
+    The pipeline names the one case it can describe precisely — text with no timing on it
+    — and reports every other failure as the exception that caused it, which is the
+    companion's business rather than the tab's.
+    """
+    if transcript_error == UNTIMED_TRANSCRIPT_ERROR:
+        return UNTIMED_TRANSCRIPT_ERROR
+    return TRANSCRIPTION_FAILED if transcript_error else None
+
+
+def _partial_success_message(transcript_problem: str | None, upload_failed: bool) -> str:
+    """What a job that produced something, but not everything, tells the extension."""
+    problems = [transcript_problem] if transcript_problem else []
+    if upload_failed:
+        problems.append(UPLOAD_FAILED)
+    described = " and ".join(PROBLEM_DESCRIPTIONS[problem] for problem in problems)
+    return f"{SAVED_BY_TRANSCRIPT_PROBLEM[transcript_problem]}; {described}"
 
 
 @dataclass
@@ -53,6 +94,7 @@ class _Job:
     transcript_json_path: str | None = None
     transcript_source: str | None = None
     comments_path: str | None = None
+    video_storage_key: str | None = None
     error_code: str | None = None
     can_capture: bool = False
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -70,6 +112,7 @@ class _Job:
             transcript_json_path=self.transcript_json_path,
             transcript_source=self.transcript_source,
             comments_path=self.comments_path,
+            video_storage_key=self.video_storage_key,
             error_code=self.error_code,
             can_capture=self.can_capture,
         )
@@ -226,7 +269,7 @@ class JobManager:
                     job_id, phase, value, message
                 ),
             )
-            self._finish(job_id, result)
+            self._store_and_finish(job_id, result)
         except DownloadCancelled:
             self._mark_cancelled(job_id)
         except Exception as error:
@@ -257,7 +300,7 @@ class JobManager:
                     job_id, phase, value, message
                 ),
             )
-            self._finish(job_id, result)
+            self._store_and_finish(job_id, result)
         except DownloadCancelled:
             self._mark_cancelled(job_id)
         except UnsupportedMediaError as error:
@@ -288,7 +331,7 @@ class JobManager:
                     job_id, phase, value, message
                 ),
             )
-            self._finish(job_id, result)
+            self._store_and_finish(job_id, result)
         except DownloadCancelled:
             self._mark_cancelled(job_id)
         except Exception as error:
@@ -304,7 +347,43 @@ class JobManager:
         finally:
             self._discard_secrets(job_id)
 
-    def _finish(self, job_id: str, result) -> None:
+    def _store_and_finish(self, job_id: str, result) -> None:
+        """Upload the video the job produced, then record what the job ended up with."""
+        stored_video, upload_error = self._upload_video(job_id, result.video_path)
+        self._finish(job_id, result, stored_video=stored_video, upload_error=upload_error)
+
+    def _upload_video(self, job_id: str, video_path: Path) -> tuple[StoredVideo | None, str | None]:
+        """Put the video in the bucket, reporting a failure rather than raising it.
+
+        The video and its transcript are already on disk, so a bucket that is unreachable
+        costs the job its durability, not its result. Cancellation is checked only before
+        the upload starts: an upload already in flight is left to finish, because
+        abandoning a multipart upload midway leaves parts behind in the bucket.
+        """
+        with self._lock:
+            if self._require(job_id).cancel_event.is_set():
+                raise DownloadCancelled("Job cancelled")
+        try:
+            stored_video = upload_job_video(
+                video_path=video_path,
+                job_id=job_id,
+                progress_callback=lambda phase, value, message: self._progress(
+                    job_id, phase, value, message
+                ),
+            )
+        except Exception as error:
+            logger.exception("Uploading %s to R2 failed", video_path)
+            return None, type(error).__name__
+        return stored_video, None
+
+    def _finish(
+        self,
+        job_id: str,
+        result,
+        *,
+        stored_video: StoredVideo | None = None,
+        upload_error: str | None = None,
+    ) -> None:
         with self._lock:
             job = self._require(job_id)
             job.video_path = str(result.video_path)
@@ -316,21 +395,26 @@ class JobManager:
             )
             job.transcript_source = result.transcript_source
             job.comments_path = str(result.comments_path) if result.comments_path else None
+            job.video_storage_key = stored_video.key if stored_video else None
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
-            if result.transcript_error == UNTIMED_TRANSCRIPT_ERROR:
-                # The text is there and worth keeping, but with no timing on it the job
-                # has not produced what the next stage is promised, so it is not complete.
+            transcript_problem = _transcript_problem(result.transcript_error)
+            if transcript_problem or upload_error:
+                # Two halves of a job can fail on their own, and either leaves something
+                # worth keeping: a transcript with no timing is still text, and a bucket
+                # that could not be reached costs the job its durability, not its result.
+                # The code names the transcript's problem first because that is what the
+                # next stage cares about; the message carries both.
                 job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = UNTIMED_TRANSCRIPT_ERROR
-                job.message = "Video and text saved; no timing could be measured"
-            elif result.transcript_error:
-                job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = "transcription_failed"
-                job.message = "Video saved; transcription can be retried"
+                job.error_code = transcript_problem or UPLOAD_FAILED
+                job.message = _partial_success_message(transcript_problem, bool(upload_error))
             else:
                 job.status = JobStatus.COMPLETE
-                job.message = "Video and transcript saved"
+                job.message = (
+                    "Video uploaded; transcript saved"
+                    if stored_video
+                    else "Video and transcript saved"
+                )
 
     def _fail(
         self,

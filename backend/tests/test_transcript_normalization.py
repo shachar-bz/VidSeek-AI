@@ -9,7 +9,7 @@ real services return go in, and the same format comes out.
 import re
 from pathlib import Path
 
-from backend.db import transcript_store
+from backend.storage import transcript_store
 from backend.services.transcription.elevenlabs import TranscriptWord
 from backend.services.transcripts import (
     TimingFidelity,

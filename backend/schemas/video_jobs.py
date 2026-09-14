@@ -32,6 +32,7 @@ class JobPhase(str, Enum):
     DOWNLOAD = "download"
     TRANSCRIPT_LOOKUP = "transcript_lookup"
     TRANSCRIPTION = "transcription"
+    UPLOAD = "upload"
     COMPLETE = "complete"
 
 
@@ -74,6 +75,10 @@ class VideoJobResponse(BaseModel):
     transcript_json_path: str | None = None
     transcript_source: str | None = None
     comments_path: str | None = None
+    # The video's object key in the R2 bucket, once it is uploaded. The key alone, not a
+    # link: a presigned URL carries a signature, which this response has no business
+    # holding, and the bucket name is the companion's business rather than the tab's.
+    video_storage_key: str | None = None
     error_code: str | None = None
     can_capture: bool = False
 

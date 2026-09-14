@@ -13,7 +13,7 @@ from urllib.parse import urlsplit, urlunsplit
 import requests
 
 from backend.core import config
-from backend.db import transcript_store
+from backend.storage import transcript_store
 from backend.schemas.browser import CaptionCandidate
 from backend.services.transcription.elevenlabs import transcribe_video
 from backend.services.transcripts import (
