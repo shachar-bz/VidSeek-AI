@@ -2,17 +2,18 @@
 
 This runs after the upload rather than beside it, because the row describes an object that
 exists: `r2_object_key` is the whole point of the row, and there is no key to write until
-the upload has returned one. A job whose upload was skipped or failed therefore records
-nothing, which is the honest outcome — the video is on one machine, and the table is for
-videos that outlived it.
+the upload has returned one. A job whose upload fails never reaches this at all — R2 is
+the video's only home, so that failure fails the job outright rather than leaving anything
+here to record.
 
 The two writes are ordered and not one transaction. The video row goes first because the
 segments reference it, and a video recorded without its transcript is a coherent state
 that a later run can fix by writing the segments; segments with no video are not a state
 the database will accept at all.
 
-A checkout with no Supabase credentials skips both writes and keeps working, the same way
-one with no R2 credentials skips the upload.
+A checkout with no Supabase credentials skips both writes and keeps working. Unlike R2,
+that is not fatal: the video is already durable in the bucket, and the row can always be
+written later from the object key alone.
 """
 
 from __future__ import annotations

@@ -245,11 +245,13 @@ def test_the_transcript_reaches_supabase_from_the_pipeline_not_from_the_json_on_
 def test_a_video_that_never_reached_the_bucket_is_not_described_as_if_it_had(
     tmp_path: Path,
 ) -> None:
-    # r2_object_key is the whole point of the row, and a skipped upload produced none.
+    # r2_object_key is the whole point of the row, and a failed upload produced none.
     written, record = capture_records()
     manager = JobManager(tmp_path)
     try:
-        run_to_completion(manager, tmp_path, return_value=None, record=record)
+        run_to_completion(
+            manager, tmp_path, side_effect=OSError("bucket unreachable"), record=record
+        )
     finally:
         manager.shutdown()
 
