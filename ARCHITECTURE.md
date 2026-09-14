@@ -27,8 +27,13 @@ VidSeek-AI/
 │   │   ├── config.py                               # The only reader of backend/.env, and the derived settings.
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
 │   │   └── security.py                             # Session tokens, URL/path guards and YouTube URL classification.
-│   ├── db/                                         # Placeholder for future persistence; empty today.
-│   │   └── __init__.py                             # Explains why there is no database yet.
+│   ├── storage/                                    # Where a video's bytes and, later, its records are kept.
+│   │   ├── __init__.py                             # Public interface of the storage layer, and what Supabase will add to it.
+│   │   └── r2/                                     # Video files stored in a Cloudflare R2 bucket.
+│   │       ├── __init__.py                         # Public interface of the R2 video storage module.
+│   │       ├── settings.py                         # Reads the R2 credentials, endpoint and bucket from the environment.
+│   │       ├── client.py                           # Builds the S3-compatible boto3 client R2 is addressed through.
+│   │       └── video_storage.py                    # Uploads, fetches, links and deletes the video objects in the bucket.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -62,13 +67,6 @@ VidSeek-AI/
 │   │   │   └── pyscenedetect/                      # Shot boundary detection over a video file, without a GPU.
 │   │   │       ├── __init__.py                     # Public interface of the PySceneDetect shot detection module.
 │   │   │       └── shot_detector.py                # Detects each shot's frame range and timecode using PySceneDetect.
-│   │   ├── storage/                                # Object storage services, one package per backend.
-│   │   │   ├── __init__.py                         # Groups the storage services.
-│   │   │   └── r2/                                 # Video files stored in a Cloudflare R2 bucket.
-│   │   │       ├── __init__.py                     # Public interface of the R2 video storage module.
-│   │   │       ├── settings.py                     # Reads the R2 credentials, endpoint and bucket from the environment.
-│   │   │       ├── client.py                       # Builds the S3-compatible boto3 client R2 is addressed through.
-│   │   │       └── video_storage.py                # Uploads, fetches, links and deletes the video objects in the bucket.
 │   │   └── video_download/                         # Video acquisition, one package per source, plus shared orchestration.
 │   │       ├── __init__.py                         # Groups the download services.
 │   │       ├── jobs.py                             # Single-worker job lifecycle, cancellation and pipeline routing.

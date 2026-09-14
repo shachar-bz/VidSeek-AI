@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from botocore.exceptions import ClientError
 
-from backend.services.storage.r2 import R2Settings, R2VideoStorage, build_video_key
-from backend.services.storage.r2.settings import load_r2_settings
+from backend.storage.r2 import R2Settings, R2VideoStorage, build_video_key
+from backend.storage.r2.settings import load_r2_settings
 
 SETTINGS = R2Settings(
     access_key_id="key-id",

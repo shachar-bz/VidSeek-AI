@@ -80,7 +80,7 @@ requests
 # --- end web video download local companion ---
 
 # --- cloudflare r2 storage module ---
-# Remove this block together with backend/services/storage/ if the module is dropped.
+# Remove this block together with backend/storage/ if the module is dropped.
 # R2 is an S3-compatible object store, so it is spoken to with the ordinary AWS SDK; no
 # Cloudflare-specific package exists or is needed. 1.36 is the floor because the checksum
 # behaviour the R2 client configures was introduced there. Needs R2_ACCESS_KEY_ID,
