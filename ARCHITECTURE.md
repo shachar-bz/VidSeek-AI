@@ -62,6 +62,13 @@ VidSeek-AI/
 │   │   │   └── pyscenedetect/                      # Shot boundary detection over a video file, without a GPU.
 │   │   │       ├── __init__.py                     # Public interface of the PySceneDetect shot detection module.
 │   │   │       └── shot_detector.py                # Detects each shot's frame range and timecode using PySceneDetect.
+│   │   ├── storage/                                # Object storage services, one package per backend.
+│   │   │   ├── __init__.py                         # Groups the storage services.
+│   │   │   └── r2/                                 # Video files stored in a Cloudflare R2 bucket.
+│   │   │       ├── __init__.py                     # Public interface of the R2 video storage module.
+│   │   │       ├── settings.py                     # Reads the R2 credentials, endpoint and bucket from the environment.
+│   │   │       ├── client.py                       # Builds the S3-compatible boto3 client R2 is addressed through.
+│   │   │       └── video_storage.py                # Uploads, fetches, links and deletes the video objects in the bucket.
 │   │   └── video_download/                         # Video acquisition, one package per source, plus shared orchestration.
 │   │       ├── __init__.py                         # Groups the download services.
 │   │       ├── jobs.py                             # Single-worker job lifecycle, cancellation and pipeline routing.
@@ -90,7 +97,8 @@ VidSeek-AI/
 │       ├── test_web_video_transcript.py            # Transcript parsing and precedence tests.
 │       ├── test_youtube_routing.py                 # YouTube hostname classification and pipeline selection tests.
 │       ├── test_youtube_job_adapter.py             # YouTube result to pipeline result mapping tests.
-│       └── test_youtube_cancellation.py            # YouTube download progress and cancellation tests.
+│       ├── test_youtube_cancellation.py            # YouTube download progress and cancellation tests.
+│       └── test_r2_video_storage.py                # R2 settings, object key and video upload tests.
 └── frontend/                                       # Frontend applications.
     └── chrome-extension/                           # Internal Manifest V3 video download extension.
         ├── public/                                 # Static files copied into the extension build.
