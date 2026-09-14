@@ -281,3 +281,29 @@ Decide before starting:
 - **Where it sits in precedence.** If alignment is trusted, the page transcript goes back
   in front of ElevenLabs for videos that have one. If it is only sometimes trusted, it
   becomes a second attempt after a low-confidence transcription instead.
+
+---
+
+## 13. Chapters and memories tables are not built yet
+
+**Status:** not started, deliberately deferred. `backend/storage/supabase/` holds `videos`
+and `transcript_segments` today; `chapters` and `memories` are the two tables Supabase was
+introduced for that have no schema, no store, and nothing producing them yet.
+
+**What each is for:**
+
+- `chapters` — one row per chapter of a video: a title, a summary, a start/end timestamp
+  range, and an embedding, linked to `video_id`. Nothing currently segments a video into
+  chapters; that segmentation is itself unbuilt.
+- `memories` — one row per notable moment within a chapter: the original text, a summary
+  or semantic idea, a timestamp range, and an embedding, linked to both `video_id` and
+  `chapter_id`. Nothing currently extracts memories either.
+
+**To close:** once something produces chapters and memories, add
+`0003_chapters.sql` and `0004_memories.sql` alongside the existing migrations in
+`backend/storage/supabase/migrations/`, following the shape of `0002_transcript_segments.sql`
+(FK to `videos`, `ON DELETE CASCADE`, RLS enabled with no policies). `pgvector` is already
+enabled by `0001_videos.sql` for exactly this; the one decision to make first is which
+embedding model sets the `vector(N)` dimension, since that is fixed at table creation.
+Store code goes in `backend/storage/supabase/chapters.py` and `memories.py`, mirroring
+`video_records.py` and `transcript_segments.py`.
