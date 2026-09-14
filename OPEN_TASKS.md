@@ -1,6 +1,6 @@
 # Open tasks
 
-Known gaps in `backend/Web_video_download/` and `frontend/chrome-extension/`, left open
+Known gaps in `backend/services/video_download/` and `frontend/chrome-extension/`, left open
 deliberately. Each entry says where it stands, what actually goes wrong, and what closing
 it would take.
 
@@ -171,16 +171,16 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 8. Caption parsing is duplicated with `YouTube_download`
+## 8. Caption parsing is duplicated between the two download pipelines
 
-**Status:** open. **Problem:** `Web_video_download/transcript.py` and
-`YouTube_download/captions.py` each carry their own WebVTT parser, timestamp parser, cue
-tag stripper and `CaptionSegment` dataclass. They can drift, and a fix to one will not
-reach the other.
+**Status:** open. **Problem:** `services/video_download/web/transcript.py` and
+`services/video_download/youtube/captions.py` each carry their own WebVTT parser,
+timestamp parser, cue tag stripper and `CaptionSegment` dataclass. They can drift, and a
+fix to one will not reach the other.
 
-**To close:** promote one parser into a shared `backend/captions/` module and have both
-pipelines use it. Not urgent — both are covered by their own tests — but the next caption
-bug will have to be fixed twice.
+**To close:** promote one parser into `backend/core/captions.py` and have both pipelines
+use it. Not urgent — both are covered by their own tests — but the next caption bug will
+have to be fixed twice.
 
 ---
 

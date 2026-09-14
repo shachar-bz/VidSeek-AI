@@ -24,13 +24,19 @@ from .transcript import (
 
 @dataclass(frozen=True)
 class PipelineResult:
-    """Paths and transcript source produced by a completed pipeline."""
+    """Paths and transcript source produced by a completed pipeline.
+
+    `comments_path` is only ever set by the YouTube pipeline; the web route has no source
+    of comments and leaves it None. Both routes return this one shape so that the job
+    manager keeps a single completion path.
+    """
 
     video_path: Path
     transcript_text_path: Path | None
     transcript_json_path: Path | None
     transcript_source: str | None
     transcript_error: str | None = None
+    comments_path: Path | None = None
 
 
 def process_downloaded_video(

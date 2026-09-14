@@ -15,7 +15,11 @@ from backend.core.errors import (
     JobStateConflictError,
     UnsupportedMediaError,
 )
-from backend.core.security import validate_local_media_path, validate_remote_url
+from backend.core.security import (
+    is_youtube_url,
+    validate_local_media_path,
+    validate_remote_url,
+)
 from backend.schemas.browser import MediaKind
 from backend.schemas.video_jobs import (
     BrowserDownloadCompleteRequest,
@@ -26,8 +30,9 @@ from backend.schemas.video_jobs import (
     VideoJobResponse,
 )
 
-from .web.downloader import DownloadedVideo, reject_youtube
+from .web.downloader import DownloadedVideo
 from .web.pipeline import download_and_transcribe, process_downloaded_video
+from .youtube_job import run_youtube_job
 
 
 @dataclass
@@ -43,6 +48,7 @@ class _Job:
     transcript_text_path: str | None = None
     transcript_json_path: str | None = None
     transcript_source: str | None = None
+    comments_path: str | None = None
     error_code: str | None = None
     can_capture: bool = False
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -59,6 +65,7 @@ class _Job:
             transcript_text_path=self.transcript_text_path,
             transcript_json_path=self.transcript_json_path,
             transcript_source=self.transcript_source,
+            comments_path=self.comments_path,
             error_code=self.error_code,
             can_capture=self.can_capture,
         )
@@ -78,15 +85,36 @@ class JobManager:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     def create(self, request: CreateVideoJobRequest) -> VideoJobResponse:
-        reject_youtube(request.page_url)
+        """Validate the request and start it on the pipeline its page URL calls for.
+
+        The choice of pipeline is made here rather than by the extension, because the
+        companion cannot take a client's word for which route to run and would have to
+        classify the URL anyway. A second endpoint would only duplicate that authority.
+        """
         validate_remote_url(request.page_url)
         for candidate in request.media_candidates:
             validate_remote_url(candidate.url)
         if request.drm_detected:
             raise UnsupportedMediaError("DRM-protected media is not supported")
-        direct_only = bool(request.media_candidates) and all(
-            candidate.kind == MediaKind.DIRECT for candidate in request.media_candidates
+
+        is_youtube = is_youtube_url(request.page_url)
+        # A YouTube page's own media URLs are googlevideo links that expire and refuse
+        # a second reader, so the YouTube pipeline always fetches for itself.
+        direct_only = (
+            not is_youtube
+            and bool(request.media_candidates)
+            and all(candidate.kind == MediaKind.DIRECT for candidate in request.media_candidates)
         )
+        if is_youtube:
+            acquisition_mode = "youtube_pipeline"
+            message = "Queued for YouTube download"
+        elif direct_only:
+            acquisition_mode = "browser_download"
+            message = "Waiting for Chrome to download the direct media file"
+        else:
+            acquisition_mode = "companion_download"
+            message = "Queued for authenticated download"
+
         job_id = uuid.uuid4().hex
         job = _Job(
             job_id=job_id,
@@ -95,16 +123,14 @@ class JobManager:
                 JobStatus.AWAITING_BROWSER_DOWNLOAD if direct_only else JobStatus.QUEUED
             ),
             phase=JobPhase.DOWNLOAD,
-            acquisition_mode="browser_download" if direct_only else "companion_download",
-            message=(
-                "Waiting for Chrome to download the direct media file"
-                if direct_only
-                else "Queued for authenticated download"
-            ),
+            acquisition_mode=acquisition_mode,
+            message=message,
         )
         with self._lock:
             self._jobs[job_id] = job
-        if not direct_only:
+        if is_youtube:
+            self._executor.submit(self._run_youtube, job_id)
+        elif not direct_only:
             self._executor.submit(self._run_download, job_id)
         return job.public()
 
@@ -180,6 +206,37 @@ class JobManager:
             job.progress = min(max(value, 0.0), 1.0)
             job.message = message
 
+    def _run_youtube(self, job_id: str) -> None:
+        with self._lock:
+            job = self._require(job_id)
+            if job.status == JobStatus.CANCELLED:
+                return
+            job.status = JobStatus.RUNNING
+            request = job.request
+        try:
+            result = run_youtube_job(
+                request=request,
+                download_root=self.download_root,
+                cancel_event=job.cancel_event,
+                progress_callback=lambda phase, value, message: self._progress(
+                    job_id, phase, value, message
+                ),
+            )
+            self._finish(job_id, result)
+        except DownloadCancelled:
+            self._mark_cancelled(job_id)
+        except Exception as error:
+            # No capture retry is offered: capturing a googlevideo request would not help,
+            # since the YouTube pipeline never used the browser's request in the first place.
+            self._fail(
+                job_id,
+                "download_failed",
+                f"YouTube download failed ({type(error).__name__})",
+                can_capture=False,
+            )
+        finally:
+            self._discard_secrets(job_id)
+
     def _run_download(self, job_id: str) -> None:
         with self._lock:
             job = self._require(job_id)
@@ -254,6 +311,7 @@ class JobManager:
                 str(result.transcript_json_path) if result.transcript_json_path else None
             )
             job.transcript_source = result.transcript_source
+            job.comments_path = str(result.comments_path) if result.comments_path else None
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
             if result.transcript_error:

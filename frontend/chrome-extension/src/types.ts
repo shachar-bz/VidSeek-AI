@@ -54,6 +54,7 @@ export interface VideoJob {
   transcript_text_path?: string;
   transcript_json_path?: string;
   transcript_source?: string;
+  comments_path?: string;
   error_code?: string;
   can_capture: boolean;
 }

@@ -10,4 +10,4 @@ __pycache__/
 .claude/worktrees/
 frontend/chrome-extension/node_modules/
 frontend/chrome-extension/dist/
-backend/YouTube_download/downloads/
+backend/services/video_download/youtube/downloads/

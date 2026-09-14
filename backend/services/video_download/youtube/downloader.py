@@ -33,28 +33,37 @@ class DownloadedVideo:
     video_path: str
 
 
-def build_download_options(output_dir: Path) -> dict:
+def build_download_options(output_dir: Path, *, progress_hooks: list | None = None) -> dict:
     """yt-dlp options shared by every call this module makes.
 
     `noplaylist` is the load-bearing one: an ordinary watch URL copied out of the browser
     usually carries a `&list=` alongside the video id, and without this yt-dlp obligingly
     downloads the entire playlist that video happens to sit in.
+
+    `noprogress` only suppresses yt-dlp's own console rendering; hooks passed here still
+    fire, which is what lets a caller report progress or abort a download in flight. The
+    CLI path passes none and behaves exactly as before.
     """
-    return {
+    options = {
         "outtmpl": str(output_dir / "%(id)s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
     }
+    if progress_hooks:
+        options["progress_hooks"] = progress_hooks
+    return options
 
 
-def download_video(url: str, output_dir: str | Path) -> DownloadedVideo:
+def download_video(
+    url: str, output_dir: str | Path, *, progress_hooks: list | None = None
+) -> DownloadedVideo:
     """Download the video at `url` into `output_dir` as a single MP4."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    options = build_download_options(output_dir) | {
+    options = build_download_options(output_dir, progress_hooks=progress_hooks) | {
         "format": FORMAT_SELECTOR,
         "merge_output_format": MERGE_CONTAINER,
     }

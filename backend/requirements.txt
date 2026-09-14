@@ -1,5 +1,5 @@
-# --- Omni_shot_detection module ---
-# Remove this block together with backend/Omni_shot_detection/ if the module is dropped.
+# --- omni shot detection module ---
+# Remove this block together with backend/services/shot_detection/omni/ if the module is dropped.
 # torch must come from the CUDA index, not PyPI, whose Windows wheels are CPU-only:
 #   pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
 # OmniShotCut hardcodes .to("cuda") and shells out to ffmpeg, so a CUDA GPU and the
@@ -7,38 +7,38 @@
 torch>=2.0
 ffmpeg-python
 omnishotcut @ git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut.git
-# --- end Omni_shot_detection module ---
+# --- end omni shot detection module ---
 
-# --- PySceneDetect_shot_detection module ---
-# Remove this block together with backend/PySceneDetect_shot_detection/ if the module is
+# --- pyscenedetect shot detection module ---
+# Remove this block together with backend/services/shot_detection/pyscenedetect/ if the module is
 # dropped. Pure CPU, and it pulls opencv-python in itself, so it needs neither a GPU nor
 # ffmpeg. Pinned below 0.8 because PySceneDetect's API is still declared unstable.
 scenedetect<0.8
-# --- end PySceneDetect_shot_detection module ---
+# --- end pyscenedetect shot detection module ---
 
-# --- ElevenLabs_transcription module ---
-# Remove this block together with backend/ElevenLabs_transcription/ if the module is
+# --- elevenlabs transcription module ---
+# Remove this block together with backend/services/transcription/elevenlabs/ if the module is
 # dropped. Speech transcription through ElevenLabs' hosted Scribe v2 model: no GPU, no
 # model weights, and no ffmpeg either, because Scribe reads the audio out of the uploaded
 # video itself. Needs ELEVENLABS_API_KEY in backend/.env.
 elevenlabs>=2.0
 python-dotenv
-# --- end ElevenLabs_transcription module ---
+# --- end elevenlabs transcription module ---
 
-# --- OpenAI_transcription module ---
-# Remove this block together with backend/OpenAI_transcription_pipeline/OpenAI_transcription/ if
+# --- openai transcription module ---
+# Remove this block together with backend/services/transcription/openai_pipeline/transcription/ if
 # the module is dropped.
 # Speech transcription through OpenAI's hosted gpt-transcribe model: no GPU and no model
 # weights, but it needs the ffmpeg binary on PATH to pull audio out of a video, and
 # OPENAI_API_KEY_DUDU in backend/.env. ffmpeg-python is already required by
-# Omni_shot_detection and is listed again here so this block stands on its own.
+# the omni shot detection module and is listed again here so this block stands on its own.
 openai>=2.0
 python-dotenv
 ffmpeg-python
-# --- end OpenAI_transcription module ---
+# --- end openai transcription module ---
 
-# --- MMS_word_alignment module ---
-# Remove this block together with backend/OpenAI_transcription_pipeline/MMS_word_alignment/ if
+# --- word alignment module ---
+# Remove this block together with backend/services/transcription/openai_pipeline/word_alignment/ if
 # the module is dropped.
 # Forced alignment runs locally on torchaudio's MMS_FA pipeline, which downloads a 1.2 GB
 # checkpoint to the torch hub cache on first use and runs on the GPU when there is one.
@@ -50,31 +50,31 @@ torchaudio>=2.1
 uroman
 num2words
 ffmpeg-python
-# --- end MMS_word_alignment module ---
+# --- end word alignment module ---
 
-# --- YouTube_download module ---
-# Remove this block together with backend/YouTube_download/ if the module is dropped.
+# --- youtube download module ---
+# Remove this block together with backend/services/video_download/youtube/ if the module is dropped.
 # yt-dlp downloads the video and reads its native captions, and needs the ffmpeg binary
 # on PATH (already required by other modules) to mux separate video/audio streams into
 # one file. The comments call is one plain HTTP request to the YouTube Data API v3, so
 # it uses requests rather than the much larger google-api-python-client. Needs
-# YOUTUBE_API_KEY in backend/.env; falls back to backend/ElevenLabs_transcription
+# YOUTUBE_API_KEY in backend/.env; falls back to backend/services/transcription/elevenlabs
 # (already a dependency above) when a video has no captions.
 yt-dlp
 requests
 python-dotenv
-# --- end YouTube_download module ---
+# --- end youtube download module ---
 
-# --- Web_video_download local companion ---
-# Remove this block together with backend/Web_video_download/ and backend/app.py if the
+# --- web video download local companion ---
+# Remove this block together with backend/services/video_download/web/ and backend/app.py if the
 # authenticated Chrome download feature is dropped. FastAPI is bound to loopback and
 # yt-dlp/ffmpeg assemble direct, HLS and DASH recordings. Firecrawl uses the existing
 # requests dependency and needs FIRECRAWL_API_KEY. Transcription falls back to
-# backend/ElevenLabs_transcription (already a dependency above) and needs
+# backend/services/transcription/elevenlabs (already a dependency above) and needs
 # ELEVENLABS_API_KEY.
 fastapi>=0.115
 uvicorn[standard]>=0.30
 yt-dlp
 python-dotenv
 requests
-# --- end Web_video_download local companion ---
+# --- end web video download local companion ---

@@ -73,6 +73,7 @@ class VideoJobResponse(BaseModel):
     transcript_text_path: str | None = None
     transcript_json_path: str | None = None
     transcript_source: str | None = None
+    comments_path: str | None = None
     error_code: str | None = None
     can_capture: bool = False
 

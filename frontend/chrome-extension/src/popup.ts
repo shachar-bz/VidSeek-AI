@@ -30,7 +30,7 @@ function message<T = Record<string, unknown>>(payload: ExtensionMessage): Promis
   return chrome.runtime.sendMessage(payload) as Promise<T>;
 }
 
-/** Mirrors the companion's reject_youtube, which also covers m./music. subdomains. */
+/** Mirrors the companion's is_youtube_url, which also covers m./music. subdomains. */
 function isYouTube(pageUrl: string): boolean {
   let hostname: string;
   try {
@@ -53,15 +53,30 @@ async function inspectTab(): Promise<void> {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !tab.url?.startsWith("http")) throw new Error("Open an HTTP or HTTPS video page first");
     activeTabId = tab.id;
+
+    // Decided from the tab's own URL, before any script runs in the page. Discovery would
+    // find nothing usable on YouTube anyway — its media URLs are expiring googlevideo
+    // links — and the YouTube player reports DRM on streams the pipeline downloads fine,
+    // so inspecting it would only produce a false drm_detected refusal.
+    if (isYouTube(tab.url)) {
+      discovery = {
+        page_url: tab.url,
+        page_title: tab.title ?? "video",
+        drm_detected: false,
+        media_candidates: [],
+        caption_candidates: []
+      };
+      setStatus("YouTube video.", "Captions and comments are fetched by the YouTube pipeline.");
+      downloadButton.hidden = false;
+      return;
+    }
+
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: discoverPage
     });
     discovery = results[0]?.result as DiscoveryResult | undefined;
     if (!discovery) throw new Error("The page could not be inspected");
-    if (isYouTube(discovery.page_url)) {
-      throw new Error("Use VidSeek's YouTube pipeline for this page");
-    }
     if (discovery.drm_detected) throw new Error("This player reports DRM protection and cannot be downloaded");
     if (!discovery.media_candidates.length) {
       setStatus(
@@ -150,17 +165,26 @@ async function hydrateCaptionBodies(discoveryValue: DiscoveryResult): Promise<vo
   }
 }
 
+const EMPTY_BROWSER_CONTEXT: BrowserContext = { cookies: [], headers: {}, user_agent: "" };
+
 async function startDownload(): Promise<void> {
   if (!discovery) return;
   downloadButton.disabled = true;
   let grantedOrigins: string[] = [];
   try {
-    const origins = originPatterns(discovery);
-    const granted = await chrome.permissions.request({ permissions: ["cookies"], origins });
-    if (!granted) throw new Error("Site/CDN access was not granted");
-    grantedOrigins = origins;
-    await hydrateCaptionBodies(discovery);
-    const context = await collectCookies(discovery);
+    // The YouTube pipeline authenticates nothing and fetches the video itself, so it is
+    // sent no cookies at all. Asking for YouTube cookies would mean a new host permission
+    // and would hand over the highest-value credential in the profile for no gain; the
+    // cost is that age-restricted videos fail, with the pipeline's own message.
+    const youtube = isYouTube(discovery.page_url);
+    const origins = youtube ? [] : originPatterns(discovery);
+    if (!youtube) {
+      const granted = await chrome.permissions.request({ permissions: ["cookies"], origins });
+      if (!granted) throw new Error("Site/CDN access was not granted");
+      grantedOrigins = origins;
+      await hydrateCaptionBodies(discovery);
+    }
+    const context = youtube ? EMPTY_BROWSER_CONTEXT : await collectCookies(discovery);
     const token = await createSession();
     const job = await createJob(token, discovery, context);
     const tracker: TrackedJob = { jobId: job.job_id, token, grantedOrigins: origins };
