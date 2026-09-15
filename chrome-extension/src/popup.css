@@ -35,6 +35,31 @@ progress {
   height: 8px;
 }
 
+#video-picker {
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px solid #dbe2ee;
+  border-radius: 8px;
+}
+
+#video-picker legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #4d5b70;
+}
+
+#video-picker label {
+  display: block;
+  padding: 6px 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#video-picker input {
+  margin-inline-end: 6px;
+}
+
 button {
   width: 100%;
   margin-top: 10px;

@@ -114,6 +114,77 @@ export function mergeDiscoveryResults(frames: FrameDiscoveryResult[]): Discovery
   };
 }
 
+/** One frame's worth of candidates, offered to the user as a single choice of video. */
+export interface VideoGroup {
+  frameId: number;
+  label: string;
+  result: DiscoveryResult;
+}
+
+function isEmptyFrameResult(result: DiscoveryResult): boolean {
+  return (
+    !isYouTubeUrl(result.page_url) &&
+    result.media_candidates.length === 0 &&
+    result.caption_candidates.length === 0
+  );
+}
+
+function describeVideoGroup(result: DiscoveryResult, frameId: number, topPageTitle: string): string {
+  if (isYouTubeUrl(result.page_url)) return `YouTube: ${result.page_title.replace(/ - YouTube$/, "")}`;
+  if (result.page_title && result.page_title !== topPageTitle) return result.page_title;
+  const mediaCount = `${result.media_candidates.length} media source(s)`;
+  return frameId === 0 ? `Main page (${mediaCount})` : `Embedded player (${mediaCount})`;
+}
+
+/**
+ * Splits per-frame discovery results into the distinct videos found on the page, when there
+ * is more than one to choose from.
+ *
+ * A frame with no media candidates, no caption candidates, and no YouTube identity found
+ * nothing and is not offered as a choice -- most frames on a typical page (ads, widgets,
+ * analytics iframes) fall here. Returns undefined when zero or one frame found anything, so
+ * the caller can fall back to treating the page as having a single video, via
+ * `mergeDiscoveryResults`, exactly as before this function existed.
+ */
+export function findVideoGroups(frames: FrameDiscoveryResult[], topPageTitle: string): VideoGroup[] | undefined {
+  const groups = frames
+    .filter((frame): frame is FrameDiscoveryResult & { result: DiscoveryResult } => Boolean(frame.result))
+    .filter((frame) => !isEmptyFrameResult(frame.result))
+    .map((frame) => ({
+      frameId: frame.frameId,
+      label: describeVideoGroup(frame.result, frame.frameId, topPageTitle),
+      result: frame.result
+    }));
+  return groups.length > 1 ? groups : undefined;
+}
+
+/**
+ * Turns the user's chosen `VideoGroup` into the `DiscoveryResult` to submit as the job.
+ *
+ * The chosen frame's own media and caption candidates are used as-is, but -- unless the
+ * choice is a YouTube identity, which stands for the whole job on its own -- the page
+ * identity (URL, title, language) still comes from the top frame, for the same reason
+ * `mergeDiscoveryResults` does that: cookies and the Referer/Origin headers sent to the CDN
+ * need to reflect the page the browser was actually on, not an embed's own iframe URL.
+ *
+ * DRM is scoped to just the chosen frame here, unlike `mergeDiscoveryResults`'s page-wide OR:
+ * once the user has picked a specific video, an unrelated frame (an ad, a tracker) reporting
+ * DRM must not block a clean choice -- that would defeat the point of letting them choose.
+ */
+export function resolveSelectedGroup(group: VideoGroup, frames: FrameDiscoveryResult[]): DiscoveryResult {
+  if (isYouTubeUrl(group.result.page_url)) return group.result;
+  const top = frames.find((frame) => frame.frameId === 0)?.result;
+  if (!top) return group.result;
+  return {
+    page_url: top.page_url,
+    page_title: top.page_title,
+    preferred_language: top.preferred_language,
+    drm_detected: group.result.drm_detected,
+    media_candidates: group.result.media_candidates,
+    caption_candidates: group.result.caption_candidates
+  };
+}
+
 export function discoverPage(): DiscoveryResult {
   // A YouTube-hosted frame -- typically an <iframe src="https://www.youtube.com/embed/...">
   // embedded in an otherwise unrelated page -- can never yield a usable media candidate: its

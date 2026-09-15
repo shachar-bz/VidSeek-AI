@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMediaUrl,
   chooseDirectCandidate,
+  findVideoGroups,
   isYouTubeUrl,
   mergeDiscoveryResults,
-  originPatterns
+  originPatterns,
+  resolveSelectedGroup
 } from "../src/discovery";
+import type { FrameDiscoveryResult } from "../src/discovery";
 import type { DiscoveryResult } from "../src/types";
 
 describe("media discovery helpers", () => {
@@ -208,6 +211,121 @@ describe("mergeDiscoveryResults", () => {
       { frameId: 1, result: frameB }
     ]);
     expect(merged?.media_candidates).toHaveLength(100);
+  });
+});
+
+describe("findVideoGroups", () => {
+  const mainPage: DiscoveryResult = {
+    page_url: "https://app.example/watch/1",
+    page_title: "App",
+    drm_detected: false,
+    media_candidates: [
+      { kind: "direct", url: "https://cdn.example/native.mp4", mime_type: "video/mp4", source: "video" }
+    ],
+    caption_candidates: []
+  };
+  const vimeoEmbed: DiscoveryResult = {
+    page_url: "https://player.vimeo.com/video/1",
+    page_title: "Vimeo embed",
+    drm_detected: false,
+    media_candidates: [
+      { kind: "direct", url: "https://cdn.example/vimeo.mp4", mime_type: "video/mp4", source: "video" }
+    ],
+    caption_candidates: []
+  };
+  const emptyAdFrame: DiscoveryResult = {
+    page_url: "https://ads.example/slot",
+    page_title: "ads.example",
+    drm_detected: false,
+    media_candidates: [],
+    caption_candidates: []
+  };
+
+  it("returns undefined when at most one frame found anything", () => {
+    expect(findVideoGroups([{ frameId: 0, result: mainPage }, { frameId: 1, result: emptyAdFrame }], "App")).toBeUndefined();
+    expect(findVideoGroups([{ frameId: 1 }, { frameId: 2, result: emptyAdFrame }], "App")).toBeUndefined();
+  });
+
+  it("offers one group per frame that found a video, skipping empty frames", () => {
+    const groups = findVideoGroups(
+      [
+        { frameId: 0, result: mainPage },
+        { frameId: 7, result: emptyAdFrame },
+        { frameId: 9, result: vimeoEmbed }
+      ],
+      "App"
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups?.map((group) => group.frameId)).toEqual([0, 9]);
+    expect(groups?.[1]?.label).toBe("Vimeo embed");
+  });
+
+  it("labels a YouTube-hosted frame distinctly, trimming the ' - YouTube' suffix", () => {
+    const youtubeEmbed: DiscoveryResult = {
+      page_url: "https://www.youtube.com/watch?v=abc123",
+      page_title: "How AI helps at work - YouTube",
+      drm_detected: false,
+      media_candidates: [],
+      caption_candidates: []
+    };
+    const groups = findVideoGroups(
+      [
+        { frameId: 0, result: mainPage },
+        { frameId: 4, result: youtubeEmbed }
+      ],
+      "App"
+    );
+    expect(groups?.[1]?.label).toBe("YouTube: How AI helps at work");
+  });
+});
+
+describe("resolveSelectedGroup", () => {
+  const topFrame: DiscoveryResult = {
+    page_url: "https://app.example/watch/1",
+    page_title: "App",
+    preferred_language: "en",
+    drm_detected: true,
+    media_candidates: [],
+    caption_candidates: []
+  };
+  const frames: FrameDiscoveryResult[] = [
+    { frameId: 0, result: topFrame },
+    {
+      frameId: 5,
+      result: {
+        page_url: "https://player.vimeo.com/video/1",
+        page_title: "Vimeo embed",
+        drm_detected: false,
+        media_candidates: [
+          { kind: "direct", url: "https://cdn.example/vimeo.mp4", mime_type: "video/mp4", source: "video" }
+        ],
+        caption_candidates: []
+      }
+    }
+  ];
+
+  it("keeps the top frame's identity but the chosen frame's own candidates and DRM flag", () => {
+    const group = { frameId: 5, label: "Vimeo embed", result: frames[1]!.result! };
+    const resolved = resolveSelectedGroup(group, frames);
+    expect(resolved.page_url).toBe(topFrame.page_url);
+    expect(resolved.preferred_language).toBe("en");
+    expect(resolved.media_candidates).toEqual(group.result.media_candidates);
+    // The top frame flags DRM, but the chosen embed does not -- a clean choice must not be
+    // blocked by an unrelated frame (e.g. an ad) reporting DRM.
+    expect(resolved.drm_detected).toBe(false);
+  });
+
+  it("uses the YouTube identity as-is, without borrowing the top frame's URL", () => {
+    const youtubeResult: DiscoveryResult = {
+      page_url: "https://www.youtube.com/watch?v=abc123",
+      page_title: "video",
+      drm_detected: false,
+      media_candidates: [],
+      caption_candidates: []
+    };
+    const group = { frameId: 8, label: "YouTube: video", result: youtubeResult };
+    const resolved = resolveSelectedGroup(group, frames);
+    expect(resolved).toBe(youtubeResult);
   });
 });
 

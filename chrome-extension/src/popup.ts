@@ -1,5 +1,14 @@
 import { createJob, createSession, getJob } from "./api";
-import { chooseDirectCandidate, discoverPage, isYouTubeUrl, mergeDiscoveryResults, originPatterns } from "./discovery";
+import {
+  chooseDirectCandidate,
+  discoverPage,
+  findVideoGroups,
+  isYouTubeUrl,
+  mergeDiscoveryResults,
+  originPatterns,
+  resolveSelectedGroup
+} from "./discovery";
+import type { FrameDiscoveryResult, VideoGroup } from "./discovery";
 import type {
   BrowserContext,
   DiscoveryResult,
@@ -11,6 +20,7 @@ import type {
 const statusElement = document.querySelector<HTMLParagraphElement>("#status")!;
 const detailsElement = document.querySelector<HTMLDivElement>("#details")!;
 const progressElement = document.querySelector<HTMLProgressElement>("#progress")!;
+const videoPickerElement = document.querySelector<HTMLFieldSetElement>("#video-picker")!;
 const inspectButton = document.querySelector<HTMLButtonElement>("#inspect")!;
 const downloadButton = document.querySelector<HTMLButtonElement>("#download")!;
 const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
@@ -30,8 +40,44 @@ function message<T = Record<string, unknown>>(payload: ExtensionMessage): Promis
   return chrome.runtime.sendMessage(payload) as Promise<T>;
 }
 
+function resetVideoPicker(): void {
+  videoPickerElement.hidden = true;
+  videoPickerElement.replaceChildren();
+}
+
+/** Lets the user pick which of several videos found on the page to download. */
+function renderVideoPicker(groups: VideoGroup[], frames: FrameDiscoveryResult[]): void {
+  const legend = document.createElement("legend");
+  legend.textContent = "Choose a video";
+  videoPickerElement.replaceChildren(legend);
+
+  for (const [index, group] of groups.entries()) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "video-group";
+    input.value = String(index);
+    input.addEventListener("change", () => {
+      discovery = resolveSelectedGroup(group, frames);
+      setStatus(
+        "Video selected.",
+        `${discovery.media_candidates.length} media source(s), ${discovery.caption_candidates.length} caption/transcript source(s)`
+      );
+      downloadButton.hidden = false;
+    });
+    label.append(input, ` ${group.label}`);
+    videoPickerElement.appendChild(label);
+  }
+
+  videoPickerElement.hidden = false;
+  setStatus(`Found ${groups.length} videos on this page.`, "Choose which one to download below.");
+}
+
 async function inspectTab(): Promise<void> {
   inspectButton.disabled = true;
+  discovery = undefined;
+  downloadButton.hidden = true;
+  resetVideoPicker();
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !tab.url?.startsWith("http")) throw new Error("Open an HTTP or HTTPS video page first");
@@ -58,6 +104,16 @@ async function inspectTab(): Promise<void> {
       target: { tabId: tab.id, allFrames: true },
       func: discoverPage
     });
+
+    // More than one frame found a video: let the user pick instead of silently combining or
+    // arbitrarily preferring one, which is what the single merged DiscoveryResult below would
+    // otherwise do.
+    const groups = findVideoGroups(results, tab.title ?? "");
+    if (groups) {
+      renderVideoPicker(groups, results);
+      return;
+    }
+
     discovery = mergeDiscoveryResults(results);
     if (!discovery) throw new Error("The page could not be inspected");
     if (discovery.drm_detected) throw new Error("This player reports DRM protection and cannot be downloaded");
@@ -78,6 +134,7 @@ async function inspectTab(): Promise<void> {
     // behind a still-visible Download button.
     discovery = undefined;
     downloadButton.hidden = true;
+    resetVideoPicker();
     setStatus("Inspection failed", String(error));
   } finally {
     inspectButton.disabled = false;
