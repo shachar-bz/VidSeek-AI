@@ -1,5 +1,5 @@
 import { createJob, createSession, getJob } from "./api";
-import { chooseDirectCandidate, discoverPage, originPatterns } from "./discovery";
+import { chooseDirectCandidate, discoverPage, mergeDiscoveryResults, originPatterns } from "./discovery";
 import type {
   BrowserContext,
   DiscoveryResult,
@@ -72,10 +72,10 @@ async function inspectTab(): Promise<void> {
     }
 
     const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
+      target: { tabId: tab.id, allFrames: true },
       func: discoverPage
     });
-    discovery = results[0]?.result as DiscoveryResult | undefined;
+    discovery = mergeDiscoveryResults(results);
     if (!discovery) throw new Error("The page could not be inspected");
     if (discovery.drm_detected) throw new Error("This player reports DRM protection and cannot be downloaded");
     if (!discovery.media_candidates.length) {
