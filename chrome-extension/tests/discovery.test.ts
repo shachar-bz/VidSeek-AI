@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyMediaUrl, chooseDirectCandidate, originPatterns } from "../src/discovery";
+import {
+  classifyMediaUrl,
+  chooseDirectCandidate,
+  mergeDiscoveryResults,
+  originPatterns
+} from "../src/discovery";
 import type { DiscoveryResult } from "../src/types";
 
 describe("media discovery helpers", () => {
@@ -73,6 +78,104 @@ describe("media discovery helpers", () => {
         { kind: "hls", url: "https://cdn.example/master.m3u8", mime_type: "", source: "dom" }
       ])
     ).toBeUndefined();
+  });
+});
+
+describe("mergeDiscoveryResults", () => {
+  const topFrame: DiscoveryResult = {
+    page_url: "https://app.example/watch/1",
+    page_title: "Example",
+    preferred_language: "en",
+    drm_detected: false,
+    media_candidates: [],
+    caption_candidates: []
+  };
+
+  it("returns undefined when no frame produced a result", () => {
+    expect(mergeDiscoveryResults([{ frameId: 0 }, { frameId: 12 }])).toBeUndefined();
+  });
+
+  it("takes the page identity from the top frame, wherever it sits in the array", () => {
+    const iframe: DiscoveryResult = {
+      page_url: "https://player.example/embed/1",
+      page_title: "Embedded player",
+      drm_detected: false,
+      media_candidates: [],
+      caption_candidates: []
+    };
+    const merged = mergeDiscoveryResults([
+      { frameId: 7, result: iframe },
+      { frameId: 0, result: topFrame }
+    ]);
+    expect(merged?.page_url).toBe(topFrame.page_url);
+    expect(merged?.page_title).toBe(topFrame.page_title);
+    expect(merged?.preferred_language).toBe("en");
+  });
+
+  it("falls back to the first frame with a result if frameId 0 never produced one", () => {
+    const iframe: DiscoveryResult = { ...topFrame, page_url: "https://player.example/embed/1" };
+    const merged = mergeDiscoveryResults([{ frameId: 3, result: iframe }, { frameId: 9 }]);
+    expect(merged?.page_url).toBe(iframe.page_url);
+  });
+
+  it("merges and dedups media and caption candidates found in an iframe", () => {
+    const embeddedVideo: DiscoveryResult = {
+      ...topFrame,
+      page_url: "https://player.example/embed/1",
+      media_candidates: [
+        { kind: "direct", url: "https://cdn.example/clip.mp4", mime_type: "video/mp4", source: "video" }
+      ],
+      caption_candidates: [
+        { url: "https://cdn.example/en.vtt", format: "vtt", is_active: true, is_manual: true, is_visible_transcript: false }
+      ]
+    };
+    const merged = mergeDiscoveryResults([
+      { frameId: 0, result: topFrame },
+      { frameId: 4, result: embeddedVideo },
+      // The same clip fetched twice (e.g. by a nested iframe) must not appear twice.
+      { frameId: 5, result: embeddedVideo }
+    ]);
+    expect(merged?.media_candidates).toHaveLength(1);
+    expect(merged?.media_candidates[0]?.url).toBe("https://cdn.example/clip.mp4");
+    expect(merged?.caption_candidates).toHaveLength(1);
+  });
+
+  it("treats the page as DRM-protected if any frame reports it", () => {
+    const protectedFrame: DiscoveryResult = { ...topFrame, page_url: "https://player.example/embed/1", drm_detected: true };
+    const merged = mergeDiscoveryResults([
+      { frameId: 0, result: topFrame },
+      { frameId: 4, result: protectedFrame }
+    ]);
+    expect(merged?.drm_detected).toBe(true);
+  });
+
+  it("caps the merged totals at 100 media and 50 caption candidates", () => {
+    const many = (count: number, make: (index: number) => DiscoveryResult["media_candidates"][number]) =>
+      Array.from({ length: count }, (_, index) => make(index));
+    const frameA: DiscoveryResult = {
+      ...topFrame,
+      media_candidates: many(80, (index) => ({
+        kind: "direct",
+        url: `https://cdn.example/a-${index}.mp4`,
+        mime_type: "",
+        source: "video"
+      }))
+    };
+    const frameB: DiscoveryResult = {
+      ...topFrame,
+      page_url: "https://player.example/embed/1",
+      media_candidates: many(80, (index) => ({
+        kind: "direct",
+        url: `https://cdn.example/b-${index}.mp4`,
+        mime_type: "",
+        source: "video"
+      }))
+    };
+    const merged = mergeDiscoveryResults([
+      { frameId: 0, result: frameA },
+      { frameId: 1, result: frameB }
+    ]);
+    expect(merged?.media_candidates).toHaveLength(100);
   });
 });
 

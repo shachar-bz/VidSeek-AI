@@ -37,6 +37,57 @@ export function chooseDirectCandidate(candidates: MediaCandidate[]): MediaCandid
   return candidates.find((candidate) => candidate.kind === "direct");
 }
 
+/** One entry per frame `discoverPage` ran in, as `chrome.scripting.executeScript` returns them. */
+export interface FrameDiscoveryResult {
+  frameId: number;
+  result?: DiscoveryResult;
+}
+
+const MAX_MEDIA_CANDIDATES = 100;
+const MAX_CAPTION_CANDIDATES = 50;
+
+/**
+ * Combines one `DiscoveryResult` per frame into one page-wide result.
+ *
+ * An embedded player (Vimeo, JW Player, Brightcove, Kaltura) usually lives in an iframe, so
+ * `discoverPage` has to run in every frame, not just the top one, to see it. The top frame
+ * (frameId 0) still owns the identity of the page -- its URL, title and language -- but a
+ * DRM flag or a media/caption candidate from any frame counts.
+ */
+export function mergeDiscoveryResults(frames: FrameDiscoveryResult[]): DiscoveryResult | undefined {
+  const withResult = frames.filter(
+    (frame): frame is FrameDiscoveryResult & { result: DiscoveryResult } => Boolean(frame.result)
+  );
+  const first = withResult[0];
+  if (!first) return undefined;
+  const top = withResult.find((frame) => frame.frameId === 0) ?? first;
+
+  const media = new Map<string, MediaCandidate>();
+  const captions = new Map<string, DiscoveryResult["caption_candidates"][number]>();
+  let drmDetected = false;
+  let visibleTranscriptIndex = 0;
+
+  for (const frame of withResult) {
+    drmDetected = drmDetected || frame.result.drm_detected;
+    for (const candidate of frame.result.media_candidates) {
+      if (!media.has(candidate.url)) media.set(candidate.url, candidate);
+    }
+    for (const caption of frame.result.caption_candidates) {
+      const key = caption.url ?? `visible:${visibleTranscriptIndex++}`;
+      if (!captions.has(key)) captions.set(key, caption);
+    }
+  }
+
+  return {
+    page_url: top.result.page_url,
+    page_title: top.result.page_title,
+    preferred_language: top.result.preferred_language,
+    drm_detected: drmDetected,
+    media_candidates: [...media.values()].slice(0, MAX_MEDIA_CANDIDATES),
+    caption_candidates: [...captions.values()].slice(0, MAX_CAPTION_CANDIDATES)
+  };
+}
+
 export function discoverPage(): DiscoveryResult {
   const mediaExtensions = /\.(mp4|m4v|mov|webm|mkv|avi)(?:$|[?#])/i;
   const hls = /\.m3u8(?:$|[?#])/i;

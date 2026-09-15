@@ -36,20 +36,25 @@ transcript. Confirm the popup survives the permission prompt, and that a job app
 
 ## 2. Discovery misses embedded and adaptive players
 
-These four share one root: `discoverPage` only reads what the top frame's DOM exposes
-before playback starts. The capture fallback covers every case, but only after a download
-attempt has already failed, which costs the user a slow round trip.
+The remaining three share one root: `discoverPage` only reads what's already sitting in the
+DOM before playback starts. (2a's iframe gap shared that root too, and is now closed.) The
+capture fallback covers every remaining case, but only after a download attempt has already
+failed, which costs the user a slow round trip.
 
-### 2a. Iframes are never scanned
+### 2a. Iframes are never scanned — closed
 
-**Status:** open. **Problem:** `popup.ts` calls `chrome.scripting.executeScript` without
-`allFrames: true`, so only the top frame is inspected. Vimeo, JW Player, Brightcove and
-Kaltura embeds are usually in an iframe, and discovery returns nothing for them.
+**Status:** closed. **Problem:** `popup.ts` called `chrome.scripting.executeScript` without
+`allFrames: true`, so only the top frame was inspected. Vimeo, JW Player, Brightcove and
+Kaltura embeds are usually in an iframe, and discovery returned nothing for them.
 
-**To close:** pass `allFrames: true` and merge the per-frame results (`executeScript`
-resolves to one entry per frame). `activeTab` already grants sub-frame access, so no new
-permission is needed. Dedup by resolved URL, as the single-frame path already does, and
-keep the 100/50 caps applied after the merge rather than per frame.
+**Fix:** `popup.ts` now passes `allFrames: true`. `discovery.ts` exports
+`mergeDiscoveryResults`, which combines the one `DiscoveryResult` per frame that
+`executeScript` returns: page identity (URL, title, language) comes from the top frame
+(frameId 0, falling back to whichever frame answered first if frame 0 didn't produce a
+result), a DRM flag or a media/caption candidate from *any* frame counts, and candidates are
+deduped by URL across frames before the existing 100/50 caps are applied to the merged
+totals rather than per frame. `activeTab` already covered sub-frame access, so no new
+permission was needed. Covered by `mergeDiscoveryResults` tests in `discovery.test.ts`.
 
 ### 2b. MSE and `blob:` playback look like "no video"
 
