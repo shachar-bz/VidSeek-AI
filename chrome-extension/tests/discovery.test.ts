@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMediaUrl,
   chooseDirectCandidate,
+  isYouTubeUrl,
   mergeDiscoveryResults,
   originPatterns
 } from "../src/discovery";
@@ -49,6 +50,15 @@ describe("media discovery helpers", () => {
       "https://app.example/*",
       "https://cdn.example/*"
     ]);
+  });
+
+  it("recognizes YouTube hosts, including nocookie and subdomains", () => {
+    expect(isYouTubeUrl("https://www.youtube.com/watch?v=abc123")).toBe(true);
+    expect(isYouTubeUrl("https://youtu.be/abc123")).toBe(true);
+    expect(isYouTubeUrl("https://m.youtube.com/watch?v=abc123")).toBe(true);
+    expect(isYouTubeUrl("https://www.youtube-nocookie.com/embed/abc123")).toBe(true);
+    expect(isYouTubeUrl("https://player.example/embed/1")).toBe(false);
+    expect(isYouTubeUrl("not a url")).toBe(false);
   });
 
   it("ignores media URLs that are not addressable by a match pattern", () => {
@@ -147,6 +157,28 @@ describe("mergeDiscoveryResults", () => {
       { frameId: 4, result: protectedFrame }
     ]);
     expect(merged?.drm_detected).toBe(true);
+  });
+
+  it("lets a YouTube-hosted frame take over the whole merge, even mid-array", () => {
+    const embeddedYouTube: DiscoveryResult = {
+      page_url: "https://www.youtube.com/watch?v=2GEE0kiF6Dk",
+      page_title: "video",
+      drm_detected: false,
+      media_candidates: [],
+      caption_candidates: []
+    };
+    const siblingFrame: DiscoveryResult = {
+      ...topFrame,
+      media_candidates: [
+        { kind: "direct", url: "https://cdn.example/unrelated.mp4", mime_type: "video/mp4", source: "video" }
+      ]
+    };
+    const merged = mergeDiscoveryResults([
+      { frameId: 0, result: siblingFrame },
+      { frameId: 3, result: embeddedYouTube }
+    ]);
+    expect(merged?.page_url).toBe(embeddedYouTube.page_url);
+    expect(merged?.media_candidates).toEqual([]);
   });
 
   it("caps the merged totals at 100 media and 50 caption candidates", () => {

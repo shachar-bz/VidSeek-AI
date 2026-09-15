@@ -37,6 +37,23 @@ export function chooseDirectCandidate(candidates: MediaCandidate[]): MediaCandid
   return candidates.find((candidate) => candidate.kind === "direct");
 }
 
+/** Mirrors the companion's is_youtube_url, which also covers m./music. subdomains. */
+export function isYouTubeUrl(url: string): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return false;
+  }
+  return (
+    hostname === "youtu.be" ||
+    hostname === "youtube.com" ||
+    hostname.endsWith(".youtube.com") ||
+    hostname === "youtube-nocookie.com" ||
+    hostname.endsWith(".youtube-nocookie.com")
+  );
+}
+
 /** One entry per frame `discoverPage` ran in, as `chrome.scripting.executeScript` returns them. */
 export interface FrameDiscoveryResult {
   frameId: number;
@@ -53,6 +70,13 @@ const MAX_CAPTION_CANDIDATES = 50;
  * `discoverPage` has to run in every frame, not just the top one, to see it. The top frame
  * (frameId 0) still owns the identity of the page -- its URL, title and language -- but a
  * DRM flag or a media/caption candidate from any frame counts.
+ *
+ * A frame that is itself hosted on YouTube (an embedded player on an otherwise unrelated
+ * page, e.g. an edX Video XBlock configured with a YouTube ID) is the one exception: its
+ * `discoverPage` result already stands in for the whole page -- see the YouTube branch of
+ * `discoverPage` below -- and takes over the merge outright, the same way `popup.ts` skips
+ * discovery entirely when the tab itself is a YouTube page. Mixing it with candidates found
+ * in sibling frames would only produce expiring googlevideo links.
  */
 export function mergeDiscoveryResults(frames: FrameDiscoveryResult[]): DiscoveryResult | undefined {
   const withResult = frames.filter(
@@ -60,6 +84,8 @@ export function mergeDiscoveryResults(frames: FrameDiscoveryResult[]): Discovery
   );
   const first = withResult[0];
   if (!first) return undefined;
+  const youtubeFrame = withResult.find((frame) => isYouTubeUrl(frame.result.page_url));
+  if (youtubeFrame) return youtubeFrame.result;
   const top = withResult.find((frame) => frame.frameId === 0) ?? first;
 
   const media = new Map<string, MediaCandidate>();
@@ -89,6 +115,49 @@ export function mergeDiscoveryResults(frames: FrameDiscoveryResult[]): Discovery
 }
 
 export function discoverPage(): DiscoveryResult {
+  // A YouTube-hosted frame -- typically an <iframe src="https://www.youtube.com/embed/...">
+  // embedded in an otherwise unrelated page -- can never yield a usable media candidate: its
+  // <video> element streams through MediaSource (a blob: src, filtered out below) and its
+  // actual segments come from expiring, unclassifiable googlevideo.com URLs. Reporting the
+  // frame as its own canonical watch page instead lets `mergeDiscoveryResults` route the
+  // whole job to the YouTube pipeline, the same one used when the active tab is YouTube
+  // itself. This is inlined, rather than calling `isYouTubeUrl`, because this function is
+  // injected into the page via `chrome.scripting.executeScript` and runs with no closure
+  // over this module's other bindings.
+  const youtubeVideoId = ((): string | null => {
+    let hostname: string;
+    try {
+      hostname = location.hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+    const onYouTube =
+      hostname === "youtu.be" ||
+      hostname === "youtube.com" ||
+      hostname.endsWith(".youtube.com") ||
+      hostname === "youtube-nocookie.com" ||
+      hostname.endsWith(".youtube-nocookie.com");
+    if (!onYouTube) return null;
+    const embedMatch = location.pathname.match(/^\/embed\/([\w-]{6,})/);
+    if (embedMatch?.[1]) return embedMatch[1];
+    const watchId = new URLSearchParams(location.search).get("v");
+    if (watchId) return watchId;
+    if (hostname === "youtu.be") {
+      const shortMatch = location.pathname.match(/^\/([\w-]{6,})/);
+      if (shortMatch?.[1]) return shortMatch[1];
+    }
+    return null;
+  })();
+  if (youtubeVideoId) {
+    return {
+      page_url: `https://www.youtube.com/watch?v=${youtubeVideoId}`,
+      page_title: document.title || "video",
+      drm_detected: false,
+      media_candidates: [],
+      caption_candidates: []
+    };
+  }
+
   const mediaExtensions = /\.(mp4|m4v|mov|webm|mkv|avi)(?:$|[?#])/i;
   const hls = /\.m3u8(?:$|[?#])/i;
   const dash = /\.mpd(?:$|[?#])/i;

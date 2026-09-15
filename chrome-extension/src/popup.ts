@@ -1,5 +1,5 @@
 import { createJob, createSession, getJob } from "./api";
-import { chooseDirectCandidate, discoverPage, mergeDiscoveryResults, originPatterns } from "./discovery";
+import { chooseDirectCandidate, discoverPage, isYouTubeUrl, mergeDiscoveryResults, originPatterns } from "./discovery";
 import type {
   BrowserContext,
   DiscoveryResult,
@@ -30,23 +30,6 @@ function message<T = Record<string, unknown>>(payload: ExtensionMessage): Promis
   return chrome.runtime.sendMessage(payload) as Promise<T>;
 }
 
-/** Mirrors the companion's is_youtube_url, which also covers m./music. subdomains. */
-function isYouTube(pageUrl: string): boolean {
-  let hostname: string;
-  try {
-    hostname = new URL(pageUrl).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return false;
-  }
-  return (
-    hostname === "youtu.be" ||
-    hostname === "youtube.com" ||
-    hostname.endsWith(".youtube.com") ||
-    hostname === "youtube-nocookie.com" ||
-    hostname.endsWith(".youtube-nocookie.com")
-  );
-}
-
 async function inspectTab(): Promise<void> {
   inspectButton.disabled = true;
   try {
@@ -58,7 +41,7 @@ async function inspectTab(): Promise<void> {
     // find nothing usable on YouTube anyway — its media URLs are expiring googlevideo
     // links — and the YouTube player reports DRM on streams the pipeline downloads fine,
     // so inspecting it would only produce a false drm_detected refusal.
-    if (isYouTube(tab.url)) {
+    if (isYouTubeUrl(tab.url)) {
       discovery = {
         page_url: tab.url,
         page_title: tab.title ?? "video",
@@ -176,7 +159,7 @@ async function startDownload(): Promise<void> {
     // sent no cookies at all. Asking for YouTube cookies would mean a new host permission
     // and would hand over the highest-value credential in the profile for no gain; the
     // cost is that age-restricted videos fail, with the pipeline's own message.
-    const youtube = isYouTube(discovery.page_url);
+    const youtube = isYouTubeUrl(discovery.page_url);
     const origins = youtube ? [] : originPatterns(discovery);
     if (!youtube) {
       const granted = await chrome.permissions.request({ permissions: ["cookies"], origins });
