@@ -106,7 +106,11 @@ def test_the_prompt_is_sent_as_written() -> None:
 
     assert prompt.startswith("You are given a video transcript with timestamps.")
     assert "Use only the provided segment IDs and never invent, modify, or skip segment IDs." in prompt
-    assert prompt.endswith("answering user questions about specific parts of the video.")
+    assert (
+        "The goal is to create moments that will later be useful for semantic search, "
+        "embeddings, and answering user questions about specific parts of the video."
+    ) in prompt
+    assert prompt.endswith("`summary`: a short description of what happens or is discussed")
 
 
 def test_memories_take_their_times_and_text_from_the_transcript_not_the_model() -> None:
