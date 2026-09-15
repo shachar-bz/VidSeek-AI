@@ -113,6 +113,14 @@ VidSeek-AI/
 │   │           └── downloads/                      # Local output folder for CLI downloads (gitignored).
 │   ├── semantic_processing/                        # What a transcript becomes once transcription is done.
 │   │   ├── __init__.py                             # Public interface of the semantic processing package.
+│   │   ├── chapters/                               # Pipeline stage three: semantic memories grouped into higher-level chapters by an LLM.
+│   │   │   ├── __init__.py                         # Public interface of the chapter grouping stage.
+│   │   │   ├── prompt.py                           # The grouping instruction sent to the model, as a docstring.
+│   │   │   ├── memory_ids.py                       # Names each memory `memory_N` and renders the summaries and resolves those IDs.
+│   │   │   ├── boundaries.py                       # Pydantic structured-output schema of the model's response.
+│   │   │   ├── validation.py                       # Checks the returned boundaries partition the memories exactly once.
+│   │   │   ├── chapter.py                          # Chapter data model, deriving its times from the original memories.
+│   │   │   └── grouper.py                          # Runs the stage: renders, requests, validates and builds the chapters.
 │   │   └── memories/                               # Pipeline stage two: a transcript divided into semantic memories by an LLM.
 │   │       ├── __init__.py                         # Public interface of the memory creation stage.
 │   │       ├── prompt.py                           # The segmentation instruction sent to the model, as a docstring.
@@ -125,6 +133,7 @@ VidSeek-AI/
 │       ├── conftest.py                             # Keeps the developer's download root and backend/.env out of the test run.
 │       ├── test_transcript_normalization.py        # Transcript format, segment timing and transcript store tests.
 │       ├── test_memory_segmentation.py             # Segment ID rendering, boundary validation and memory construction tests.
+│       ├── test_chapter_grouping.py                # Memory ID rendering, boundary validation and chapter construction tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
 │       ├── test_web_video_jobs.py                  # Job lifecycle tests.
