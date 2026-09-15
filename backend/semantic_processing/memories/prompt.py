@@ -18,8 +18,8 @@ def memory_segmentation_prompt() -> str:
     A **memory** is a meaningful part of a conversation that focuses on one specific idea, point, story, argument, or discussion.
 
     It should be long enough to include the relevant context, so it can still make sense when read on its own.
-
-    A memory is **not** just a single sentence or a tiny detail. Several related sentences or examples should stay together if they are part of the same idea.
+    
+    The goal is to create moments that will later be useful for semantic search, embeddings, and answering user questions about specific parts of the video.
 
     Rules:
 
@@ -38,6 +38,5 @@ def memory_segmentation_prompt() -> str:
     * `end_segment_id`: the last transcript segment belonging to the memory
     * `summary`: a short description of what happens or is discussed
 
-    The goal is to create moments that will later be useful for semantic search, embeddings, and answering user questions about specific parts of the video.
     """
     return inspect.cleandoc(memory_segmentation_prompt.__doc__)
