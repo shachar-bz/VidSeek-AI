@@ -54,6 +54,118 @@ export function isYouTubeUrl(url: string): boolean {
   );
 }
 
+export type DrmSystem = "widevine" | "playready" | "fairplay" | "clearkey" | "drm";
+
+export interface DrmCheck {
+  drm_detected: boolean;
+  system?: DrmSystem;
+  reason?: string;
+}
+
+const WIDEVINE_SYSTEM_ID = "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed";
+const PLAYREADY_SYSTEM_ID = "9a04f079-9840-4286-ab92-e65be0885f95";
+const FAIRPLAY_KEYFORMAT = "com.apple.streamingkeydelivery";
+const CLEARKEY_SYSTEM_ID = "1077efec-c0b2-4d02-ace3-3c1e52e2fb4b";
+
+/**
+ * Looks for the tags a manifest carries when its segments need a DRM license rather than
+ * being merely obfuscated. HLS's own `METHOD=AES-128` is a plain static key yt-dlp already
+ * fetches and decrypts on its own -- only `SAMPLE-AES` or a DRM `KEYFORMAT` mean a license
+ * server is involved. DASH signals the same thing with a `ContentProtection` element.
+ */
+export function detectManifestDrm(text: string, kind: MediaKind): DrmCheck {
+  if (kind === "hls") {
+    const keyLines = text.match(/#EXT-X-KEY:[^\r\n]*/gi) ?? [];
+    for (const line of keyLines) {
+      const method = /METHOD=([\w-]+)/i.exec(line)?.[1]?.toUpperCase();
+      if (!method || method === "NONE" || method === "AES-128") continue;
+      const keyformat = /KEYFORMAT="([^"]+)"/i.exec(line)?.[1]?.toLowerCase() ?? "";
+      if (keyformat.includes(WIDEVINE_SYSTEM_ID)) {
+        return { drm_detected: true, system: "widevine", reason: "HLS EXT-X-KEY uses Widevine" };
+      }
+      if (keyformat.includes(FAIRPLAY_KEYFORMAT)) {
+        return { drm_detected: true, system: "fairplay", reason: "HLS EXT-X-KEY uses FairPlay" };
+      }
+      if (keyformat.includes(CLEARKEY_SYSTEM_ID)) {
+        return { drm_detected: true, system: "clearkey", reason: "HLS EXT-X-KEY uses ClearKey" };
+      }
+      return { drm_detected: true, system: "drm", reason: `HLS EXT-X-KEY method ${method}` };
+    }
+    return { drm_detected: false };
+  }
+  if (kind === "dash") {
+    if (!/<ContentProtection[\s>]/i.test(text)) return { drm_detected: false };
+    const lowered = text.toLowerCase();
+    if (lowered.includes(WIDEVINE_SYSTEM_ID)) {
+      return { drm_detected: true, system: "widevine", reason: "DASH ContentProtection uses Widevine" };
+    }
+    if (lowered.includes(PLAYREADY_SYSTEM_ID)) {
+      return { drm_detected: true, system: "playready", reason: "DASH ContentProtection uses PlayReady" };
+    }
+    if (lowered.includes(CLEARKEY_SYSTEM_ID)) {
+      return { drm_detected: true, system: "clearkey", reason: "DASH ContentProtection uses ClearKey" };
+    }
+    return { drm_detected: true, system: "drm", reason: "DASH manifest declares ContentProtection" };
+  }
+  return { drm_detected: false };
+}
+
+const LICENSE_TRAFFIC = /license|widevine|playready|fairplay|drmtoday|castlabs|\/drm\/|getlicense|acquirelicense/i;
+
+/** A request to one of these looks like a DRM license acquisition, not the media itself. */
+export function isLicenseTraffic(url: string): boolean {
+  return LICENSE_TRAFFIC.test(url);
+}
+
+export interface EmeMonitorState {
+  requested: boolean;
+  keySystem?: string;
+  encryptedEventFired: boolean;
+  setMediaKeysCalled: boolean;
+}
+
+/**
+ * Injected into the page's MAIN world (not the isolated content-script world) so it patches
+ * the very `navigator`/`HTMLMediaElement` the player itself calls. A manifest can look clean
+ * while the player still switches to a DRM-protected rendition once playback starts, so this
+ * is the only way to observe that. Idempotent: installing it twice keeps the first instance.
+ */
+export function installEmeMonitor(): void {
+  const globalWithMonitor = window as unknown as { __vidseekEmeMonitor?: EmeMonitorState };
+  if (globalWithMonitor.__vidseekEmeMonitor) return;
+  const state: EmeMonitorState = { requested: false, encryptedEventFired: false, setMediaKeysCalled: false };
+  globalWithMonitor.__vidseekEmeMonitor = state;
+
+  const originalRequest = navigator.requestMediaKeySystemAccess?.bind(navigator);
+  if (originalRequest) {
+    navigator.requestMediaKeySystemAccess = (keySystem, configs) => {
+      state.requested = true;
+      state.keySystem = keySystem;
+      return originalRequest(keySystem, configs);
+    };
+  }
+
+  const mediaElementProto = window.HTMLMediaElement?.prototype;
+  const originalSetMediaKeys = mediaElementProto?.setMediaKeys;
+  if (mediaElementProto && typeof originalSetMediaKeys === "function") {
+    mediaElementProto.setMediaKeys = function (this: HTMLMediaElement, mediaKeys) {
+      if (mediaKeys) state.setMediaKeysCalled = true;
+      return originalSetMediaKeys.call(this, mediaKeys);
+    };
+  }
+
+  // `encrypted` does not bubble, but capture-phase delivery still visits every ancestor
+  // regardless of a target's bubbling, so one listener on `document` sees every element.
+  document.addEventListener("encrypted", () => {
+    state.encryptedEventFired = true;
+  }, true);
+}
+
+/** Reads back what `installEmeMonitor` observed; also injected into the MAIN world. */
+export function readEmeMonitor(): EmeMonitorState | undefined {
+  return (window as unknown as { __vidseekEmeMonitor?: EmeMonitorState }).__vidseekEmeMonitor;
+}
+
 /** One entry per frame `discoverPage` ran in, as `chrome.scripting.executeScript` returns them. */
 export interface FrameDiscoveryResult {
   frameId: number;

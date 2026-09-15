@@ -73,6 +73,14 @@ export type ExtensionMessage =
   | { type: "START_BROWSER_DOWNLOAD"; tracker: TrackedJob; url: string; filename: string }
   | { type: "GET_TRACKED_JOB" }
   | { type: "CANCEL_TRACKED_JOB" }
-  | { type: "START_CAPTURE"; tabId: number; jobId: string }
+  // jobId is omitted for a pre-download DRM verification: no job exists yet to retry.
+  | { type: "START_CAPTURE"; tabId: number; jobId?: string }
   | { type: "STOP_CAPTURE" };
+
+/** What `STOP_CAPTURE` hands back: a DRM verdict, or the media requests it captured. */
+export interface StopCaptureResult {
+  drm_detected: boolean;
+  reason?: string;
+  candidates: MediaCandidate[];
+}
 

@@ -13,6 +13,8 @@ import type {
   BrowserContext,
   DiscoveryResult,
   ExtensionMessage,
+  MediaCandidate,
+  StopCaptureResult,
   TrackedJob,
   VideoJob
 } from "./types";
@@ -23,6 +25,8 @@ const progressElement = document.querySelector<HTMLProgressElement>("#progress")
 const videoPickerElement = document.querySelector<HTMLFieldSetElement>("#video-picker")!;
 const inspectButton = document.querySelector<HTMLButtonElement>("#inspect")!;
 const downloadButton = document.querySelector<HTMLButtonElement>("#download")!;
+const verifyButton = document.querySelector<HTMLButtonElement>("#verify")!;
+const stopVerifyButton = document.querySelector<HTMLButtonElement>("#stop-verify")!;
 const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
 const stopCaptureButton = document.querySelector<HTMLButtonElement>("#stop-capture")!;
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
@@ -45,6 +49,60 @@ function resetVideoPicker(): void {
   videoPickerElement.replaceChildren();
 }
 
+/** Stopped, notified state for any DRM signal, whether seen at inspect time or after playback. */
+function reportDrmBlocked(reason: string): void {
+  discovery = undefined;
+  downloadButton.hidden = true;
+  verifyButton.hidden = true;
+  stopVerifyButton.hidden = true;
+  captureButton.hidden = true;
+  cancelButton.hidden = true;
+  void clearVerifyState();
+  void chrome.action.setBadgeBackgroundColor({ color: "#c62828" });
+  void chrome.action.setBadgeText({ text: "DRM" });
+  setStatus("DRM detected — download stopped", reason);
+}
+
+/**
+ * Adaptive/MSE players are exactly the ones that can switch to a DRM-protected rendition
+ * only once playback actually starts (open_tasks.md #2c): a plain progressive `<video src>`
+ * cannot. Gating only these behind a play-and-verify step keeps a simple direct file fast.
+ */
+function needsPlaybackVerification(discoveryValue: DiscoveryResult): boolean {
+  return (
+    discoveryValue.media_candidates.length === 0 ||
+    discoveryValue.media_candidates.some((candidate) => candidate.kind === "hls" || candidate.kind === "dash")
+  );
+}
+
+/**
+ * Applies the DRM/playback-verification gate to a discovery result and sets the popup's
+ * button state accordingly. Shared by the single-video path and the video picker below, so
+ * picking a specific video from several never skips the same DRM check a single video gets.
+ */
+function presentDiscovery(discoveryValue: DiscoveryResult): void {
+  discovery = discoveryValue;
+  if (discoveryValue.drm_detected) {
+    reportDrmBlocked("This player reports DRM protection (video.mediaKeys is already set).");
+    return;
+  }
+  if (needsPlaybackVerification(discoveryValue)) {
+    downloadButton.hidden = true;
+    verifyButton.hidden = false;
+    setStatus(
+      discoveryValue.media_candidates.length ? "Adaptive player detected." : "No direct source found yet.",
+      "DRM can only be confirmed once playback starts. Click 'Verify & play', then press Play in the page."
+    );
+  } else {
+    verifyButton.hidden = true;
+    downloadButton.hidden = false;
+    setStatus(
+      "Video discovered.",
+      `${discoveryValue.media_candidates.length} media source(s), ${discoveryValue.caption_candidates.length} caption/transcript source(s)`
+    );
+  }
+}
+
 /** Lets the user pick which of several videos found on the page to download. */
 function renderVideoPicker(groups: VideoGroup[], frames: FrameDiscoveryResult[]): void {
   const legend = document.createElement("legend");
@@ -57,14 +115,7 @@ function renderVideoPicker(groups: VideoGroup[], frames: FrameDiscoveryResult[])
     input.type = "radio";
     input.name = "video-group";
     input.value = String(index);
-    input.addEventListener("change", () => {
-      discovery = resolveSelectedGroup(group, frames);
-      setStatus(
-        "Video selected.",
-        `${discovery.media_candidates.length} media source(s), ${discovery.caption_candidates.length} caption/transcript source(s)`
-      );
-      downloadButton.hidden = false;
-    });
+    input.addEventListener("change", () => presentDiscovery(resolveSelectedGroup(group, frames)));
     label.append(input, ` ${group.label}`);
     videoPickerElement.appendChild(label);
   }
@@ -96,6 +147,7 @@ async function inspectTab(): Promise<void> {
         caption_candidates: []
       };
       setStatus("YouTube video.", "Captions and comments are fetched by the YouTube pipeline.");
+      verifyButton.hidden = true;
       downloadButton.hidden = false;
       return;
     }
@@ -114,26 +166,15 @@ async function inspectTab(): Promise<void> {
       return;
     }
 
-    discovery = mergeDiscoveryResults(results);
-    if (!discovery) throw new Error("The page could not be inspected");
-    if (discovery.drm_detected) throw new Error("This player reports DRM protection and cannot be downloaded");
-    if (!discovery.media_candidates.length) {
-      setStatus(
-        "No direct source found yet.",
-        "You can still submit the page to its yt-dlp extractor; capture is available if that fails."
-      );
-    } else {
-      setStatus(
-        "Video discovered.",
-        `${discovery.media_candidates.length} media source(s), ${discovery.caption_candidates.length} caption/transcript source(s)`
-      );
-    }
-    downloadButton.hidden = false;
+    const merged = mergeDiscoveryResults(results);
+    if (!merged) throw new Error("The page could not be inspected");
+    presentDiscovery(merged);
   } catch (error) {
     // Without this a failed re-inspect leaves the previous page's discovery armed
     // behind a still-visible Download button.
     discovery = undefined;
     downloadButton.hidden = true;
+    verifyButton.hidden = true;
     resetVideoPicker();
     setStatus("Inspection failed", String(error));
   } finally {
@@ -207,6 +248,15 @@ async function hydrateCaptionBodies(discoveryValue: DiscoveryResult): Promise<vo
 
 const EMPTY_BROWSER_CONTEXT: BrowserContext = { cookies: [], headers: {}, user_agent: "" };
 
+/** Requests the site/CDN origins a discovery result touches; YouTube needs none of them. */
+async function grantSiteAccess(discoveryValue: DiscoveryResult): Promise<string[]> {
+  if (isYouTubeUrl(discoveryValue.page_url)) return [];
+  const origins = originPatterns(discoveryValue);
+  const granted = await chrome.permissions.request({ permissions: ["cookies"], origins });
+  if (!granted) throw new Error("Site/CDN access was not granted");
+  return origins;
+}
+
 async function startDownload(): Promise<void> {
   if (!discovery) return;
   downloadButton.disabled = true;
@@ -217,17 +267,12 @@ async function startDownload(): Promise<void> {
     // and would hand over the highest-value credential in the profile for no gain; the
     // cost is that age-restricted videos fail, with the pipeline's own message.
     const youtube = isYouTubeUrl(discovery.page_url);
-    const origins = youtube ? [] : originPatterns(discovery);
-    if (!youtube) {
-      const granted = await chrome.permissions.request({ permissions: ["cookies"], origins });
-      if (!granted) throw new Error("Site/CDN access was not granted");
-      grantedOrigins = origins;
-      await hydrateCaptionBodies(discovery);
-    }
+    grantedOrigins = await grantSiteAccess(discovery);
+    if (!youtube) await hydrateCaptionBodies(discovery);
     const context = youtube ? EMPTY_BROWSER_CONTEXT : await collectCookies(discovery);
     const token = await createSession();
     const job = await createJob(token, discovery, context);
-    const tracker: TrackedJob = { jobId: job.job_id, token, grantedOrigins: origins };
+    const tracker: TrackedJob = { jobId: job.job_id, token, grantedOrigins };
     const direct = chooseDirectCandidate(discovery.media_candidates);
     if (job.acquisition_mode === "browser_download" && direct) {
       await message({
@@ -240,6 +285,7 @@ async function startDownload(): Promise<void> {
       await message({ type: "TRACK_JOB", tracker });
     }
     downloadButton.hidden = true;
+    verifyButton.hidden = true;
     inspectButton.hidden = true;
     cancelButton.hidden = false;
     renderJob(job);
@@ -251,6 +297,105 @@ async function startDownload(): Promise<void> {
     }
     setStatus("Could not start download", String(error));
     downloadButton.disabled = false;
+  }
+}
+
+/** Merges media candidates confirmed during playback ahead of what discovery first saw. */
+function mergeCandidates(primary: MediaCandidate[], fallback: MediaCandidate[]): MediaCandidate[] {
+  const seen = new Set(primary.map((candidate) => candidate.url));
+  return [...primary, ...fallback.filter((candidate) => !seen.has(candidate.url))];
+}
+
+interface VerifyState {
+  discovery: DiscoveryResult;
+  grantedOrigins: string[];
+}
+
+const VERIFY_STATE_KEY = "vidseekVerifyState";
+
+// The popup closes the moment the user clicks into the page to press Play, so the discovery
+// result and the origins granted for it must survive that close/reopen in session storage —
+// a module-level variable would not.
+async function saveVerifyState(state: VerifyState): Promise<void> {
+  await chrome.storage.session.set({ [VERIFY_STATE_KEY]: state });
+}
+
+async function readVerifyState(): Promise<VerifyState | undefined> {
+  const stored = await chrome.storage.session.get(VERIFY_STATE_KEY);
+  return stored[VERIFY_STATE_KEY] as VerifyState | undefined;
+}
+
+async function clearVerifyState(): Promise<void> {
+  await chrome.storage.session.remove(VERIFY_STATE_KEY);
+}
+
+async function startVerification(): Promise<void> {
+  if (!discovery || activeTabId === undefined) return;
+  verifyButton.disabled = true;
+  let grantedOrigins: string[] = [];
+  try {
+    grantedOrigins = await grantSiteAccess(discovery);
+    await message({ type: "START_CAPTURE", tabId: activeTabId });
+    await saveVerifyState({ discovery, grantedOrigins });
+    verifyButton.hidden = true;
+    downloadButton.hidden = true;
+    stopVerifyButton.hidden = false;
+    cancelButton.hidden = false;
+    setStatus(
+      "Verification active.",
+      "Reload the page and press Play, then reopen this popup and click 'Finish verification'."
+    );
+  } catch (error) {
+    if (grantedOrigins.length) {
+      await chrome.permissions.remove({ origins: grantedOrigins }).catch(() => false);
+      await chrome.permissions.remove({ permissions: ["cookies"] }).catch(() => false);
+    }
+    setStatus("Could not start verification", String(error));
+  } finally {
+    verifyButton.disabled = false;
+  }
+}
+
+type StopCaptureResponse = ({ ok: true } & StopCaptureResult) | { ok: false; error: string };
+
+async function finishVerification(): Promise<void> {
+  stopVerifyButton.disabled = true;
+  try {
+    const verifyState = await readVerifyState();
+    const response = await message<StopCaptureResponse>({ type: "STOP_CAPTURE" });
+    if (!response.ok) throw new Error(response.error);
+    await clearVerifyState();
+    stopVerifyButton.hidden = true;
+    cancelButton.hidden = true;
+    if (response.drm_detected) {
+      if (verifyState?.grantedOrigins.length) {
+        await chrome.permissions.remove({ origins: verifyState.grantedOrigins }).catch(() => false);
+        await chrome.permissions.remove({ permissions: ["cookies"] }).catch(() => false);
+      }
+      reportDrmBlocked(response.reason ?? "DRM was detected during playback.");
+      return;
+    }
+    if (!verifyState) throw new Error("Lost discovery state; inspect the page again");
+    discovery = {
+      ...verifyState.discovery,
+      media_candidates: mergeCandidates(response.candidates, verifyState.discovery.media_candidates)
+    };
+    setStatus(
+      "No DRM detected.",
+      `${response.candidates.length} media request(s) confirmed during playback. Starting download...`
+    );
+    await startDownload();
+  } catch (error) {
+    // The capture already detached on the background side (win or lose), so there is
+    // nothing left to finish — send the user back to a fresh inspect rather than leaving
+    // a "Finish verification" button that would now do nothing.
+    await clearVerifyState().catch(() => undefined);
+    stopVerifyButton.hidden = true;
+    cancelButton.hidden = true;
+    inspectButton.hidden = false;
+    setStatus("Verification did not find a video", String(error));
+  } finally {
+    stopVerifyButton.disabled = false;
   }
 }
 
@@ -295,13 +440,26 @@ function stopPolling(): void {
 }
 
 async function restoreTrackedJob(): Promise<void> {
-  const response = await message<{ ok: boolean; tracker?: TrackedJob; capturing?: boolean }>({
+  const response = await message<{ ok: boolean; tracker?: TrackedJob; capturing?: boolean; verifying?: boolean }>({
     type: "GET_TRACKED_JOB"
   });
+  if (response.verifying) {
+    inspectButton.hidden = true;
+    downloadButton.hidden = true;
+    verifyButton.hidden = true;
+    stopVerifyButton.hidden = false;
+    cancelButton.hidden = false;
+    setStatus(
+      "Verification active.",
+      "Reopen this popup after pressing Play in the page, then click 'Finish verification'."
+    );
+    return;
+  }
   if (!response.tracker) return;
   capturing = Boolean(response.capturing);
   inspectButton.hidden = true;
   downloadButton.hidden = true;
+  verifyButton.hidden = true;
   cancelButton.hidden = false;
   // Left to renderJob's can_capture check unless a capture is already running; the
   // companion rejects a capture retry for any job that is not eligible.
@@ -312,14 +470,23 @@ async function restoreTrackedJob(): Promise<void> {
 
 inspectButton.addEventListener("click", () => void inspectTab());
 downloadButton.addEventListener("click", () => void startDownload());
+verifyButton.addEventListener("click", () => void startVerification());
+stopVerifyButton.addEventListener("click", () => void finishVerification());
 cancelButton.addEventListener("click", () => {
-  void message({ type: "CANCEL_TRACKED_JOB" })
-    .then(() => {
-      stopPolling();
-      setStatus("Cancelled");
-      cancelButton.hidden = true;
-    })
-    .catch((error: unknown) => setStatus("Could not cancel", String(error)));
+  void (async () => {
+    const verifyState = await readVerifyState();
+    await message({ type: "CANCEL_TRACKED_JOB" });
+    stopPolling();
+    if (verifyState?.grantedOrigins.length) {
+      await chrome.permissions.remove({ origins: verifyState.grantedOrigins }).catch(() => false);
+      await chrome.permissions.remove({ permissions: ["cookies"] }).catch(() => false);
+    }
+    await clearVerifyState();
+    setStatus("Cancelled");
+    cancelButton.hidden = true;
+    stopVerifyButton.hidden = true;
+    inspectButton.hidden = false;
+  })().catch((error: unknown) => setStatus("Could not cancel", String(error)));
 });
 captureButton.addEventListener("click", () => {
   void (async () => {
@@ -338,16 +505,22 @@ captureButton.addEventListener("click", () => {
 });
 stopCaptureButton.addEventListener("click", () => {
   stopCaptureButton.disabled = true;
-  void message({ type: "STOP_CAPTURE" }).then((response: any) => {
-    if (!response.ok) throw new Error(response.error);
-    capturing = false;
-    stopCaptureButton.hidden = true;
-    setStatus("Captured request submitted", `${response.candidates} media request(s) found`);
-  }).catch((error) => {
-    capturing = false;
-    stopCaptureButton.disabled = false;
-    setStatus("Capture did not find a video", String(error));
-  });
+  void message<StopCaptureResponse>({ type: "STOP_CAPTURE" })
+    .then((response) => {
+      if (!response.ok) throw new Error(response.error);
+      capturing = false;
+      stopCaptureButton.hidden = true;
+      if (response.drm_detected) {
+        reportDrmBlocked(response.reason ?? "DRM was detected during playback.");
+        return;
+      }
+      setStatus("Captured request submitted", `${response.candidates.length} media request(s) found`);
+    })
+    .catch((error: unknown) => {
+      capturing = false;
+      stopCaptureButton.disabled = false;
+      setStatus("Capture did not find a video", String(error));
+    });
 });
 
 void restoreTrackedJob().catch((error: unknown) =>
