@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMediaUrl,
   chooseDirectCandidate,
+  detectManifestDrm,
+  isLicenseTraffic,
   mergeDiscoveryResults,
   originPatterns
 } from "../src/discovery";
@@ -78,6 +80,71 @@ describe("media discovery helpers", () => {
         { kind: "hls", url: "https://cdn.example/master.m3u8", mime_type: "", source: "dom" }
       ])
     ).toBeUndefined();
+  });
+});
+
+describe("detectManifestDrm", () => {
+  it("clears a plain HLS playlist with no encryption", () => {
+    const playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nlow.m3u8\n";
+    expect(detectManifestDrm(playlist, "hls")).toEqual({ drm_detected: false });
+  });
+
+  it("clears HLS AES-128, which yt-dlp already decrypts on its own", () => {
+    const playlist = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\n#EXTINF:10,\nseg1.ts\n';
+    expect(detectManifestDrm(playlist, "hls")).toEqual({ drm_detected: false });
+  });
+
+  it("flags HLS SAMPLE-AES with a Widevine keyformat", () => {
+    const playlist =
+      '#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,KEYFORMAT="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed",URI="skd://x"\n';
+    const check = detectManifestDrm(playlist, "hls");
+    expect(check.drm_detected).toBe(true);
+    expect(check.system).toBe("widevine");
+  });
+
+  it("flags HLS FairPlay by its keyformat", () => {
+    const playlist =
+      '#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,KEYFORMAT="com.apple.streamingkeydelivery",URI="skd://x"\n';
+    expect(detectManifestDrm(playlist, "hls").system).toBe("fairplay");
+  });
+
+  it("clears a DASH manifest with no ContentProtection", () => {
+    const manifest = '<MPD><Period><AdaptationSet mimeType="video/mp4"></AdaptationSet></Period></MPD>';
+    expect(detectManifestDrm(manifest, "dash")).toEqual({ drm_detected: false });
+  });
+
+  it("flags a DASH manifest that declares Widevine ContentProtection", () => {
+    const manifest =
+      '<MPD><Period><AdaptationSet><ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"/></AdaptationSet></Period></MPD>';
+    const check = detectManifestDrm(manifest, "dash");
+    expect(check.drm_detected).toBe(true);
+    expect(check.system).toBe("widevine");
+  });
+
+  it("flags an unrecognized ContentProtection scheme as generic DRM", () => {
+    const manifest = '<MPD><ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011"/></MPD>';
+    expect(detectManifestDrm(manifest, "dash")).toEqual({
+      drm_detected: true,
+      system: "drm",
+      reason: "DASH manifest declares ContentProtection"
+    });
+  });
+
+  it("has nothing to check for a direct file", () => {
+    expect(detectManifestDrm("anything", "direct")).toEqual({ drm_detected: false });
+  });
+});
+
+describe("isLicenseTraffic", () => {
+  it("recognizes common DRM license endpoints", () => {
+    expect(isLicenseTraffic("https://cdn.example/widevine/license")).toBe(true);
+    expect(isLicenseTraffic("https://drm.example/getlicense?id=1")).toBe(true);
+    expect(isLicenseTraffic("https://cdn.example/fairplay/acquireLicense")).toBe(true);
+  });
+
+  it("leaves ordinary media and manifest requests alone", () => {
+    expect(isLicenseTraffic("https://cdn.example/master.m3u8")).toBe(false);
+    expect(isLicenseTraffic("https://cdn.example/segment-1.ts")).toBe(false);
   });
 });
 
