@@ -38,8 +38,9 @@ transcript. Confirm the popup survives the permission prompt, and that a job app
 
 The remaining three share one root: `discoverPage` only reads what's already sitting in the
 DOM before playback starts. (2a's iframe gap shared that root too, and is now closed.) The
-capture fallback covers every remaining case, but only after a download attempt has already
-failed, which costs the user a slow round trip.
+capture fallback used to cover every remaining case, but only after a download attempt had
+already failed, which cost the user a slow round trip; 2c closes that gap for DRM
+specifically, with a play-and-verify step that runs before a download is ever attempted.
 
 ### 2a. Iframes are never scanned — closed
 
@@ -69,16 +70,29 @@ as a flag on `DiscoveryResult` (it is not a media candidate). The popup can then
 capture straight away instead of after a failed download. Needs a matching optional field
 on `CreateVideoJobRequest`, or it can stay purely client-side.
 
-### 2c. DRM is only detected after playback starts
+### 2c. DRM is only detected after playback starts — closed
 
-**Status:** open. **Problem:** `drm_detected` reads `video.mediaKeys`, which is `null`
+**Status:** closed. **Problem:** `drm_detected` reads `video.mediaKeys`, which is `null`
 until the player calls `setMediaKeys()`. Inspecting a DRM-protected page before pressing
-play reports `drm_detected: false`, and the refusal only happens later, if at all.
+play reported `drm_detected: false`, and the refusal only happened later, if at all — after
+the companion had already started downloading a manifest and its segments.
 
-**To close:** re-check at download time rather than at inspect time, or watch for
-`encrypted` events on the element during a short observation window. Note the companion
-also refuses DRM independently, from yt-dlp's `has_drm`, so this is a wasted round trip
-rather than a way to download protected media.
+**Fix:** discovery of an adaptive (HLS/DASH) source, or of nothing playable yet, now routes
+through a play-and-verify step instead of an immediate Download button. `popup.ts`'s
+**Verify & play** requests the same page/CDN access, then `background.ts`'s `startCapture`
+attaches the debugger and injects `discovery.ts`'s `installEmeMonitor` into the page's MAIN
+world, which patches `navigator.requestMediaKeySystemAccess` and `HTMLMediaElement
+.setMediaKeys` and listens for the `encrypted` event. Once the user presses Play and clicks
+**Finish verification**, `stopCapture` checks, before detaching: the page's own EME activity
+(`readEmeMonitor`), every captured request against `isLicenseTraffic`, and every captured
+HLS/DASH manifest body (read via `Network.getResponseBody` while still attached) against
+`detectManifestDrm`. Any positive stops the flow with a specific reason and no job is ever
+created; the same check now also guards the pre-existing post-failure capture-and-retry
+path. Covered by `detectManifestDrm`/`isLicenseTraffic` tests in `discovery.test.ts`.
+
+**Deliberately not flagged:** HLS `METHOD=AES-128` (a static key yt-dlp already fetches and
+decrypts on its own) and a bare `requestMediaKeySystemAccess` call with no attached key or
+`encrypted` event (several player libraries probe EME support even for unprotected content).
 
 ### 2d. The `<video>` element's MIME type is always empty
 
