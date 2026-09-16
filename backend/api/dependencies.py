@@ -7,10 +7,12 @@ share state by accident.
 
 from __future__ import annotations
 
-from fastapi import Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
+from backend.core.auth import UserAuthRegistry
 from backend.core.security import SessionRegistry
 from backend.services.video_download.jobs import JobManager
+from backend.storage.postgres import PostgresUsers, StoredUser
 
 
 def session_registry(request: Request) -> SessionRegistry:
@@ -21,6 +23,56 @@ def session_registry(request: Request) -> SessionRegistry:
 def job_manager(request: Request) -> JobManager:
     """The job manager this app was built with."""
     return request.app.state.job_manager
+
+
+def user_auth_registry(request: Request) -> UserAuthRegistry:
+    """The user auth token registry this app was built with."""
+    return request.app.state.user_auth_registry
+
+
+def users_store(request: Request) -> PostgresUsers:
+    """The `users` table store this app was built with."""
+    return request.app.state.users_store
+
+
+def _signed_in_user(token: str | None, request: Request, store: PostgresUsers) -> StoredUser:
+    registry: UserAuthRegistry = request.app.state.user_auth_registry
+    user_id = registry.verify(token) if token else None
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in")
+    user = store.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in")
+    return user
+
+
+def current_user(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    store: PostgresUsers = Depends(users_store),
+) -> StoredUser:
+    """The signed-in account a login/signup token names.
+
+    A separate gate from `authorize` below: that one proves the request came from the
+    allowed Chrome extension, this one proves which account, if any, is using it. Both read
+    the same `Authorization` header shape, but against independent registries, so a route
+    that needs one never has to also satisfy the other.
+    """
+    token = authorization.removeprefix("Bearer ") if authorization else ""
+    return _signed_in_user(token or None, request, store)
+
+
+def current_user_for_job_creation(
+    request: Request,
+    x_vidseek_user_token: str | None = Header(default=None),
+    store: PostgresUsers = Depends(users_store),
+) -> StoredUser:
+    """The account starting a video job, so the video it produces can be recorded as theirs.
+
+    Job creation already spends `Authorization` on `authorize`'s extension-session bearer,
+    so the account token travels in this header of its own rather than contending with it.
+    """
+    return _signed_in_user(x_vidseek_user_token, request, store)
 
 
 def authorize(

@@ -44,6 +44,21 @@ def _records(rows: list[dict] | None = None) -> tuple[PostgresVideoRecords, Fake
     return PostgresVideoRecords(pool=pool), pool
 
 
+def test_a_video_carries_the_account_that_requested_it() -> None:
+    records, pool = _records([{**ROW, "user_id": "11111111-2222-3333-4444-555555555555"}])
+    stored = records.upsert(VideoRecord(**{**RECORD.to_row(), "user_id": "11111111-2222-3333-4444-555555555555"}))
+
+    assert stored.video.user_id == "11111111-2222-3333-4444-555555555555"
+    assert '"user_id"' in pool.statements[0]
+
+
+def test_a_video_with_no_signed_in_requester_carries_no_owner() -> None:
+    records, pool = _records([ROW])
+    stored = records.upsert(RECORD)
+
+    assert stored.video.user_id is None
+
+
 def test_a_video_is_upserted_against_the_blob_it_describes() -> None:
     records, pool = _records([ROW])
     stored = records.upsert(RECORD)

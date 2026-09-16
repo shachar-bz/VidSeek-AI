@@ -159,6 +159,46 @@ def test_a_capture_retry_cannot_interleave_with_the_previous_runs_cleanup(tmp_pa
         manager.shutdown()
 
 
+def test_the_account_that_started_a_job_is_threaded_to_its_recorded_video(tmp_path: Path) -> None:
+    # `user_id` travels from `create()` through the in-memory `_Job` to the call that
+    # records the finished video, since that is the only place the two ever meet.
+    manager = JobManager(tmp_path)
+    user_id = "11111111-2222-3333-4444-555555555555"
+    try:
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
+            created = manager.create(direct_request(), user_id=user_id)
+        video_path = tmp_path / "video.mp4"
+        video_path.write_bytes(b"video")
+        result = PipelineResult(
+            video_path=video_path,
+            transcript_text_path=None,
+            transcript_json_path=None,
+            transcript_source="page_transcript",
+            transcript_error=None,
+            normalized_transcript=None,
+        )
+        with (
+            patch(
+                "backend.services.video_download.jobs.validate_local_media_path",
+                return_value=video_path,
+            ),
+            patch(
+                "backend.services.video_download.jobs.process_downloaded_video",
+                return_value=result,
+            ),
+            patch("backend.services.video_download.jobs.upload_job_video", return_value=STORED),
+            patch("backend.services.video_download.jobs.record_job_video") as record_mock,
+        ):
+            manager.complete_browser_download(
+                created.job_id, BrowserDownloadCompleteRequest(local_path=str(video_path))
+            )
+            manager._executor.shutdown(wait=True)
+    finally:
+        manager.shutdown()
+
+    assert record_mock.call_args.kwargs["user_id"] == user_id
+
+
 def test_drm_is_rejected_before_job_creation(tmp_path: Path) -> None:
     manager = JobManager(tmp_path)
     try:

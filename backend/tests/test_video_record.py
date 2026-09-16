@@ -95,6 +95,7 @@ def _record(
     configured: bool = True,
     transcript: NormalizedTranscript | None = None,
     comments: list[CommentEntry] | None = None,
+    user_id: str | None = None,
 ):
     with (
         patch.object(video_record, "is_postgres_configured", return_value=configured),
@@ -118,6 +119,7 @@ def _record(
             transcript_source="page_transcript",
             transcript=transcript,
             comments=comments,
+            user_id=user_id,
         )
 
 
@@ -134,6 +136,20 @@ def test_the_row_ties_the_stored_blob_back_to_the_page_it_came_from() -> None:
     assert written.transcript_source == "page_transcript"
     assert written.job_id == "job-42"
     assert stored is not None and stored.video == written
+
+
+def test_the_row_carries_the_account_that_started_the_job() -> None:
+    records = FakeVideoRecords()
+    _record(records, user_id="11111111-2222-3333-4444-555555555555")
+
+    assert records.upserted[0].user_id == "11111111-2222-3333-4444-555555555555"
+
+
+def test_a_job_with_no_signed_in_account_records_an_ownerless_video() -> None:
+    records = FakeVideoRecords()
+    _record(records)
+
+    assert records.upserted[0].user_id is None
 
 
 def test_the_uploaded_blob_s_own_facts_are_taken_from_the_upload() -> None:

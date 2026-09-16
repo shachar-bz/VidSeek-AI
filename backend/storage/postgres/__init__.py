@@ -10,13 +10,17 @@ from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
 from .settings import PostgresSettings, is_postgres_configured, load_postgres_settings
 from .transcript_segments import PostgresTranscriptSegments
+from .users import NewUser, PostgresUsers, StoredUser
 from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
 
 __all__ = [
+    "NewUser",
     "PostgresComments",
     "PostgresSettings",
     "PostgresTranscriptSegments",
+    "PostgresUsers",
     "PostgresVideoRecords",
+    "StoredUser",
     "StoredVideoRecord",
     "VideoRecord",
     "build_pool",

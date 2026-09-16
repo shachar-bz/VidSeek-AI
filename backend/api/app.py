@@ -10,10 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.core import config
+from backend.core.auth import UserAuthRegistry
 from backend.core.security import SessionRegistry
 from backend.services.video_download.jobs import JobManager
+from backend.storage.postgres import PostgresUsers
 
-from .routes import health, sessions, video_jobs
+from .routes import auth, health, sessions, video_jobs
 
 LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "testclient"}
 
@@ -22,10 +24,16 @@ def create_app(
     *,
     session_registry: SessionRegistry | None = None,
     job_manager: JobManager | None = None,
+    user_auth_registry: UserAuthRegistry | None = None,
+    users_store: PostgresUsers | None = None,
 ) -> FastAPI:
     """Build the companion app with injectable state for tests."""
     registry = session_registry or SessionRegistry.from_environment()
     manager = job_manager or JobManager(config.download_root())
+    auth_registry = user_auth_registry or UserAuthRegistry()
+    # Nothing is queried yet: PostgresUsers only reaches the pool when a route actually
+    # calls it, so building this needs no database, the same as every other Postgres store.
+    store = users_store or PostgresUsers()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -35,6 +43,8 @@ def create_app(
     app = FastAPI(title="VidSeek local companion", version="1.0.0", lifespan=lifespan)
     app.state.session_registry = registry
     app.state.job_manager = manager
+    app.state.user_auth_registry = auth_registry
+    app.state.users_store = store
 
     # Starlette runs the last-registered middleware outermost, so CORS must be added
     # before the loopback gate to keep running inside it, as it did before this split.
@@ -44,7 +54,7 @@ def create_app(
         allow_origins=[f"chrome-extension://{item}" for item in config.extension_ids()],
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-VidSeek-User-Token"],
     )
 
     @app.middleware("http")
@@ -64,5 +74,6 @@ def create_app(
 
     app.include_router(health.router)
     app.include_router(sessions.router)
+    app.include_router(auth.router)
     app.include_router(video_jobs.router)
     return app

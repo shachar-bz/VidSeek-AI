@@ -92,6 +92,9 @@ class _Job:
     status: JobStatus
     phase: JobPhase
     acquisition_mode: str
+    # The account that started this job, or None for a request nothing required a
+    # signed-in account for; carried through to the video row `_record_video` writes.
+    user_id: str | None = None
     progress: float = 0.0
     message: str = "Waiting"
     video_path: str | None = None
@@ -136,12 +139,19 @@ class JobManager:
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-    def create(self, request: CreateVideoJobRequest) -> VideoJobResponse:
+    def create(
+        self, request: CreateVideoJobRequest, user_id: str | None = None
+    ) -> VideoJobResponse:
         """Validate the request and start it on the pipeline its page URL calls for.
 
         The choice of pipeline is made here rather than by the extension, because the
         companion cannot take a client's word for which route to run and would have to
         classify the URL anyway. A second endpoint would only duplicate that authority.
+
+        `user_id` names the account the video row this job eventually writes will belong
+        to. It is optional here, not because an anonymous job is desired, but because
+        requiring it is the API route's job (`current_user_for_job_creation`): this
+        manager only carries whatever the caller already resolved.
         """
         validate_remote_url(request.page_url)
         for candidate in request.media_candidates:
@@ -176,6 +186,7 @@ class JobManager:
             ),
             phase=JobPhase.DOWNLOAD,
             acquisition_mode=acquisition_mode,
+            user_id=user_id,
             message=message,
         )
         with self._lock:
@@ -389,7 +400,7 @@ class JobManager:
         """
         with self._lock:
             job = self._require(job_id)
-            request, acquisition_mode = job.request, job.acquisition_mode
+            request, acquisition_mode, user_id = job.request, job.acquisition_mode, job.user_id
         try:
             record_job_video(
                 stored_video=stored_video,
@@ -399,6 +410,7 @@ class JobManager:
                 transcript_source=result.transcript_source,
                 transcript=result.normalized_transcript,
                 comments=result.comments,
+                user_id=user_id,
             )
         except Exception:
             logger.exception("Recording %s in the database failed", stored_video.name)

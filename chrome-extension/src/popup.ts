@@ -1,4 +1,4 @@
-import { createJob, createSession, getJob } from "./api";
+import { createJob, createSession, fetchCurrentUser, getJob, logIn, logOut, signUp } from "./api";
 import {
   chooseDirectCandidate,
   discoverPage,
@@ -9,7 +9,9 @@ import {
   resolveSelectedGroup
 } from "./discovery";
 import type { FrameDiscoveryResult, VideoGroup } from "./discovery";
+import { textureBlock } from "./texture";
 import type {
+  AuthSession,
   BrowserContext,
   DiscoveryResult,
   ExtensionMessage,
@@ -31,6 +33,23 @@ const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
 const stopCaptureButton = document.querySelector<HTMLButtonElement>("#stop-capture")!;
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
 
+const appElement = document.querySelector<HTMLElement>("#app")!;
+const authScreenElement = document.querySelector<HTMLElement>("#auth")!;
+const authTextureElement = document.querySelector<HTMLPreElement>("#auth-texture-art")!;
+const authWelcomeElement = document.querySelector<HTMLDivElement>("#auth-welcome")!;
+const authStatusElement = document.querySelector<HTMLParagraphElement>("#auth-status")!;
+const authLogoutButton = document.querySelector<HTMLButtonElement>("#auth-logout")!;
+const authFormElement = document.querySelector<HTMLFormElement>("#auth-form")!;
+const authFormTaglineElement = document.querySelector<HTMLParagraphElement>("#auth-form-tagline")!;
+const authEmailInput = document.querySelector<HTMLInputElement>("#auth-email")!;
+const authPasswordInput = document.querySelector<HTMLInputElement>("#auth-password")!;
+const authDisplayNameInput = document.querySelector<HTMLInputElement>("#auth-display-name")!;
+const authErrorElement = document.querySelector<HTMLParagraphElement>("#auth-error")!;
+const authSubmitButton = document.querySelector<HTMLButtonElement>("#auth-submit")!;
+const authShowLoginButton = document.querySelector<HTMLButtonElement>("#auth-show-login")!;
+const authShowSignupButton = document.querySelector<HTMLButtonElement>("#auth-show-signup")!;
+const authBackButton = document.querySelector<HTMLButtonElement>("#auth-back")!;
+
 let discovery: DiscoveryResult | undefined;
 let activeTabId: number | undefined;
 let pollingTimer: number | undefined;
@@ -38,6 +57,114 @@ let pollingTimer: number | undefined;
 function setStatus(message: string, details = ""): void {
   statusElement.textContent = message;
   detailsElement.textContent = details;
+}
+
+const AUTH_STORAGE_KEY = "vidseekAuth";
+
+// Wide and tall enough to cover the screen at the backdrop's 6px type, plus the inset the
+// stylesheet gives it to drift inside. Anything past the edges is simply clipped.
+const AUTH_TEXTURE_SHAPE = { columns: 100, rows: 70 };
+
+let authSession: AuthSession | undefined;
+let authMode: "login" | "signup" = "login";
+let authView: "welcome" | "form" = "welcome";
+
+async function readStoredAuth(): Promise<AuthSession | undefined> {
+  const stored = await chrome.storage.local.get(AUTH_STORAGE_KEY);
+  return stored[AUTH_STORAGE_KEY] as AuthSession | undefined;
+}
+
+async function writeStoredAuth(session: AuthSession | undefined): Promise<void> {
+  if (session) await chrome.storage.local.set({ [AUTH_STORAGE_KEY]: session });
+  else await chrome.storage.local.remove(AUTH_STORAGE_KEY);
+}
+
+/** Signed out, the login screen is the whole popup; signed in, it is gone entirely. */
+function renderAuth(): void {
+  const signedIn = Boolean(authSession);
+  authScreenElement.hidden = signedIn;
+  appElement.hidden = !signedIn;
+  if (authSession) {
+    authStatusElement.textContent = `Signed in as ${authSession.user.display_name || authSession.user.email}`;
+    return;
+  }
+  const onForm = authView === "form";
+  authWelcomeElement.hidden = onForm;
+  authFormElement.hidden = !onForm;
+  authDisplayNameInput.hidden = authMode !== "signup";
+  authPasswordInput.autocomplete = authMode === "signup" ? "new-password" : "current-password";
+  authSubmitButton.textContent = authMode === "signup" ? "Create account" : "Log in";
+  authFormTaglineElement.textContent =
+    authMode === "signup" ? "Create an account to get started" : "Log in to your account";
+}
+
+function openAuthForm(mode: "login" | "signup"): void {
+  authMode = mode;
+  authView = "form";
+  authErrorElement.textContent = "";
+  renderAuth();
+  authEmailInput.focus();
+}
+
+async function handleAuthSubmit(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  authErrorElement.textContent = "";
+  authSubmitButton.disabled = true;
+  try {
+    const email = authEmailInput.value.trim();
+    const password = authPasswordInput.value;
+    const session =
+      authMode === "signup"
+        ? await signUp(email, password, authDisplayNameInput.value.trim())
+        : await logIn(email, password);
+    authSession = session;
+    await writeStoredAuth(session);
+    authFormElement.reset();
+    renderAuth();
+  } catch (error) {
+    authErrorElement.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    authSubmitButton.disabled = false;
+  }
+}
+
+async function handleAuthLogout(): Promise<void> {
+  authLogoutButton.disabled = true;
+  try {
+    if (authSession) await logOut(authSession.token).catch(() => undefined);
+  } finally {
+    authSession = undefined;
+    authView = "welcome";
+    await writeStoredAuth(undefined);
+    renderAuth();
+    authLogoutButton.disabled = false;
+  }
+}
+
+/**
+ * A stored token can outlive the companion process: it is verified in memory only
+ * (backend/core/auth.py), so a restart drops every signed-in session. Rather than show a
+ * stale "signed in" state that fails the moment it is used, this re-checks the token against
+ * `/v1/auth/me` on every popup open and quietly returns to the login screen if it no longer
+ * verifies.
+ */
+async function restoreAuthState(): Promise<void> {
+  const stored = await readStoredAuth();
+  if (!stored) {
+    renderAuth();
+    return;
+  }
+  authSession = stored;
+  renderAuth();
+  try {
+    const user = await fetchCurrentUser(stored.token);
+    authSession = { token: stored.token, user };
+    await writeStoredAuth(authSession);
+  } catch {
+    authSession = undefined;
+    await writeStoredAuth(undefined);
+  }
+  renderAuth();
 }
 
 function message<T = Record<string, unknown>>(payload: ExtensionMessage): Promise<T> {
@@ -258,7 +385,7 @@ async function grantSiteAccess(discoveryValue: DiscoveryResult): Promise<string[
 }
 
 async function startDownload(): Promise<void> {
-  if (!discovery) return;
+  if (!discovery || !authSession) return;
   downloadButton.disabled = true;
   let grantedOrigins: string[] = [];
   try {
@@ -271,7 +398,7 @@ async function startDownload(): Promise<void> {
     if (!youtube) await hydrateCaptionBodies(discovery);
     const context = youtube ? EMPTY_BROWSER_CONTEXT : await collectCookies(discovery);
     const token = await createSession();
-    const job = await createJob(token, discovery, context);
+    const job = await createJob(token, authSession.token, discovery, context);
     const tracker: TrackedJob = { jobId: job.job_id, token, grantedOrigins };
     const direct = chooseDirectCandidate(discovery.media_candidates);
     if (job.acquisition_mode === "browser_download" && direct) {
@@ -526,3 +653,17 @@ stopCaptureButton.addEventListener("click", () => {
 void restoreTrackedJob().catch((error: unknown) =>
   setStatus("Could not read the active job", String(error))
 );
+
+authShowLoginButton.addEventListener("click", () => openAuthForm("login"));
+authShowSignupButton.addEventListener("click", () => openAuthForm("signup"));
+authBackButton.addEventListener("click", () => {
+  authView = "welcome";
+  authErrorElement.textContent = "";
+  authFormElement.reset();
+  renderAuth();
+});
+authFormElement.addEventListener("submit", (event) => void handleAuthSubmit(event));
+authLogoutButton.addEventListener("click", () => void handleAuthLogout());
+
+authTextureElement.textContent = textureBlock(AUTH_TEXTURE_SHAPE);
+void restoreAuthState();

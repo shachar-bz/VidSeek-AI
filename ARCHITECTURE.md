@@ -15,15 +15,18 @@ VidSeek-AI/
 │   │   ├── dependencies.py                         # Request-scoped access to app state, and the bearer-token gate.
 │   │   └── routes/                                 # One module per resource the companion exposes.
 │   │       ├── __init__.py                         # Groups the route modules.
+│   │       ├── auth.py                             # Signup, login, account lookup and logout for a user account.
 │   │       ├── health.py                           # Liveness probe.
 │   │       ├── sessions.py                         # Issues short-lived extension session tokens.
 │   │       └── video_jobs.py                       # Video job create, poll, download-complete, capture and cancel.
 │   ├── schemas/                                    # The Pydantic contract shared with the Chrome extension.
 │   │   ├── __init__.py                             # Public interface of the schema layer.
+│   │   ├── auth.py                                 # Signup, login and account-info request/response models.
 │   │   ├── browser.py                              # Cookies, headers and the media and caption sources found in a tab.
 │   │   └── video_jobs.py                           # Job request, lifecycle enums and the response the extension polls.
 │   ├── core/                                       # Cross-cutting foundations, depending on nothing above them.
 │   │   ├── __init__.py                             # Public interface of the core layer.
+│   │   ├── auth.py                                 # Password hashing and the bearer tokens a logged-in user carries.
 │   │   ├── captions.py                              # Shared CaptionSegment type and generic WebVTT/SRT/TTML parsing.
 │   │   ├── config.py                               # The only reader of backend/.env, and the derived settings.
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
@@ -41,6 +44,7 @@ VidSeek-AI/
 │   │       ├── settings.py                         # Reads the database connection URL from the environment.
 │   │       ├── connection.py                       # Builds the connection pool, and reads a timestamp column back as text.
 │   │       ├── migrate.py                          # Applies the migrations in order, once each, recording them as it goes.
+│   │       ├── users.py                            # Reads and writes the users table accounts sign in through.
 │   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
 │   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
@@ -51,7 +55,9 @@ VidSeek-AI/
 │   │           ├── 0004_comments.sql               # Creates the comments table linked to a video.
 │   │           ├── 0005_chapters.sql               # Creates the chapters table linked to a video.
 │   │           ├── 0006_memories.sql               # Creates the memories table linked to a video and a chapter.
-│   │           └── 0007_embeddings.sql             # Creates the memory_embeddings and chapter_embeddings tables.
+│   │           ├── 0007_embeddings.sql             # Creates the memory_embeddings and chapter_embeddings tables.
+│   │           ├── 0008_users.sql                  # Creates the users table, its email index and its updated_at trigger.
+│   │           └── 0009_videos_user_id.sql         # Adds videos.user_id, linking a video to the account that requested it.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -140,10 +146,12 @@ VidSeek-AI/
 │       ├── test_memory_segmentation.py             # Segment ID rendering, boundary validation and memory construction tests.
 │       ├── test_chapter_grouping.py                # Memory ID rendering, boundary validation and chapter construction tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
+│       ├── test_auth_routes.py                     # Signup, login, /v1/auth/me and logout route tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
 │       ├── test_web_video_jobs.py                  # Job lifecycle tests.
 │       ├── test_web_video_pipeline.py              # Transcript precedence, transcript-failure and cancellation pipeline tests.
 │       ├── test_web_video_security.py              # Security boundary tests.
+│       ├── test_core_auth.py                       # Password hashing and user auth token registry tests.
 │       ├── test_web_video_transcript.py            # Transcript parsing and precedence tests.
 │       ├── test_youtube_routing.py                 # YouTube hostname classification and pipeline selection tests.
 │       ├── test_youtube_job_adapter.py             # YouTube result to pipeline result mapping tests.
@@ -153,6 +161,7 @@ VidSeek-AI/
 │       ├── test_blob_video_storage.py              # Blob Storage settings, blob name and container operation tests.
 │       ├── test_video_upload.py                    # Job video upload, progress and skip-when-unconfigured tests.
 │       ├── test_postgres_video_records.py          # Database settings and videos table read/write tests.
+│       ├── test_postgres_users.py                  # Users table read/write and duplicate-email tests.
 │       ├── test_postgres_transcript_segments.py    # Transcript segment batching and replacement tests.
 │       ├── test_postgres_comments.py               # Comment batching and replacement tests.
 │       ├── test_postgres_migrations.py             # Migration ordering, one-time application and failure reporting tests.
@@ -161,14 +170,16 @@ VidSeek-AI/
     ├── public/                                     # Static files copied into the extension build.
     │   └── manifest.json                           # Chrome permissions and service-worker manifest.
     ├── src/                                        # Extension discovery, API, background and popup source.
-    │   ├── api.ts                                  # Typed companion HTTP client and session handling.
+    │   ├── api.ts                                  # Typed companion HTTP client, session handling, and signup/login/me/logout.
     │   ├── background.ts                           # Service worker: job tracking, Chrome downloads and debugger capture.
     │   ├── discovery.ts                            # Media and caption discovery injected into the active tab.
     │   ├── popup.css                               # Popup styling.
-    │   ├── popup.ts                                # Popup controller: inspect, download, cancel and capture.
+    │   ├── popup.ts                                # Popup controller: login/signup, inspect, download, cancel and capture.
+    │   ├── texture.ts                              # Generates the ASCII field drawn behind the login screen.
     │   └── types.ts                                # Shared wire types mirroring the companion API models.
     ├── tests/                                      # Extension helper unit tests.
-    │   └── discovery.test.ts                       # Media classification and origin pattern tests.
+    │   ├── discovery.test.ts                       # Media classification and origin pattern tests.
+    │   └── texture.test.ts                         # Login backdrop grid, alphabet and row density tests.
     ├── package.json                                # Extension build and test dependencies.
     ├── popup.html                                  # User interface entrypoint.
     ├── README.md                                   # Build, load and capture instructions.

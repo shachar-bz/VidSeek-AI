@@ -28,3 +28,11 @@ class MissingDependencyError(RuntimeError):
 
 class UnsupportedMediaError(RuntimeError):
     """The URL points to media deliberately outside the v1 scope."""
+
+
+class EmailAlreadyRegisteredError(ValueError):
+    """An account already exists for this email address."""
+
+    def __init__(self, email: str):
+        super().__init__(f"An account already exists for {email}")
+        self.email = email
