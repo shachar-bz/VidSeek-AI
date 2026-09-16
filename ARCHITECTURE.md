@@ -29,24 +29,29 @@ VidSeek-AI/
 │   │   ├── errors.py                               # Named exceptions inheriting the builtins they replace.
 │   │   └── security.py                             # Session tokens, URL/path guards and YouTube URL classification.
 │   ├── storage/                                    # Where a video's bytes and its records are kept.
-│   │   ├── __init__.py                             # What the storage layer holds today, and what Supabase will add to it.
+│   │   ├── __init__.py                             # What the storage layer holds, split between Blob Storage and PostgreSQL.
 │   │   ├── transcript_store.py                     # Saves and loads a video's normalized transcript as JSON under the download root.
-│   │   ├── r2/                                     # Video files stored in a Cloudflare R2 bucket.
-│   │   │   ├── __init__.py                         # Public interface of the R2 video storage module.
-│   │   │   ├── settings.py                         # Reads the R2 credentials, endpoint and bucket from the environment.
-│   │   │   ├── client.py                           # Builds the S3-compatible boto3 client R2 is addressed through.
-│   │   │   └── video_storage.py                    # Uploads, fetches, links and deletes the video objects in the bucket.
-│   │   └── supabase/                               # Video metadata and transcripts in a Supabase Postgres database.
-│   │       ├── __init__.py                         # Public interface of the Supabase database module.
-│   │       ├── settings.py                         # Reads the Supabase project URL and API key from the environment.
-│   │       ├── client.py                           # Builds the Supabase client the tables are reached through.
-│   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the R2 object it describes.
+│   │   ├── blob/                                   # Video files stored in an Azure Blob Storage container.
+│   │   │   ├── __init__.py                         # Public interface of the Azure Blob Storage video module.
+│   │   │   ├── settings.py                         # Reads the storage connection string and container from the environment.
+│   │   │   ├── client.py                           # Builds the Blob Storage client the container is addressed through.
+│   │   │   └── video_storage.py                    # Uploads, fetches, links and deletes the video blobs in the container.
+│   │   └── postgres/                               # Video metadata, transcripts and comments in Azure Database for PostgreSQL.
+│   │       ├── __init__.py                         # Public interface of the Azure Database for PostgreSQL module.
+│   │       ├── settings.py                         # Reads the database connection URL from the environment.
+│   │       ├── connection.py                       # Builds the connection pool, and reads a timestamp column back as text.
+│   │       ├── migrate.py                          # Applies the migrations in order, once each, recording them as it goes.
+│   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
-│   │       ├── video_comments.py                   # Reads and writes a YouTube video's top comments.
-│   │       └── migrations/                         # SQL applied by hand to the Supabase project, in order.
-│   │           ├── 0001_videos.sql                 # Creates the videos table, its indexes and its row level security.
-│   │           ├── 0002_transcript_segments.sql    # Creates the transcript_segments table linked to a video.
-│   │           └── 0003_video_comments.sql         # Creates the video_comments table linked to a video.
+│   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
+│   │       └── migrations/                         # SQL applied by the runner, in filename order.
+│   │           ├── 0001_extensions.sql             # Enables pgcrypto and pgvector.
+│   │           ├── 0002_videos.sql                 # Creates the videos table, its indexes and its updated_at trigger.
+│   │           ├── 0003_transcript_segments.sql    # Creates the transcript_segments table linked to a video.
+│   │           ├── 0004_comments.sql               # Creates the comments table linked to a video.
+│   │           ├── 0005_chapters.sql               # Creates the chapters table linked to a video.
+│   │           ├── 0006_memories.sql               # Creates the memories table linked to a video and a chapter.
+│   │           └── 0007_embeddings.sql             # Creates the memory_embeddings and chapter_embeddings tables.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -94,8 +99,8 @@ VidSeek-AI/
 │   │       ├── __init__.py                         # Groups the download services.
 │   │       ├── jobs.py                             # Single-worker job lifecycle, cancellation and pipeline routing.
 │   │       ├── youtube_job.py                      # Adapts a YouTube result into the shared pipeline result shape.
-│   │       ├── video_upload.py                     # Uploads a finished job's video to the R2 bucket.
-│   │       ├── video_record.py                     # Records a finished job's video and transcript in Supabase.
+│   │       ├── video_upload.py                     # Uploads a finished job's video to the Blob Storage container.
+│   │       ├── video_record.py                     # Records a finished job's video and transcript in PostgreSQL.
 │   │       ├── web/                                # Authenticated non-YouTube download and transcript pipeline.
 │   │       │   ├── __init__.py                     # Public interface of the web video download module.
 │   │       │   ├── downloader.py                   # Cookie-aware yt-dlp and FFmpeg video acquisition.
@@ -144,11 +149,13 @@ VidSeek-AI/
 │       ├── test_youtube_job_adapter.py             # YouTube result to pipeline result mapping tests.
 │       ├── test_youtube_cancellation.py            # YouTube download progress and cancellation tests.
 │       ├── test_youtube_transcript_fallback.py     # YouTube untimed-caption-to-ElevenLabs fallback tests.
-│       ├── test_r2_video_storage.py                # R2 settings, object key and bucket operation tests.
+│       ├── fake_postgres.py                        # A connection pool that records SQL instead of reaching a database.
+│       ├── test_blob_video_storage.py              # Blob Storage settings, blob name and container operation tests.
 │       ├── test_video_upload.py                    # Job video upload, progress and skip-when-unconfigured tests.
-│       ├── test_supabase_video_records.py          # Supabase settings and videos table read/write tests.
-│       ├── test_supabase_transcript_segments.py    # Transcript segment batching, paging and replacement tests.
-│       ├── test_supabase_video_comments.py         # Video comment batching and replacement tests.
+│       ├── test_postgres_video_records.py          # Database settings and videos table read/write tests.
+│       ├── test_postgres_transcript_segments.py    # Transcript segment batching and replacement tests.
+│       ├── test_postgres_comments.py               # Comment batching and replacement tests.
+│       ├── test_postgres_migrations.py             # Migration ordering, one-time application and failure reporting tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
 ├── chrome-extension/                               # Internal Manifest V3 video download extension.
     ├── public/                                     # Static files copied into the extension build.

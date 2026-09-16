@@ -94,7 +94,7 @@ def test_upload_progress_stays_inside_the_slice_of_the_bar_it_owns(tmp_path: Pat
 
 
 def test_an_empty_file_does_not_divide_its_progress_by_zero(tmp_path: Path) -> None:
-    # boto3 reports a total of zero bytes for an empty file; a job should still finish.
+    # The SDK reports a total of zero bytes for an empty file; a job should still finish.
     _, reported = _upload(tmp_path, FakeVideoStorage(chunks=((0, 0),)))
 
     assert reported[-1][1] == pytest.approx(video_upload.PROGRESS_END)
