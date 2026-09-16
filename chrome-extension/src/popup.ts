@@ -385,7 +385,7 @@ async function grantSiteAccess(discoveryValue: DiscoveryResult): Promise<string[
 }
 
 async function startDownload(): Promise<void> {
-  if (!discovery) return;
+  if (!discovery || !authSession) return;
   downloadButton.disabled = true;
   let grantedOrigins: string[] = [];
   try {
@@ -398,7 +398,7 @@ async function startDownload(): Promise<void> {
     if (!youtube) await hydrateCaptionBodies(discovery);
     const context = youtube ? EMPTY_BROWSER_CONTEXT : await collectCookies(discovery);
     const token = await createSession();
-    const job = await createJob(token, discovery, context);
+    const job = await createJob(token, authSession.token, discovery, context);
     const tracker: TrackedJob = { jobId: job.job_id, token, grantedOrigins };
     const direct = chooseDirectCandidate(discovery.media_candidates);
     if (job.acquisition_mode === "browser_download" && direct) {

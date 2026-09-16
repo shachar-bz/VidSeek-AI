@@ -49,6 +49,11 @@ class VideoRecord:
     title: str
     blob_container: str
     blob_name: str
+
+    # The account that requested this video, or null for a video recorded before the
+    # `users` table existed (0009) or by a request nothing required a signed-in account for.
+    user_id: str | None = None
+
     source_video_id: str | None = None
     duration_seconds: float | None = None
 

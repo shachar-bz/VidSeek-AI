@@ -5,8 +5,41 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.api import create_app
-from backend.services.video_download.jobs import JobManager
+from backend.core.auth import UserAuthRegistry, hash_password
 from backend.core.security import SessionRegistry
+from backend.schemas.video_jobs import JobPhase, JobStatus, VideoJobResponse
+from backend.services.video_download.jobs import JobManager
+from backend.storage.postgres import PostgresUsers
+from backend.tests.fake_postgres import FakePool
+
+USER_ROW = {
+    "id": "11111111-2222-3333-4444-555555555555",
+    "email": "person@example.com",
+    "password_hash": hash_password("irrelevant"),
+    "display_name": None,
+    "created_at": "2026-09-14T10:00:00+00:00",
+    "updated_at": "2026-09-14T10:00:00+00:00",
+}
+
+
+class RecordingJobManager(JobManager):
+    """A `JobManager` that remembers what it was asked to create instead of running it."""
+
+    def __init__(self, download_root: Path):
+        super().__init__(download_root)
+        self.calls: list[tuple[object, str | None]] = []
+
+    def create(self, request, user_id: str | None = None) -> VideoJobResponse:
+        self.calls.append((request, user_id))
+        return VideoJobResponse(
+            job_id="job-1",
+            status=JobStatus.QUEUED,
+            phase=JobPhase.DOWNLOAD,
+            progress=0.0,
+            message="Queued",
+            acquisition_mode="companion_download",
+            can_capture=False,
+        )
 
 
 def test_session_rejects_web_page_origin(tmp_path: Path) -> None:
@@ -75,3 +108,44 @@ def test_starting_work_still_requires_the_origin_header(tmp_path: Path) -> None:
             json={"page_url": "https://example.com/watch"},
         )
     assert response.status_code == 401
+
+
+def test_starting_work_requires_a_signed_in_account(tmp_path: Path) -> None:
+    # The extension session in Authorization proves this is the allowed extension; it says
+    # nothing about which account is using it, which is what the video row needs to record.
+    registry = SessionRegistry({"allowed"})
+    app = create_app(session_registry=registry, job_manager=JobManager(tmp_path))
+    token = registry.create("chrome-extension://allowed")
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/video-jobs",
+            headers={"Authorization": f"Bearer {token}", "Origin": "chrome-extension://allowed"},
+            json={"page_url": "https://example.com/watch"},
+        )
+    assert response.status_code == 401
+
+
+def test_starting_work_records_which_account_asked_for_it(tmp_path: Path) -> None:
+    registry = SessionRegistry({"allowed"})
+    auth_registry = UserAuthRegistry()
+    user_token = auth_registry.issue(USER_ROW["id"])
+    manager = RecordingJobManager(tmp_path)
+    app = create_app(
+        session_registry=registry,
+        job_manager=manager,
+        user_auth_registry=auth_registry,
+        users_store=PostgresUsers(pool=FakePool(rows=[USER_ROW])),
+    )
+    session_token = registry.create("chrome-extension://allowed")
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/video-jobs",
+            headers={
+                "Authorization": f"Bearer {session_token}",
+                "Origin": "chrome-extension://allowed",
+                "X-VidSeek-User-Token": user_token,
+            },
+            json={"page_url": "https://example.com/watch"},
+        )
+    assert response.status_code == 200
+    assert manager.calls == [(manager.calls[0][0], USER_ROW["id"])]

@@ -54,7 +54,7 @@ def create_app(
         allow_origins=[f"chrome-extension://{item}" for item in config.extension_ids()],
         allow_credentials=False,
         allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-VidSeek-User-Token"],
     )
 
     @app.middleware("http")

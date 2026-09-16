@@ -56,7 +56,8 @@ VidSeek-AI/
 │   │           ├── 0005_chapters.sql               # Creates the chapters table linked to a video.
 │   │           ├── 0006_memories.sql               # Creates the memories table linked to a video and a chapter.
 │   │           ├── 0007_embeddings.sql             # Creates the memory_embeddings and chapter_embeddings tables.
-│   │           └── 0008_users.sql                  # Creates the users table, its email index and its updated_at trigger.
+│   │           ├── 0008_users.sql                  # Creates the users table, its email index and its updated_at trigger.
+│   │           └── 0009_videos_user_id.sql         # Adds videos.user_id, linking a video to the account that requested it.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.

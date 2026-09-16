@@ -2,10 +2,16 @@ import type { AuthSession, AuthUser, BrowserContext, DiscoveryResult, MediaCandi
 
 const COMPANION_URL = "http://127.0.0.1:8765";
 
-async function companionFetch<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+async function companionFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  token?: string,
+  userToken?: string
+): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (userToken) headers.set("X-VidSeek-User-Token", userToken);
   const response = await fetch(`${COMPANION_URL}${path}`, { ...init, headers });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ detail: response.statusText }));
@@ -62,13 +68,15 @@ export async function logOut(token: string): Promise<void> {
 
 export async function createJob(
   token: string,
+  userToken: string,
   discovery: DiscoveryResult,
   browserContext: BrowserContext
 ): Promise<VideoJob> {
   return companionFetch<VideoJob>(
     "/v1/video-jobs",
     { method: "POST", body: JSON.stringify({ ...discovery, browser_context: browserContext }) },
-    token
+    token,
+    userToken
   );
 }
 
