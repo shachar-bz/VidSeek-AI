@@ -9,6 +9,35 @@
   <body>
     <main>
       <h1>VidSeek</h1>
+
+      <section id="auth">
+        <div id="auth-signed-in" hidden>
+          <p id="auth-status"></p>
+          <button id="auth-logout" class="secondary">Log out</button>
+        </div>
+        <form id="auth-form">
+          <input id="auth-email" type="email" placeholder="Email" autocomplete="username" required />
+          <input
+            id="auth-display-name"
+            type="text"
+            placeholder="Name"
+            autocomplete="name"
+            hidden
+          />
+          <input
+            id="auth-password"
+            type="password"
+            placeholder="Password"
+            autocomplete="current-password"
+            required
+          />
+          <p id="auth-error"></p>
+          <button id="auth-submit" type="submit">Log in</button>
+          <button id="auth-toggle" type="button" class="link">Need an account? Sign up</button>
+        </form>
+      </section>
+      <hr />
+
       <p id="status">Inspect the active tab to find its video.</p>
       <progress id="progress" max="1" value="0"></progress>
       <div id="details"></div>

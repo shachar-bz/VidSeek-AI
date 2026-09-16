@@ -68,6 +68,17 @@ export interface TrackedJob {
   downloadId?: number;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  display_name?: string | null;
+}
+
+export interface AuthSession {
+  token: string;
+  user: AuthUser;
+}
+
 export type ExtensionMessage =
   | { type: "TRACK_JOB"; tracker: TrackedJob }
   | { type: "START_BROWSER_DOWNLOAD"; tracker: TrackedJob; url: string; filename: string }

@@ -116,6 +116,17 @@ azure-storage-blob>=12.19
 python-dotenv
 # --- end azure blob storage module ---
 
+# --- login and signup module ---
+# Remove this block together with backend/core/auth.py, backend/schemas/auth.py,
+# backend/api/routes/auth.py and backend/storage/postgres/users.py if the feature is
+# dropped. bcrypt hashes and verifies account passwords; email-validator is what lets
+# pydantic's EmailStr reject a malformed address before it reaches the database. Needs
+# AZURE_DATABASE_URL in backend/.env, already required below by the azure postgresql
+# module, and the migrations applied.
+bcrypt>=4.0
+email-validator>=2.0
+# --- end login and signup module ---
+
 # --- azure postgresql module ---
 # Remove this block together with backend/storage/postgres/ if the module is dropped.
 # Everything about a video that is not its bytes: the videos, transcript_segments and

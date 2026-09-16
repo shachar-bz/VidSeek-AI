@@ -1,4 +1,4 @@
-import { createJob, createSession, getJob } from "./api";
+import { createJob, createSession, fetchCurrentUser, getJob, logIn, logOut, signUp } from "./api";
 import {
   chooseDirectCandidate,
   discoverPage,
@@ -10,6 +10,7 @@ import {
 } from "./discovery";
 import type { FrameDiscoveryResult, VideoGroup } from "./discovery";
 import type {
+  AuthSession,
   BrowserContext,
   DiscoveryResult,
   ExtensionMessage,
@@ -31,6 +32,17 @@ const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
 const stopCaptureButton = document.querySelector<HTMLButtonElement>("#stop-capture")!;
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
 
+const authSignedInElement = document.querySelector<HTMLDivElement>("#auth-signed-in")!;
+const authStatusElement = document.querySelector<HTMLParagraphElement>("#auth-status")!;
+const authLogoutButton = document.querySelector<HTMLButtonElement>("#auth-logout")!;
+const authFormElement = document.querySelector<HTMLFormElement>("#auth-form")!;
+const authEmailInput = document.querySelector<HTMLInputElement>("#auth-email")!;
+const authPasswordInput = document.querySelector<HTMLInputElement>("#auth-password")!;
+const authDisplayNameInput = document.querySelector<HTMLInputElement>("#auth-display-name")!;
+const authErrorElement = document.querySelector<HTMLParagraphElement>("#auth-error")!;
+const authSubmitButton = document.querySelector<HTMLButtonElement>("#auth-submit")!;
+const authToggleButton = document.querySelector<HTMLButtonElement>("#auth-toggle")!;
+
 let discovery: DiscoveryResult | undefined;
 let activeTabId: number | undefined;
 let pollingTimer: number | undefined;
@@ -38,6 +50,98 @@ let pollingTimer: number | undefined;
 function setStatus(message: string, details = ""): void {
   statusElement.textContent = message;
   detailsElement.textContent = details;
+}
+
+const AUTH_STORAGE_KEY = "vidseekAuth";
+
+let authSession: AuthSession | undefined;
+let authMode: "login" | "signup" = "login";
+
+async function readStoredAuth(): Promise<AuthSession | undefined> {
+  const stored = await chrome.storage.local.get(AUTH_STORAGE_KEY);
+  return stored[AUTH_STORAGE_KEY] as AuthSession | undefined;
+}
+
+async function writeStoredAuth(session: AuthSession | undefined): Promise<void> {
+  if (session) await chrome.storage.local.set({ [AUTH_STORAGE_KEY]: session });
+  else await chrome.storage.local.remove(AUTH_STORAGE_KEY);
+}
+
+function renderAuthMode(): void {
+  authDisplayNameInput.hidden = authMode !== "signup";
+  authPasswordInput.autocomplete = authMode === "signup" ? "new-password" : "current-password";
+  authSubmitButton.textContent = authMode === "signup" ? "Create account" : "Log in";
+  authToggleButton.textContent =
+    authMode === "signup" ? "Already have an account? Log in" : "Need an account? Sign up";
+}
+
+function renderAuthSession(): void {
+  const signedIn = Boolean(authSession);
+  authSignedInElement.hidden = !signedIn;
+  authFormElement.hidden = signedIn;
+  if (authSession) {
+    authStatusElement.textContent = `Signed in as ${authSession.user.display_name || authSession.user.email}`;
+  }
+}
+
+async function handleAuthSubmit(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  authErrorElement.textContent = "";
+  authSubmitButton.disabled = true;
+  try {
+    const email = authEmailInput.value.trim();
+    const password = authPasswordInput.value;
+    const session =
+      authMode === "signup"
+        ? await signUp(email, password, authDisplayNameInput.value.trim())
+        : await logIn(email, password);
+    authSession = session;
+    await writeStoredAuth(session);
+    authFormElement.reset();
+    renderAuthSession();
+  } catch (error) {
+    authErrorElement.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    authSubmitButton.disabled = false;
+  }
+}
+
+async function handleAuthLogout(): Promise<void> {
+  authLogoutButton.disabled = true;
+  try {
+    if (authSession) await logOut(authSession.token).catch(() => undefined);
+  } finally {
+    authSession = undefined;
+    await writeStoredAuth(undefined);
+    renderAuthSession();
+    authLogoutButton.disabled = false;
+  }
+}
+
+/**
+ * A stored token can outlive the companion process: it is verified in memory only
+ * (backend/core/auth.py), so a restart drops every signed-in session. Rather than show a
+ * stale "signed in" state that fails the moment it is used, this re-checks the token against
+ * `/v1/auth/me` on every popup open and quietly returns to the login form if it no longer
+ * verifies.
+ */
+async function restoreAuthState(): Promise<void> {
+  const stored = await readStoredAuth();
+  if (!stored) {
+    renderAuthSession();
+    return;
+  }
+  authSession = stored;
+  renderAuthSession();
+  try {
+    const user = await fetchCurrentUser(stored.token);
+    authSession = { token: stored.token, user };
+    await writeStoredAuth(authSession);
+  } catch {
+    authSession = undefined;
+    await writeStoredAuth(undefined);
+  }
+  renderAuthSession();
 }
 
 function message<T = Record<string, unknown>>(payload: ExtensionMessage): Promise<T> {
@@ -526,3 +630,14 @@ stopCaptureButton.addEventListener("click", () => {
 void restoreTrackedJob().catch((error: unknown) =>
   setStatus("Could not read the active job", String(error))
 );
+
+authToggleButton.addEventListener("click", () => {
+  authMode = authMode === "signup" ? "login" : "signup";
+  authErrorElement.textContent = "";
+  renderAuthMode();
+});
+authFormElement.addEventListener("submit", (event) => void handleAuthSubmit(event));
+authLogoutButton.addEventListener("click", () => void handleAuthLogout());
+
+renderAuthMode();
+void restoreAuthState();

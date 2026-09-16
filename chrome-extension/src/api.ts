@@ -1,4 +1,4 @@
-import type { BrowserContext, DiscoveryResult, MediaCandidate, VideoJob } from "./types";
+import type { AuthSession, AuthUser, BrowserContext, DiscoveryResult, MediaCandidate, VideoJob } from "./types";
 
 const COMPANION_URL = "http://127.0.0.1:8765";
 
@@ -11,6 +11,8 @@ async function companionFetch<T>(path: string, init: RequestInit = {}, token?: s
     const payload = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(describeDetail(payload.detail) || response.statusText);
   }
+  // /v1/auth/logout answers 204 with no body; parsing that as JSON would throw.
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -34,6 +36,28 @@ function describeDetail(detail: unknown): string {
 export async function createSession(): Promise<string> {
   const response = await companionFetch<{ token: string }>("/v1/session", { method: "POST" });
   return response.token;
+}
+
+export async function signUp(email: string, password: string, displayName: string): Promise<AuthSession> {
+  return companionFetch<AuthSession>("/v1/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password, display_name: displayName || undefined })
+  });
+}
+
+export async function logIn(email: string, password: string): Promise<AuthSession> {
+  return companionFetch<AuthSession>("/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password })
+  });
+}
+
+export async function fetchCurrentUser(token: string): Promise<AuthUser> {
+  return companionFetch<AuthUser>("/v1/auth/me", {}, token);
+}
+
+export async function logOut(token: string): Promise<void> {
+  await companionFetch<void>("/v1/auth/logout", { method: "POST" }, token);
 }
 
 export async function createJob(
