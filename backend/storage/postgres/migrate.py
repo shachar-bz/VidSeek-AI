@@ -52,8 +52,8 @@ AZURE_EXTENSION_HELP = (
     "Applying {filename} failed. On Azure Database for PostgreSQL Flexible Server an "
     "extension must be allow-listed before any role may create it: open the server in the "
     "Azure portal, go to Settings > Server parameters, search for `azure.extensions`, tick "
-    "VECTOR (and PGCRYPTO if it is not already on), and save. The server applies the change "
-    "without a restart. Then run this again."
+    "VECTOR, and save. The server applies the change without a restart. Then run this "
+    "again. The underlying error follows.\n\n{error}"
 )
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,9 @@ def _apply_one(pool, path: Path) -> None:
             )
     except psycopg.Error as error:
         if path.name == EXTENSIONS_MIGRATION:
-            raise RuntimeError(AZURE_EXTENSION_HELP.format(filename=path.name)) from error
+            raise RuntimeError(
+                AZURE_EXTENSION_HELP.format(filename=path.name, error=error)
+            ) from error
         raise
     logger.info("Applied %s", path.name)
 

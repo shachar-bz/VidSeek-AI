@@ -1,18 +1,18 @@
 -- The extensions every later migration depends on.
 --
--- Alone in its own file because these are the two statements that can fail for a reason
--- that has nothing to do with the schema: an extension has to be permitted by the server
--- before any role may create it. Keeping them apart means a failure here points at the
--- server's configuration rather than at whichever table happened to be first.
+-- Alone in its own file because this is the one statement that can fail for a reason that
+-- has nothing to do with the schema: an extension has to be permitted by the server before
+-- any role may create it. Keeping it apart means a failure here points at the server's
+-- configuration rather than at whichever table happened to be first.
 --
 -- Applied by `python -m backend.storage.postgres.migrate`, which runs each file once, in
--- filename order, inside its own transaction. Re-running is safe: every statement below
--- is idempotent.
-
--- `gen_random_uuid()`, the default of every generated primary key that follows. Built in
--- since Postgres 13, but created explicitly so this file states what it relies on rather
--- than assuming a version.
-create extension if not exists pgcrypto;
+-- filename order, inside its own transaction. Re-running is safe: the statement below is
+-- idempotent.
+--
+-- pgcrypto is deliberately not created here, although `gen_random_uuid()` -- the default of
+-- every generated primary key that follows -- came from it once. It has been in the server
+-- core since PostgreSQL 13, and Azure does not allow-list pgcrypto by default, so asking
+-- for it would add a configuration step to gain nothing.
 
 -- pgvector, for the embedding columns in 0007. Enabled here rather than in that migration
 -- because enabling an extension is a one-off server-level step, and having it in place
