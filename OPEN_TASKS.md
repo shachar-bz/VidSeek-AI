@@ -236,26 +236,41 @@ exists only in `services/video_download/web/`.
 
 ---
 
-## 10. Chapters and memories tables are not built yet
+## 10. Nothing writes the chapters and memories tables
 
-**Status:** not started, deliberately deferred. `backend/storage/supabase/` holds `videos`
-and `transcript_segments` today; `chapters` and `memories` are the two tables Supabase was
-introduced for that have no schema, no store, and nothing producing them yet.
+**Status:** the schema exists, the writers do not. `0005_chapters.sql`,
+`0006_memories.sql` and `0007_embeddings.sql` created `chapters`, `memories`,
+`chapter_embeddings` and `memory_embeddings` during the move to Azure, so the shape is
+settled; what is missing is a store for each and something in the request path that calls
+them.
 
 **What each is for:**
 
-- `chapters` — one row per chapter of a video: a title, a summary, a start/end timestamp
-  range, and an embedding, linked to `video_id`. Nothing currently segments a video into
-  chapters; that segmentation is itself unbuilt.
-- `memories` — one row per notable moment within a chapter: the original text, a summary
-  or semantic idea, a timestamp range, and an embedding, linked to both `video_id` and
-  `chapter_id`. Nothing currently extracts memories either.
+- `chapters` — one row per broad section of a video: a title, a summary and a start/end
+  timestamp range, linked to `video_id`. `backend/semantic_processing/chapters/` produces
+  these and is tested.
+- `memories` — one row per semantic moment within a video: the original text, the model's
+  summary and a timestamp range, linked to `video_id` and, once the grouping stage has run,
+  to `chapter_id`. `backend/semantic_processing/memories/` produces these and is tested.
 
-**To close:** once something produces chapters and memories, add
-`0003_chapters.sql` and `0004_memories.sql` alongside the existing migrations in
-`backend/storage/supabase/migrations/`, following the shape of `0002_transcript_segments.sql`
-(FK to `videos`, `ON DELETE CASCADE`, RLS enabled with no policies). `pgvector` is already
-enabled by `0001_videos.sql` for exactly this; the one decision to make first is which
-embedding model sets the `vector(N)` dimension, since that is fixed at table creation.
-Store code goes in `backend/storage/supabase/chapters.py` and `memories.py`, mirroring
-`video_records.py` and `transcript_segments.py`.
+Neither stage is called from anywhere: `segment_transcript` and `group_memories` appear
+only in their own packages and in the tests.
+
+**To close:** add `backend/storage/postgres/chapters.py` and `memories.py`, mirroring
+`transcript_segments.py` (a `replace` that upserts every position in one transaction and
+trims the tail). Then call them from `backend/services/video_download/video_record.py`,
+after the transcript is written, which is the only place that has both the transcript and
+the `videos.id` the rows hang off.
+
+**The embedding decision is still open.** `memory_embeddings.embedding` and
+`chapter_embeddings.embedding` are declared as bare `vector` with no dimension, which
+pgvector allows but cannot index: a similarity search against them today is a sequential
+scan. Picking the embedding model fixes the dimension, and one migration then does both:
+
+```sql
+alter table public.memory_embeddings alter column embedding type vector(1536);
+create index on public.memory_embeddings using hnsw (embedding vector_cosine_ops);
+```
+
+They are separate tables rather than columns on `memories` and `chapters` for exactly this
+reason — an empty table can be altered freely, a column beside real rows cannot.

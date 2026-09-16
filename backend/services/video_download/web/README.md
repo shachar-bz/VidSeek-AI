@@ -16,13 +16,20 @@ when captions or a published transcript are unavailable.
    FIRECRAWL_API_KEY=your_key
    # Optional; this must match Chrome's Downloads/VidSeek directory.
    VIDSEEK_DOWNLOAD_ROOT=C:\Users\you\Downloads\VidSeek
-   # Optional; where a finished video is uploaded. Without these a job downloads and
-   # transcribes as before and the video stays on this machine only. See
-   # backend/.env.example for the full set.
-   R2_ACCESS_KEY_ID=your_key_id
-   R2_ACCESS_KEY=your_secret
-   R2_ENDPOINT_URL=https://your_account_id.r2.cloudflarestorage.com
-   R2_BUCKET_NAME=your_bucket
+   # Required for a job to finish: Blob Storage is where a finished video is uploaded,
+   # and the local copy is deleted once it is there. A job fails at the upload step
+   # without them. See backend/.env.example for the full set.
+   AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+   AZURE_STORAGE_CONTAINER_NAME=videos
+   # Optional; where the video's metadata, transcript and comments are recorded. Without
+   # it a job still succeeds and reports that the video was stored but not recorded.
+   AZURE_DATABASE_URL=postgresql://user:password@server.postgres.database.azure.com:5432/db?sslmode=require
+   ```
+
+   Then apply the schema once, from the repository root:
+
+   ```powershell
+   python -m backend.storage.postgres.migrate
    ```
 
 4. From the repository root, start the loopback service:

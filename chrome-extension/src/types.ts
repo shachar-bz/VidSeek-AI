@@ -55,7 +55,7 @@ export interface VideoJob {
   transcript_json_path?: string;
   transcript_source?: string;
   comments_path?: string;
-  /** The video's object key in the R2 bucket, absent until it is uploaded. */
+  /** The video's blob name in the storage container, absent until it is uploaded. */
   video_storage_key?: string;
   error_code?: string;
   can_capture: boolean;

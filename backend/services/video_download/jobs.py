@@ -30,7 +30,7 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
-from backend.storage.r2 import StoredVideo
+from backend.storage.blob import StoredVideo
 
 from .video_record import record_job_video
 from .video_upload import upload_job_video
@@ -55,7 +55,7 @@ SAVED_BY_TRANSCRIPT_PROBLEM = {
 PROBLEM_DESCRIPTIONS = {
     UNTIMED_TRANSCRIPT_ERROR: "no timing could be measured",
     TRANSCRIPTION_FAILED: "transcription can be retried",
-    RECORD_FAILED: "the video is in R2 but was not recorded in Supabase",
+    RECORD_FAILED: "the video is in Blob Storage but was not recorded in the database",
 }
 
 logger = logging.getLogger(__name__)
@@ -76,9 +76,9 @@ def _transcript_problem(transcript_error: str | None) -> str | None:
 def _partial_success_message(transcript_problem: str | None, record_problem: str | None) -> str:
     """What a job that produced something, but not everything, tells the extension.
 
-    At most two problems can arrive here. The transcript's half and the Supabase half fail
-    independently, but the Supabase half fails in only one way per job: recording a video
-    is attempted only once its upload has already returned an object key.
+    At most two problems can arrive here. The transcript's half and the database half fail
+    independently, but the database half fails in only one way per job: recording a video
+    is attempted only once its upload has already returned a blob name.
     """
     problems = [problem for problem in (transcript_problem, record_problem) if problem]
     described = " and ".join(PROBLEM_DESCRIPTIONS[problem] for problem in problems)
@@ -347,11 +347,11 @@ class JobManager:
             )
 
     def _store_and_finish(self, job_id: str, result) -> None:
-        """Store the video in R2, describe it in Supabase, then finish the job.
+        """Store the video in Blob Storage, describe it in the database, then finish the job.
 
-        Storage is not optional: R2 is the video's only home, so a failure here fails the
-        job rather than falling back to the local copy the pipeline made to transcribe it.
-        Recording the video in Supabase is not that kind of failure — the video and its
+        Storage is not optional: Blob Storage is the video's only home, so a failure here
+        fails the job rather than falling back to the local copy the pipeline made to
+        transcribe it. Recording the video is not that kind of failure — the video and its
         transcript files are already durable once the upload succeeds — so a database that
         refuses the write is reported on the finished job rather than thrown away with it.
         """
@@ -367,11 +367,11 @@ class JobManager:
                 ),
             )
         except Exception as error:
-            logger.exception("Storing %s in R2 failed", result.video_path)
+            logger.exception("Storing %s in Blob Storage failed", result.video_path)
             self._fail(
                 job_id,
                 UPLOAD_FAILED,
-                f"Storing the video in R2 failed ({type(error).__name__})",
+                f"Storing the video in Blob Storage failed ({type(error).__name__})",
                 can_capture=False,
             )
             return
@@ -379,9 +379,9 @@ class JobManager:
         self._finish(job_id, result, stored_video=stored_video, record_problem=record_problem)
 
     def _record_video(self, job_id: str, result, stored_video: StoredVideo) -> str | None:
-        """Describe the uploaded video in Supabase, reporting a failure rather than raising.
+        """Describe the uploaded video in the database, reporting a failure rather than raising.
 
-        The row can be written again later from the object key alone, so a database that
+        The row can be written again later from the blob name alone, so a database that
         is unreachable is worth reporting but not worth discarding a finished download
         over. Nothing here is retried: the upload has already happened, and a second
         attempt against a project that just refused one is unlikely to be answered
@@ -401,7 +401,7 @@ class JobManager:
                 comments=result.comments,
             )
         except Exception:
-            logger.exception("Recording %s in Supabase failed", stored_video.key)
+            logger.exception("Recording %s in the database failed", stored_video.name)
             return RECORD_FAILED
         return None
 
@@ -415,7 +415,8 @@ class JobManager:
     ) -> None:
         with self._lock:
             job = self._require(job_id)
-            # The video now lives only in R2; the local copy made for transcription is gone.
+            # The video now lives only in Blob Storage; the local copy made for transcription
+            # is gone.
             job.video_path = None
             job.transcript_text_path = (
                 str(result.transcript_text_path) if result.transcript_text_path else None
@@ -425,13 +426,13 @@ class JobManager:
             )
             job.transcript_source = result.transcript_source
             job.comments_path = str(result.comments_path) if result.comments_path else None
-            job.video_storage_key = stored_video.key
+            job.video_storage_key = stored_video.name
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
             transcript_problem = _transcript_problem(result.transcript_error)
             if transcript_problem or record_problem:
                 # A transcript with no timing is still text, and a video not yet described
-                # in Supabase is still safely in R2 -- neither costs the job its result, so
+                # in the database is still safely stored -- neither costs the job its result, so
                 # both are reported rather than failing a job that otherwise finished.
                 job.status = JobStatus.PARTIAL_SUCCESS
                 job.error_code = transcript_problem or record_problem

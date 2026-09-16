@@ -104,23 +104,28 @@ python-dotenv
 requests
 # --- end web video download local companion ---
 
-# --- cloudflare r2 storage module ---
-# Remove this block together with backend/storage/ if the module is dropped.
-# R2 is an S3-compatible object store, so it is spoken to with the ordinary AWS SDK; no
-# Cloudflare-specific package exists or is needed. 1.36 is the floor because the checksum
-# behaviour the R2 client configures was introduced there. Needs R2_ACCESS_KEY_ID,
-# R2_ACCESS_KEY, R2_ENDPOINT_URL and R2_BUCKET_NAME in backend/.env.
-boto3>=1.36
+# --- azure blob storage module ---
+# Remove this block together with backend/storage/blob/ if the module is dropped.
+# Where a finished video's file is kept. The whole account is addressed through one
+# connection string, so there is nothing else to configure and no separate credential
+# package. 12.19 is the floor because `progress_hook`, which the upload reports job
+# progress through, is only accepted from there. Needs AZURE_STORAGE_CONNECTION_STRING
+# and AZURE_STORAGE_CONTAINER_NAME in backend/.env, and the container to already exist;
+# nothing here creates it.
+azure-storage-blob>=12.19
 python-dotenv
-# --- end cloudflare r2 storage module ---
+# --- end azure blob storage module ---
 
-# --- supabase database module ---
-# Remove this block together with backend/storage/supabase/ if the module is dropped.
-# The official client wraps Supabase's PostgREST API over HTTP, so no Postgres driver and
-# no database port are needed. 2.0 is the floor because everything here uses the v2 API
-# shape (`create_client(...).table(...)` returning a response with `.data`). Needs
-# SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) in backend/.env, and
-# the tables from backend/storage/supabase/migrations/ applied to the project.
-supabase>=2.0
+# --- azure postgresql module ---
+# Remove this block together with backend/storage/postgres/ if the module is dropped.
+# Everything about a video that is not its bytes: the videos, transcript_segments and
+# comments rows, and the migrations that create them. Spoken to over the ordinary Postgres
+# wire protocol, so no Azure-specific package exists or is needed. `binary` avoids needing
+# a local libpq and a C compiler on Windows; `pool` is psycopg_pool, which keeps one
+# connection warm across jobs. 3.1 is the floor because everything here uses psycopg 3's
+# API (`connection.execute(...)` returning a cursor, and `psycopg.sql` composition).
+# Needs AZURE_DATABASE_URL in backend/.env, and
+# `python -m backend.storage.postgres.migrate` run once against the server.
+psycopg[binary,pool]>=3.1
 python-dotenv
-# --- end supabase database module ---
+# --- end azure postgresql module ---

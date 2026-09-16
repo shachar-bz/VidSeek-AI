@@ -71,15 +71,15 @@ class VideoJobResponse(BaseModel):
     message: str
     acquisition_mode: str
     # Set only while the video still sits on this machine: cleared once it is safely in
-    # R2, which is where a finished job's video lives from then on.
+    # Blob Storage, which is where a finished job's video lives from then on.
     video_path: str | None = None
     transcript_text_path: str | None = None
     transcript_json_path: str | None = None
     transcript_source: str | None = None
     comments_path: str | None = None
-    # The video's object key in the R2 bucket, once it is uploaded. The key alone, not a
-    # link: a presigned URL carries a signature, which this response has no business
-    # holding, and the bucket name is the companion's business rather than the tab's.
+    # The video's blob name in the storage container, once it is uploaded. The name alone,
+    # not a link: a SAS URL carries a signature, which this response has no business
+    # holding, and the container is the companion's business rather than the tab's.
     video_storage_key: str | None = None
     error_code: str | None = None
     can_capture: bool = False

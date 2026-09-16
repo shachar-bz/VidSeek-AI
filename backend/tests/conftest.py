@@ -6,7 +6,7 @@ job — the transcript store, most of all — resolves its location through
 `config.download_root()`, which defaults to `~/Downloads/VidSeek`; without it a test run
 would write transcripts into the same folder as real downloads and could overwrite one.
 The other hides `backend/.env`, so that a test cannot reach a real ElevenLabs key or
-upload to a real R2 bucket on a machine that happens to have credentials.
+upload to a real storage container on a machine that happens to have credentials.
 
 Between them, a test that passes on a bare checkout passes on a configured one, which is
 the property that makes the suite worth trusting.

@@ -47,13 +47,13 @@ class PipelineResult:
     comments_path: Path | None = None
 
     # The transcript itself, carried rather than re-read from the `.json` beside the
-    # video, so that whatever records the job in Supabase writes the same segments the
+    # video, so that whatever records the job in the database writes the same segments the
     # pipeline produced instead of a round trip through disk. None whenever the pipeline
     # produced no timed transcript, which is exactly when `transcript_error` is set.
     normalized_transcript: NormalizedTranscript | None = None
 
     # The comments themselves, carried the same way and for the same reason: whatever
-    # records the job in Supabase writes what the YouTube pipeline actually fetched
+    # records the job in the database writes what the YouTube pipeline actually fetched
     # instead of re-reading `comments_path` off disk. Empty rather than None whenever the
     # YouTube pipeline ran, since it always attempts the fetch and treats a failure or a
     # video with comments disabled the same way: nothing found, not nothing attempted.

@@ -406,7 +406,7 @@ function renderJob(job: VideoJob): void {
   const artifacts = [
     job.video_path,
     job.transcript_text_path,
-    job.video_storage_key && `R2: ${job.video_storage_key}`
+    job.video_storage_key && `Stored: ${job.video_storage_key}`
   ];
   setStatus(job.message, artifacts.filter(Boolean).join("\n"));
   // While capturing, the capture buttons are driven by the capture flow, not by the
