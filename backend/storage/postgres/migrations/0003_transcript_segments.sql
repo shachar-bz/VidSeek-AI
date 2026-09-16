@@ -1,7 +1,6 @@
 -- The transcript_segments table: a video's speech, in the timed pieces it was heard in.
 --
--- Apply 0001_videos.sql first; every row here points at a video. As with 0001, run this
--- once in Dashboard > SQL Editor or through the Supabase CLI, and re-running it is safe.
+-- Apply 0002_videos.sql first; every row here points at a video.
 --
 -- One row per segment rather than one row per transcript, because the timings are the
 -- point: a search for a phrase has to come back with the second it was said at, and a
@@ -10,9 +9,13 @@
 -- how finely it was timed -- is on the video row instead, so it is not repeated on every
 -- segment.
 --
+-- This is the transcript that was extracted from the video, in the language it was spoken
+-- in. Nothing here is a translation; the project has no translation stage, and a segment
+-- row therefore carries no language of its own.
+--
 -- There is no embedding column here. A segment is a mechanical slice of speech, a
--- sentence or two long; the units worth searching semantically are the chapters and
--- memories still to come, and those will carry their own vectors.
+-- sentence or two long; the units worth searching semantically are the memories and
+-- chapters in 0005 and 0006, and those carry their own vectors.
 
 create table if not exists public.transcript_segments (
     id uuid primary key default gen_random_uuid(),
@@ -54,8 +57,3 @@ create index if not exists transcript_segments_video_index_idx
     on public.transcript_segments (video_id, segment_index);
 create index if not exists transcript_segments_video_time_idx
     on public.transcript_segments (video_id, start_seconds);
-
-
--- Closed to the anon and authenticated roles, exactly as `videos` is, and for the same
--- reason. See the note at the end of 0001_videos.sql.
-alter table public.transcript_segments enable row level security;

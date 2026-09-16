@@ -1,4 +1,4 @@
-"""Tests for the Supabase row a finished job writes once its video is in the bucket."""
+"""Tests for the database row a finished job writes once its video is in the container."""
 
 from unittest.mock import patch
 
@@ -10,14 +10,14 @@ from backend.services.transcripts import (
 )
 from backend.services.video_download import video_record
 from backend.services.video_download.youtube.comments import CommentEntry
-from backend.storage.r2 import StoredVideo
-from backend.storage.supabase import StoredVideoRecord, VideoRecord
+from backend.storage.blob import StoredVideo
+from backend.storage.postgres import StoredVideoRecord, VideoRecord
 
 VIDEO_ROW_ID = "11111111-2222-3333-4444-555555555555"
 
 STORED = StoredVideo(
-    bucket="vidseek-videos",
-    key="videos/job-42/clip.mp4",
+    container="videos",
+    name="videos/job-42/clip.mp4",
     size_bytes=11,
     content_type="video/mp4",
 )
@@ -50,7 +50,7 @@ COMMENTS = [
 
 
 class FakeVideoRecords:
-    """Stands in for the `videos` table, and answers the way PostgREST does."""
+    """Stands in for the `videos` table, answering with the row it wrote."""
 
     def __init__(self):
         self.upserted: list[VideoRecord] = []
@@ -97,16 +97,16 @@ def _record(
     comments: list[CommentEntry] | None = None,
 ):
     with (
-        patch.object(video_record, "is_supabase_configured", return_value=configured),
-        patch.object(video_record, "SupabaseVideoRecords", return_value=records),
+        patch.object(video_record, "is_postgres_configured", return_value=configured),
+        patch.object(video_record, "PostgresVideoRecords", return_value=records),
         patch.object(
             video_record,
-            "SupabaseTranscriptSegments",
+            "PostgresTranscriptSegments",
             return_value=segments or FakeTranscriptSegments(),
         ),
         patch.object(
             video_record,
-            "SupabaseVideoComments",
+            "PostgresComments",
             return_value=comments_store or FakeVideoComments(),
         ),
     ):
@@ -121,13 +121,13 @@ def _record(
         )
 
 
-def test_the_row_ties_the_r2_object_back_to_the_page_it_came_from() -> None:
+def test_the_row_ties_the_stored_blob_back_to_the_page_it_came_from() -> None:
     records = FakeVideoRecords()
     stored = _record(records)
 
     written = records.upserted[0]
-    assert written.r2_bucket == STORED.bucket
-    assert written.r2_object_key == STORED.key
+    assert written.blob_container == STORED.container
+    assert written.blob_name == STORED.name
     assert written.source_url == REQUEST.page_url
     assert written.title == REQUEST.page_title
     assert written.source == "companion_download"
@@ -136,7 +136,7 @@ def test_the_row_ties_the_r2_object_back_to_the_page_it_came_from() -> None:
     assert stored is not None and stored.video == written
 
 
-def test_the_uploaded_object_s_own_facts_are_taken_from_the_upload() -> None:
+def test_the_uploaded_blob_s_own_facts_are_taken_from_the_upload() -> None:
     # The size and content type belong to the file that was actually stored, not to
     # anything the tab claimed about it.
     records = FakeVideoRecords()
@@ -158,7 +158,7 @@ def test_nothing_is_guessed_for_what_no_pipeline_measured() -> None:
 
 def test_the_transcript_is_stored_against_the_video_row_the_upsert_returned() -> None:
     # The segments carry a foreign key to `videos.id`, which only exists once the video
-    # row has been written; the R2 key that identified the video up to here will not do.
+    # row has been written; the blob name that identified the video up to here will not do.
     records, segments = FakeVideoRecords(), FakeTranscriptSegments()
     _record(records, segments, transcript=TRANSCRIPT)
 

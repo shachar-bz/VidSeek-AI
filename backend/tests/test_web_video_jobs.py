@@ -29,11 +29,11 @@ from backend.services.video_download.web.pipeline import (
     UNTIMED_TRANSCRIPT_ERROR,
     PipelineResult,
 )
-from backend.storage.r2 import StoredVideo
+from backend.storage.blob import StoredVideo
 
 STORED = StoredVideo(
-    bucket="vidseek-videos",
-    key="videos/job-42/video.mp4",
+    container="videos",
+    name="videos/job-42/video.mp4",
     size_bytes=5,
     content_type="video/mp4",
 )
@@ -182,7 +182,7 @@ def run_to_completion(
 
     The file Chrome "downloaded" is the shortest way into the pipeline that still goes
     through the job manager's own completion path, which is what the upload and the
-    Supabase row both hang off. `upload` and `record` are the mock keywords — `return_value`
+    database row both hang off. `upload` and `record` are the mock keywords — `return_value`
     or `side_effect` — applied to each of those two steps.
     """
     video_path = download_root / "video.mp4"
@@ -226,21 +226,21 @@ def test_a_finished_job_reports_where_its_video_was_stored(tmp_path: Path) -> No
         manager.shutdown()
 
     assert job.status == JobStatus.COMPLETE
-    assert job.video_storage_key == STORED.key
-    # The video lives only in R2 once the job is done; the local copy is gone.
+    assert job.video_storage_key == STORED.name
+    # The video lives only in Blob Storage once the job is done; the local copy is gone.
     assert job.video_path is None
 
 
-def test_an_unreachable_bucket_fails_the_job_rather_than_keeping_a_local_copy(
+def test_an_unreachable_container_fails_the_job_rather_than_keeping_a_local_copy(
     tmp_path: Path,
 ) -> None:
     manager = JobManager(tmp_path)
     try:
-        job = run_to_completion(manager, tmp_path, side_effect=OSError("bucket unreachable"))
+        job = run_to_completion(manager, tmp_path, side_effect=OSError("container unreachable"))
     finally:
         manager.shutdown()
 
-    # R2 is the video's only home, so a storage failure fails the job instead of quietly
+    # Blob Storage is the video's only home, so a storage failure fails the job instead of
     # settling for the local copy the pipeline made to transcribe it.
     assert job.status == JobStatus.FAILED
     assert job.error_code == "upload_failed"
@@ -259,7 +259,7 @@ def test_an_untimed_transcript_still_says_so_when_the_upload_worked(tmp_path: Pa
     assert job.status == JobStatus.PARTIAL_SUCCESS
     assert job.error_code == UNTIMED_TRANSCRIPT_ERROR
     assert job.message == "Video and text saved; no timing could be measured"
-    assert job.video_storage_key == STORED.key
+    assert job.video_storage_key == STORED.name
 
 
 def test_an_untimed_transcript_does_not_mask_a_storage_failure(tmp_path: Path) -> None:
@@ -269,13 +269,13 @@ def test_an_untimed_transcript_does_not_mask_a_storage_failure(tmp_path: Path) -
             manager,
             tmp_path,
             transcript_error=UNTIMED_TRANSCRIPT_ERROR,
-            side_effect=OSError("bucket unreachable"),
+            side_effect=OSError("container unreachable"),
         )
     finally:
         manager.shutdown()
 
     # A transcript-only problem is reported as saved-with-a-caveat; a storage failure is
-    # not -- nothing is durably saved when the video never made it into the bucket.
+    # not -- nothing is durably saved when the video never made it into the container.
     assert job.status == JobStatus.FAILED
     assert job.error_code == "upload_failed"
 
@@ -286,7 +286,7 @@ def capture_records() -> tuple[list[dict], dict]:
     return written, {"side_effect": lambda **kwargs: written.append(kwargs)}
 
 
-def test_an_uploaded_video_is_described_in_supabase_before_the_job_reports_done(
+def test_an_uploaded_video_is_described_in_the_database_before_the_job_reports_done(
     tmp_path: Path,
 ) -> None:
     written, record = capture_records()
@@ -303,7 +303,7 @@ def test_an_uploaded_video_is_described_in_supabase_before_the_job_reports_done(
     assert written[0]["job_id"] == job.job_id
 
 
-def test_the_transcript_reaches_supabase_from_the_pipeline_not_from_the_json_on_disk(
+def test_the_transcript_reaches_the_database_from_the_pipeline_not_from_the_json_on_disk(
     tmp_path: Path,
 ) -> None:
     # Re-reading the file the pipeline just wrote would be a second chance to read it
@@ -320,15 +320,15 @@ def test_the_transcript_reaches_supabase_from_the_pipeline_not_from_the_json_on_
     assert written[0]["transcript"] is TRANSCRIPT
 
 
-def test_a_video_that_never_reached_the_bucket_is_not_described_as_if_it_had(
+def test_a_video_that_never_reached_the_container_is_not_described_as_if_it_had(
     tmp_path: Path,
 ) -> None:
-    # r2_object_key is the whole point of the row, and a failed upload produced none.
+    # blob_name is the whole point of the row, and a failed upload produced none.
     written, record = capture_records()
     manager = JobManager(tmp_path)
     try:
         run_to_completion(
-            manager, tmp_path, side_effect=OSError("bucket unreachable"), record=record
+            manager, tmp_path, side_effect=OSError("container unreachable"), record=record
         )
     finally:
         manager.shutdown()
@@ -345,16 +345,17 @@ def test_an_unreachable_database_leaves_the_uploaded_video_flagged_as_unrecorded
             manager,
             tmp_path,
             return_value=STORED,
-            record={"side_effect": OSError("supabase unreachable")},
+            record={"side_effect": OSError("database unreachable")},
         )
     finally:
         manager.shutdown()
 
-    # The video is in R2 and on disk, so the job keeps its result; what it lost is the
+    # The video is in Blob Storage and on disk, so the job keeps its result; what it lost is
     # row that would let anything find the object again.
     assert job.status == JobStatus.PARTIAL_SUCCESS
     assert job.error_code == "record_failed"
-    assert job.video_storage_key == STORED.key
+    assert job.video_storage_key == STORED.name
     assert job.message == (
-        "Video and transcript saved; the video is in R2 but was not recorded in Supabase"
+        "Video and transcript saved; the video is in Blob Storage but was not "
+        "recorded in the database"
     )
