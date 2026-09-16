@@ -7,23 +7,30 @@
     <link rel="stylesheet" href="/src/popup.css" />
   </head>
   <body>
-    <main>
-      <h1>VidSeek</h1>
+    <section id="auth" hidden>
+      <div id="auth-texture" aria-hidden="true"><pre id="auth-texture-art"></pre></div>
 
-      <section id="auth">
-        <div id="auth-signed-in" hidden>
-          <p id="auth-status"></p>
-          <button id="auth-logout" class="secondary">Log out</button>
+      <div id="auth-welcome" class="auth-panel">
+        <div class="auth-brand">
+          <h1 class="auth-title">VidSeek AI</h1>
+          <p class="auth-tagline">
+            Use AI to search, summarise and get insights from any video on the web
+          </p>
         </div>
-        <form id="auth-form">
+        <div class="auth-actions">
+          <button id="auth-show-login" type="button" class="auth-pill auth-pill--light">Login</button>
+          <button id="auth-show-signup" type="button" class="auth-pill auth-pill--dark">Sign up</button>
+        </div>
+      </div>
+
+      <form id="auth-form" class="auth-panel" hidden>
+        <div class="auth-brand">
+          <h1 class="auth-title">VidSeek AI</h1>
+          <p class="auth-tagline" id="auth-form-tagline">Log in to your account</p>
+        </div>
+        <div class="auth-fields">
+          <input id="auth-display-name" type="text" placeholder="Name" autocomplete="name" hidden />
           <input id="auth-email" type="email" placeholder="Email" autocomplete="username" required />
-          <input
-            id="auth-display-name"
-            type="text"
-            placeholder="Name"
-            autocomplete="name"
-            hidden
-          />
           <input
             id="auth-password"
             type="password"
@@ -32,12 +39,21 @@
             required
           />
           <p id="auth-error"></p>
-          <button id="auth-submit" type="submit">Log in</button>
-          <button id="auth-toggle" type="button" class="link">Need an account? Sign up</button>
-        </form>
-      </section>
-      <hr />
+        </div>
+        <div class="auth-actions">
+          <button id="auth-submit" type="submit" class="auth-pill auth-pill--dark">Log in</button>
+          <button id="auth-back" type="button" class="auth-link">Back</button>
+        </div>
+      </form>
+    </section>
 
+    <main id="app" hidden>
+      <div id="auth-signed-in">
+        <p id="auth-status"></p>
+        <button id="auth-logout" class="secondary">Log out</button>
+      </div>
+
+      <h1>VidSeek</h1>
       <p id="status">Inspect the active tab to find its video.</p>
       <progress id="progress" max="1" value="0"></progress>
       <div id="details"></div>
@@ -53,4 +69,3 @@
     <script type="module" src="/src/popup.ts"></script>
   </body>
 </html>
-

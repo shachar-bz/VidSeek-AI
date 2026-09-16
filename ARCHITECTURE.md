@@ -174,9 +174,11 @@ VidSeek-AI/
     │   ├── discovery.ts                            # Media and caption discovery injected into the active tab.
     │   ├── popup.css                               # Popup styling.
     │   ├── popup.ts                                # Popup controller: login/signup, inspect, download, cancel and capture.
+    │   ├── texture.ts                              # Generates the ASCII field drawn behind the login screen.
     │   └── types.ts                                # Shared wire types mirroring the companion API models.
     ├── tests/                                      # Extension helper unit tests.
-    │   └── discovery.test.ts                       # Media classification and origin pattern tests.
+    │   ├── discovery.test.ts                       # Media classification and origin pattern tests.
+    │   └── texture.test.ts                         # Login backdrop grid, alphabet and row density tests.
     ├── package.json                                # Extension build and test dependencies.
     ├── popup.html                                  # User interface entrypoint.
     ├── README.md                                   # Build, load and capture instructions.

@@ -82,50 +82,211 @@ button:disabled {
   opacity: 0.6;
 }
 
-button.link {
-  width: auto;
-  margin: 6px 0 0;
-  padding: 0;
-  color: #2457d6;
-  background: transparent;
-  font-weight: 500;
-  font-size: 12px;
-  text-decoration: underline;
-}
-
-#auth input {
-  box-sizing: border-box;
-  width: 100%;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border: 1px solid #dbe2ee;
-  border-radius: 8px;
-  font: inherit;
-}
-
-#auth input:first-child {
-  margin-top: 0;
+#auth-signed-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 #auth-status {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #4d5b70;
 }
 
+#auth-signed-in #auth-logout {
+  width: auto;
+  flex: none;
+  margin: 0;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11px;
+}
+
+/* --- Login / sign up screen ---------------------------------------------- */
+/* Its own world: a full-height panel with the ASCII field behind it, sharing none of
+   the palette, type or button shapes the signed-in popup above uses. */
+
+#auth {
+  position: relative;
+  overflow: hidden;
+  min-height: 520px;
+  color: #1c1c1b;
+  background: #f4f4f2;
+  /* OpenAI Sans is not redistributable, so it is not bundled here: this picks it up on a
+     machine that has it installed and falls back to the popup's own stack otherwise. */
+  font-family: "OpenAI Sans", "OpenAI Sans Text", Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Inset past every edge, so the drift below never pulls a bare margin into view. */
+#auth-texture {
+  position: absolute;
+  inset: -18px;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+#auth-texture pre {
+  margin: 0;
+  color: #e3e3dd;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 6px;
+  line-height: 8.5px;
+  letter-spacing: 0.6px;
+  white-space: pre;
+  will-change: transform;
+  animation: auth-texture-drift 26s ease-in-out infinite;
+}
+
+@keyframes auth-texture-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-5px, -9px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #auth-texture pre {
+    animation: none;
+  }
+}
+
+.auth-panel {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 520px;
+  padding: 0 14px;
+}
+
+/* `display` above would otherwise beat the hidden attribute, and both panels would show. */
+.auth-panel[hidden] {
+  display: none;
+}
+
+.auth-brand {
+  margin-top: 216px;
+  text-align: center;
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* Sized to hold the whole line without wrapping, which is what keeps the brand block the
+   two-line shape the design calls for rather than a three-line one. */
+.auth-tagline {
+  margin: 11px auto 0;
+  color: #5e5e58;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 130px;
+  margin-top: auto;
+  margin-bottom: 70px;
+}
+
+#auth .auth-pill {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+#auth .auth-pill--light {
+  color: #1c1c1b;
+  background: #e4e4e0;
+}
+
+#auth .auth-pill--dark {
+  color: #fbfbfa;
+  background: #2b2b28;
+}
+
+#auth .auth-pill:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+#auth .auth-link {
+  width: auto;
+  margin: 2px auto 0;
+  padding: 4px;
+  border: 0;
+  color: #6c6c66;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+#auth-form .auth-brand {
+  margin-top: 116px;
+}
+
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 236px;
+  margin-top: 26px;
+}
+
+#auth .auth-fields input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #dededa;
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: #1c1c1b;
+  background: rgba(255, 255, 255, 0.72);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+#auth .auth-fields input::placeholder {
+  color: #9a9a94;
+}
+
+#auth .auth-fields input:focus {
+  outline: none;
+  border-color: #2b2b28;
+  background: #fff;
+}
+
 #auth-error {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: #c62828;
+  margin: 2px 4px 0;
+  color: #b3392b;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 #auth-error:empty {
   display: none;
-}
-
-hr {
-  margin: 14px 0;
-  border: 0;
-  border-top: 1px solid #dbe2ee;
 }
 

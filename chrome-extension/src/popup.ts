@@ -9,6 +9,7 @@ import {
   resolveSelectedGroup
 } from "./discovery";
 import type { FrameDiscoveryResult, VideoGroup } from "./discovery";
+import { textureBlock } from "./texture";
 import type {
   AuthSession,
   BrowserContext,
@@ -32,16 +33,22 @@ const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
 const stopCaptureButton = document.querySelector<HTMLButtonElement>("#stop-capture")!;
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
 
-const authSignedInElement = document.querySelector<HTMLDivElement>("#auth-signed-in")!;
+const appElement = document.querySelector<HTMLElement>("#app")!;
+const authScreenElement = document.querySelector<HTMLElement>("#auth")!;
+const authTextureElement = document.querySelector<HTMLPreElement>("#auth-texture-art")!;
+const authWelcomeElement = document.querySelector<HTMLDivElement>("#auth-welcome")!;
 const authStatusElement = document.querySelector<HTMLParagraphElement>("#auth-status")!;
 const authLogoutButton = document.querySelector<HTMLButtonElement>("#auth-logout")!;
 const authFormElement = document.querySelector<HTMLFormElement>("#auth-form")!;
+const authFormTaglineElement = document.querySelector<HTMLParagraphElement>("#auth-form-tagline")!;
 const authEmailInput = document.querySelector<HTMLInputElement>("#auth-email")!;
 const authPasswordInput = document.querySelector<HTMLInputElement>("#auth-password")!;
 const authDisplayNameInput = document.querySelector<HTMLInputElement>("#auth-display-name")!;
 const authErrorElement = document.querySelector<HTMLParagraphElement>("#auth-error")!;
 const authSubmitButton = document.querySelector<HTMLButtonElement>("#auth-submit")!;
-const authToggleButton = document.querySelector<HTMLButtonElement>("#auth-toggle")!;
+const authShowLoginButton = document.querySelector<HTMLButtonElement>("#auth-show-login")!;
+const authShowSignupButton = document.querySelector<HTMLButtonElement>("#auth-show-signup")!;
+const authBackButton = document.querySelector<HTMLButtonElement>("#auth-back")!;
 
 let discovery: DiscoveryResult | undefined;
 let activeTabId: number | undefined;
@@ -54,8 +61,13 @@ function setStatus(message: string, details = ""): void {
 
 const AUTH_STORAGE_KEY = "vidseekAuth";
 
+// Wide and tall enough to cover the screen at the backdrop's 6px type, plus the inset the
+// stylesheet gives it to drift inside. Anything past the edges is simply clipped.
+const AUTH_TEXTURE_SHAPE = { columns: 100, rows: 70 };
+
 let authSession: AuthSession | undefined;
 let authMode: "login" | "signup" = "login";
+let authView: "welcome" | "form" = "welcome";
 
 async function readStoredAuth(): Promise<AuthSession | undefined> {
   const stored = await chrome.storage.local.get(AUTH_STORAGE_KEY);
@@ -67,21 +79,31 @@ async function writeStoredAuth(session: AuthSession | undefined): Promise<void> 
   else await chrome.storage.local.remove(AUTH_STORAGE_KEY);
 }
 
-function renderAuthMode(): void {
+/** Signed out, the login screen is the whole popup; signed in, it is gone entirely. */
+function renderAuth(): void {
+  const signedIn = Boolean(authSession);
+  authScreenElement.hidden = signedIn;
+  appElement.hidden = !signedIn;
+  if (authSession) {
+    authStatusElement.textContent = `Signed in as ${authSession.user.display_name || authSession.user.email}`;
+    return;
+  }
+  const onForm = authView === "form";
+  authWelcomeElement.hidden = onForm;
+  authFormElement.hidden = !onForm;
   authDisplayNameInput.hidden = authMode !== "signup";
   authPasswordInput.autocomplete = authMode === "signup" ? "new-password" : "current-password";
   authSubmitButton.textContent = authMode === "signup" ? "Create account" : "Log in";
-  authToggleButton.textContent =
-    authMode === "signup" ? "Already have an account? Log in" : "Need an account? Sign up";
+  authFormTaglineElement.textContent =
+    authMode === "signup" ? "Create an account to get started" : "Log in to your account";
 }
 
-function renderAuthSession(): void {
-  const signedIn = Boolean(authSession);
-  authSignedInElement.hidden = !signedIn;
-  authFormElement.hidden = signedIn;
-  if (authSession) {
-    authStatusElement.textContent = `Signed in as ${authSession.user.display_name || authSession.user.email}`;
-  }
+function openAuthForm(mode: "login" | "signup"): void {
+  authMode = mode;
+  authView = "form";
+  authErrorElement.textContent = "";
+  renderAuth();
+  authEmailInput.focus();
 }
 
 async function handleAuthSubmit(event: SubmitEvent): Promise<void> {
@@ -98,7 +120,7 @@ async function handleAuthSubmit(event: SubmitEvent): Promise<void> {
     authSession = session;
     await writeStoredAuth(session);
     authFormElement.reset();
-    renderAuthSession();
+    renderAuth();
   } catch (error) {
     authErrorElement.textContent = error instanceof Error ? error.message : String(error);
   } finally {
@@ -112,8 +134,9 @@ async function handleAuthLogout(): Promise<void> {
     if (authSession) await logOut(authSession.token).catch(() => undefined);
   } finally {
     authSession = undefined;
+    authView = "welcome";
     await writeStoredAuth(undefined);
-    renderAuthSession();
+    renderAuth();
     authLogoutButton.disabled = false;
   }
 }
@@ -122,17 +145,17 @@ async function handleAuthLogout(): Promise<void> {
  * A stored token can outlive the companion process: it is verified in memory only
  * (backend/core/auth.py), so a restart drops every signed-in session. Rather than show a
  * stale "signed in" state that fails the moment it is used, this re-checks the token against
- * `/v1/auth/me` on every popup open and quietly returns to the login form if it no longer
+ * `/v1/auth/me` on every popup open and quietly returns to the login screen if it no longer
  * verifies.
  */
 async function restoreAuthState(): Promise<void> {
   const stored = await readStoredAuth();
   if (!stored) {
-    renderAuthSession();
+    renderAuth();
     return;
   }
   authSession = stored;
-  renderAuthSession();
+  renderAuth();
   try {
     const user = await fetchCurrentUser(stored.token);
     authSession = { token: stored.token, user };
@@ -141,7 +164,7 @@ async function restoreAuthState(): Promise<void> {
     authSession = undefined;
     await writeStoredAuth(undefined);
   }
-  renderAuthSession();
+  renderAuth();
 }
 
 function message<T = Record<string, unknown>>(payload: ExtensionMessage): Promise<T> {
@@ -631,13 +654,16 @@ void restoreTrackedJob().catch((error: unknown) =>
   setStatus("Could not read the active job", String(error))
 );
 
-authToggleButton.addEventListener("click", () => {
-  authMode = authMode === "signup" ? "login" : "signup";
+authShowLoginButton.addEventListener("click", () => openAuthForm("login"));
+authShowSignupButton.addEventListener("click", () => openAuthForm("signup"));
+authBackButton.addEventListener("click", () => {
+  authView = "welcome";
   authErrorElement.textContent = "";
-  renderAuthMode();
+  authFormElement.reset();
+  renderAuth();
 });
 authFormElement.addEventListener("submit", (event) => void handleAuthSubmit(event));
 authLogoutButton.addEventListener("click", () => void handleAuthLogout());
 
-renderAuthMode();
+authTextureElement.textContent = textureBlock(AUTH_TEXTURE_SHAPE);
 void restoreAuthState();
