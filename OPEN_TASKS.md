@@ -10,54 +10,12 @@ companion and a real browser before this file was written.
 
 ---
 
-## 1. Verify the extension in real Chrome
+## 1. Discovery misses embedded and adaptive players
 
-**Status:** not done. Everything else has been exercised; this cannot be, without loading
-the unpacked extension.
+The remaining two share one root: `discoverPage` only reads what's already sitting in the
+DOM before playback starts.
 
-**Problem:** two behaviours are unverifiable outside a real browser.
-
-- `chrome.permissions.request()` is called from the action popup in `popup.ts`. Chrome
-  historically dismissed the popup when the permission prompt opened, which would mean
-  nothing after that line runs — no session, no job, no tracker.
-- The companion requires an `Origin` header. Requests from the service worker are covered
-  by a host permission, and it is not certain from the source alone that Chrome attaches
-  `Origin` to them.
-
-The `Origin` half is already defused: `authorize` in `api.py` now requires `Origin` only on
-state-changing methods, and a token stays bound to the origin it was issued to, so an
-origin that *is* sent must still match. Polling cannot 401 for a missing header.
-
-**To close:** build `dist/`, load it at `chrome://extensions`, put its id in
-`VIDSEEK_EXTENSION_IDS`, run the companion, and take one video through inspect → download →
-transcript. Confirm the popup survives the permission prompt, and that a job appears.
-
----
-
-## 2. Discovery misses embedded and adaptive players
-
-The remaining three share one root: `discoverPage` only reads what's already sitting in the
-DOM before playback starts. (2a's iframe gap shared that root too, and is now closed.) The
-capture fallback used to cover every remaining case, but only after a download attempt had
-already failed, which cost the user a slow round trip; 2c closes that gap for DRM
-specifically, with a play-and-verify step that runs before a download is ever attempted.
-
-### 2a. Iframes are never scanned — closed
-
-**Status:** closed. **Problem:** `popup.ts` called `chrome.scripting.executeScript` without
-`allFrames: true`, so only the top frame was inspected. Vimeo, JW Player, Brightcove and
-Kaltura embeds are usually in an iframe, and discovery returned nothing for them.
-
-**Fix:** `popup.ts` now passes `allFrames: true`. `discovery.ts` exports
-`mergeDiscoveryResults`, which combines the one `DiscoveryResult` per frame that
-`executeScript` returns: page identity (URL, title, language) comes from the top frame
-(frameId 0, falling back to whichever frame answered first if frame 0 didn't produce a
-result), a DRM flag or a media/caption candidate from *any* frame counts, and candidates are
-deduped by URL across frames before the existing 100/50 caps are applied to the merged
-totals rather than per frame. `activeTab` already covered sub-frame access, so no new
-permission was needed. Covered by `mergeDiscoveryResults` tests in `discovery.test.ts`.
-
-### 2b. MSE and `blob:` playback look like "no video"
+### 1a. MSE and `blob:` playback look like "no video"
 
 **Status:** open. **Problem:** `discoverPage` drops `blob:` URLs and never reads
 `video.srcObject`. Most adaptive players feed the element through Media Source Extensions,
@@ -70,31 +28,7 @@ as a flag on `DiscoveryResult` (it is not a media candidate). The popup can then
 capture straight away instead of after a failed download. Needs a matching optional field
 on `CreateVideoJobRequest`, or it can stay purely client-side.
 
-### 2c. DRM is only detected after playback starts — closed
-
-**Status:** closed. **Problem:** `drm_detected` reads `video.mediaKeys`, which is `null`
-until the player calls `setMediaKeys()`. Inspecting a DRM-protected page before pressing
-play reported `drm_detected: false`, and the refusal only happened later, if at all — after
-the companion had already started downloading a manifest and its segments.
-
-**Fix:** discovery of an adaptive (HLS/DASH) source, or of nothing playable yet, now routes
-through a play-and-verify step instead of an immediate Download button. `popup.ts`'s
-**Verify & play** requests the same page/CDN access, then `background.ts`'s `startCapture`
-attaches the debugger and injects `discovery.ts`'s `installEmeMonitor` into the page's MAIN
-world, which patches `navigator.requestMediaKeySystemAccess` and `HTMLMediaElement
-.setMediaKeys` and listens for the `encrypted` event. Once the user presses Play and clicks
-**Finish verification**, `stopCapture` checks, before detaching: the page's own EME activity
-(`readEmeMonitor`), every captured request against `isLicenseTraffic`, and every captured
-HLS/DASH manifest body (read via `Network.getResponseBody` while still attached) against
-`detectManifestDrm`. Any positive stops the flow with a specific reason and no job is ever
-created; the same check now also guards the pre-existing post-failure capture-and-retry
-path. Covered by `detectManifestDrm`/`isLicenseTraffic` tests in `discovery.test.ts`.
-
-**Deliberately not flagged:** HLS `METHOD=AES-128` (a static key yt-dlp already fetches and
-decrypts on its own) and a bare `requestMediaKeySystemAccess` call with no attached key or
-`encrypted` event (several player libraries probe EME support even for unprotected content).
-
-### 2d. The `<video>` element's MIME type is always empty
+### 1b. The `<video>` element's MIME type is always empty
 
 **Status:** open, cosmetic. **Problem:** `discoverPage` reads
 `video.getAttribute("type")`, but `type` is a `<source>` attribute and is never present on
@@ -107,7 +41,7 @@ as though it does something.
 
 ---
 
-## 3. SSRF gate: known limits, accepted
+## 2. SSRF gate: known limits, accepted
 
 **Status:** accepted as is, documented here rather than fixed.
 
@@ -134,7 +68,7 @@ second. The third needs the fragment fetches routed through the same gate.
 
 ---
 
-## 4. Chrome's download folder must match `VIDSEEK_DOWNLOAD_ROOT`
+## 3. Chrome's download folder must match `VIDSEEK_DOWNLOAD_ROOT`
 
 **Status:** open. **Problem:** `background.ts` asks Chrome to save to `VidSeek/<name>`,
 which Chrome resolves under whatever download folder the profile is configured with. The
@@ -151,7 +85,7 @@ paths disagree. `GET /health` already exists and is a natural place to return it
 
 ---
 
-## 5. Jobs are never evicted
+## 4. Jobs are never evicted
 
 **Status:** open, low priority. **Problem:** `JobManager._jobs` only grows. A failed job
 that is still capture-eligible keeps its caption text (up to 50 × 2 MB) so the retry has
@@ -162,7 +96,7 @@ the companion clears everything today, which is why this has not bitten anyone.
 
 ---
 
-## 6. Firecrawl's containment check may reject valid transcripts
+## 5. Firecrawl's containment check may reject valid transcripts
 
 **Status:** unverified. **Problem:** `scrape_public_page_transcript` accepts the extracted
 transcript only if it appears verbatim inside the returned markdown. With
@@ -177,7 +111,7 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 7. `discoverPage` has no automated test
+## 6. `discoverPage` has no automated test
 
 **Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers
 `classifyMediaUrl`, `originPatterns` and `chooseDirectCandidate`, but not `discoverPage`
@@ -195,7 +129,7 @@ scope — so a test also guards against the two copies drifting apart.
 
 ---
 
-## 8. A missing FFmpeg can yield a silent video
+## 7. A missing FFmpeg can yield a silent video
 
 **Status:** partly handled. **Problem:** `_download_options` sets
 `merge_output_format: "mp4/mkv"` with `no_warnings: True`. If ffmpeg is absent, yt-dlp
@@ -213,30 +147,7 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 9. Untimed page transcripts are recovered via forced alignment — closed
-
-**Status:** closed. A page transcript (scraped by Firecrawl, or read from a player's
-transcript panel) still has no per-word timing of its own, and `normalize_caption_cues`
-still refuses to fabricate it rather than spread words evenly and call the result a
-timestamp — but the text is no longer thrown away just because of that.
-
-**Behavior:** `backend/services/forced_alignment/` times that text against the video's
-own audio through ElevenLabs' hosted forced aligner, on the web download pipeline, before
-anything is retranscribed. The aligner only understands English, so `is_english_text`
-gates every call; a transcript in another language, or an alignment call that fails, still
-falls through to a full ElevenLabs transcription exactly as before. A transcript that
-already has valid timing (Web captions, or YouTube captions, which always carry timing) is
-used without calling either. A job left with no timing at all still finishes
-`partial_success`/`untimed_transcript` — the text is kept but nothing downstream treats it
-as indexable.
-
-**Not covered:** the YouTube pipeline has no equivalent untimed-text-with-video state to
-recover — its captions either carry usable timing or are treated as absent — so this path
-exists only in `services/video_download/web/`.
-
----
-
-## 10. Nothing writes the chapters and memories tables
+## 8. Nothing writes the chapters and memories tables
 
 **Status:** the schema exists, the writers do not. `0005_chapters.sql`,
 `0006_memories.sql` and `0007_embeddings.sql` created `chapters`, `memories`,
