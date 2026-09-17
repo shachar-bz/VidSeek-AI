@@ -12,7 +12,8 @@
 -- has a measured start and end.
 --
 -- The embedding column's dimension was left unfixed in 0007 because no model had been
--- chosen yet. It is fixed here at 384, which is what makes the hnsw index below possible.
+-- chosen yet. It is fixed here at 384. No ANN index (hnsw or otherwise) is added: retrieval
+-- and search strategy belong to the dedicated semantic search layer, not this migration.
 
 alter table public.chapter_embeddings
     add column if not exists video_id uuid references public.videos (id) on delete cascade,
@@ -37,5 +38,3 @@ alter table public.chapter_embeddings
 alter table public.chapter_embeddings alter column embedding type vector(384);
 
 create index if not exists chapter_embeddings_video_idx on public.chapter_embeddings (video_id);
-create index if not exists chapter_embeddings_embedding_idx
-    on public.chapter_embeddings using hnsw (embedding vector_cosine_ops);
