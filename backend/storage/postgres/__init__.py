@@ -6,6 +6,7 @@ part of this package and again as `__main__`, which Python warns about and which
 the runner two copies of its own module-level state. Import it by its full path instead.
 """
 
+from .chapter_embeddings import ChapterEmbedding, ChapterForEmbedding, PostgresChapterEmbeddings
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
 from .settings import PostgresSettings, is_postgres_configured, load_postgres_settings
@@ -14,7 +15,10 @@ from .users import NewUser, PostgresUsers, StoredUser
 from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
 
 __all__ = [
+    "ChapterEmbedding",
+    "ChapterForEmbedding",
     "NewUser",
+    "PostgresChapterEmbeddings",
     "PostgresComments",
     "PostgresSettings",
     "PostgresTranscriptSegments",
