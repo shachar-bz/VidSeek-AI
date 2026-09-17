@@ -22,9 +22,13 @@ VidSeek-AI/
 │   ├── conversation_tools/                         # Pydantic AI tools the conversational agent calls while talking about a video.
 │   │   ├── __init__.py                             # Public interface of the conversation tools package.
 │   │   ├── deps.py                                 # ConversationDeps: per-run state injected into every tool's RunContext.
-│   │   └── get_video_info/                         # Tool that looks up the current video's metadata via ctx.deps.video_id.
-│   │       ├── __init__.py                         # Public interface of the get_video_info tool.
-│   │       └── tool.py                             # VideoMetadata model and the get_video_info tool function.
+│   │   ├── get_video_info/                         # Tool that looks up the current video's metadata via ctx.deps.video_id.
+│   │   │   ├── __init__.py                         # Public interface of the get_video_info tool.
+│   │   │   └── tool.py                             # VideoMetadata model and the get_video_info tool function.
+│   │   └── memories_semantic_search/               # Tool that finds the current video's moments closest in meaning to a query.
+│   │       ├── __init__.py                         # Public interface of the memories_semantic_search tool.
+│   │       ├── result.py                           # MemorySearchHit: one matched moment as the agent receives it.
+│   │       └── tool.py                             # Embeds the query and returns the five nearest memories.
 │   ├── schemas/                                    # The Pydantic contract shared with the Chrome extension.
 │   │   ├── __init__.py                             # Public interface of the schema layer.
 │   │   ├── auth.py                                 # Signup, login and account-info request/response models.
@@ -55,7 +59,7 @@ VidSeek-AI/
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
 │   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
 │   │       ├── chapter_embeddings.py               # Reads a video's chapters and writes their embedding vectors.
-│   │       ├── memory_embeddings.py                # Reads a video's memories (with chapter title) and writes their embeddings.
+│   │       ├── memory_embeddings.py                # Writes a video's memory embeddings and searches them by vector distance.
 │   │       └── migrations/                         # SQL applied by the runner, in filename order.
 │   │           ├── 0001_extensions.sql             # Enables pgcrypto and pgvector.
 │   │           ├── 0002_videos.sql                 # Creates the videos table, its indexes and its updated_at trigger.
@@ -186,7 +190,8 @@ VidSeek-AI/
 │       ├── test_postgres_users.py                  # Users table read/write and duplicate-email tests.
 │       ├── test_postgres_transcript_segments.py    # Transcript segment batching and replacement tests.
 │       ├── test_postgres_comments.py               # Comment batching and replacement tests.
-│       ├── test_postgres_memory_embeddings.py      # Memory embedding read/write and replacement tests.
+│       ├── test_postgres_memory_embeddings.py      # Memory embedding read/write, replacement and nearest-memory search tests.
+│       ├── test_memories_semantic_search.py       # Query embedding, video scoping and hit mapping tests for the search tool.
 │       ├── test_memory_embedding.py                # Embedding text rendering and embed-and-store pipeline tests.
 │       ├── test_postgres_migrations.py             # Migration ordering, one-time application and failure reporting tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.

@@ -1,9 +1,12 @@
 """The `memory_embeddings` table: one vector per memory, for semantic search.
 
-Reading a video's memories for embedding needs each memory's chapter title alongside it,
-which is why `memories_for_video` joins `memories` to `chapters` rather than living as a
-plain memory read; nothing else in the backend reads `memories` on its own yet, so there is
-no separate store module for that table to reuse.
+Both sides of that live here: `memories_for_video` and `replace` fill the table, and
+`nearest_memories` is the search itself, which is what the vectors were ever written for.
+
+Both reads join `memories` to `chapters`, which is why neither lives as a plain memory
+read: embedding a memory needs its chapter's title alongside it, and answering a search
+needs the memory's own text and times. Nothing else in the backend reads `memories` on its
+own yet, so there is no separate store module for that table to reuse.
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0007_embeddings.sql` and
 `migrations/0010_memory_embeddings_video_chapter.sql` applied.
@@ -66,6 +69,28 @@ class MemoryEmbedding:
     dimensions: int
 
 
+@dataclass(frozen=True)
+class MemoryMatch:
+    """One memory a semantic search found, as the caller needs to answer with it.
+
+    Carries no ids. What a search is asked for is what was said and when, and every reader
+    of this so far wants exactly that; a caller that later needs the memory itself can be
+    given the id then, rather than every caller carrying one it never uses.
+
+    `text` is the speech the memory was built from and `summary` is the one line the
+    segmentation model wrote about it. The vector that was searched was built from the
+    summary and the chapter title, not from `text` -- see
+    `backend.services.embeddings.memory_embedding.text` -- so a match is a match on the
+    summary, and `text` is what that summary was summarizing.
+    """
+
+    text: str
+    summary: str
+    chapter_title: str | None
+    start_seconds: float
+    end_seconds: float
+
+
 class PostgresMemoryEmbeddings:
     """The `memory_embeddings` table, as the rest of the backend sees it."""
 
@@ -94,6 +119,47 @@ class PostgresMemoryEmbeddings:
                 chapter_id=str(row["chapter_id"]) if row["chapter_id"] else None,
                 chapter_title=row["chapter_title"],
                 summary=row["summary"],
+            )
+            for row in rows
+        ]
+
+    def nearest_memories(
+        self, video_id: str, embedding: Sequence[float], limit: int
+    ) -> list[MemoryMatch]:
+        """This video's memories whose vectors are closest to `embedding`, nearest first.
+
+        Ordered by cosine distance (`<=>`), which is what all-MiniLM-L6-v2 is trained for
+        and what `backend.services.embeddings` produces vectors for.
+
+        Filtered on `memory_embeddings.video_id` rather than through `memories`, which is
+        the reason 0010_memory_embeddings_video_chapter.sql put that column here: one
+        video's rows are found on its own index instead of joining every row in the table
+        first. The join to `memories` is what supplies the text and times a match is
+        answered with, and the join to `chapters` is left, for the same reason
+        `memories_for_video`'s is -- a memory embedded before the grouping stage ran has no
+        chapter, and it is still a legitimate match.
+
+        `model` is not filtered on. Only one embedding model writes this table today, and a
+        second one arriving is a migration's problem rather than a silent predicate here.
+        """
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                "select m.text as text, m.summary as summary, c.title as chapter_title, "
+                "m.start_seconds as start_seconds, m.end_seconds as end_seconds "
+                f"from public.{TABLE_NAME} e "
+                "join public.memories m on m.id = e.memory_id "
+                "left join public.chapters c on c.id = m.chapter_id "
+                "where e.video_id = %s::uuid "
+                "order by e.embedding <=> %s::vector limit %s",
+                (video_id, list(embedding), limit),
+            ).fetchall()
+        return [
+            MemoryMatch(
+                text=row["text"],
+                summary=row["summary"],
+                chapter_title=row["chapter_title"],
+                start_seconds=float(row["start_seconds"]),
+                end_seconds=float(row["end_seconds"]),
             )
             for row in rows
         ]
