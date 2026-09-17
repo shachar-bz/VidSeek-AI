@@ -70,18 +70,17 @@ second. The third needs the fragment fetches routed through the same gate.
 
 ## 3. Chrome's download folder must match `VIDSEEK_DOWNLOAD_ROOT`
 
-**Status:** open. **Problem:** `background.ts` asks Chrome to save to `VidSeek/<name>`,
+**Status:** closed. **Problem:** `background.ts` asks Chrome to save to `VidSeek/<name>`,
 which Chrome resolves under whatever download folder the profile is configured with. The
 companion accepts local paths only under `VIDSEEK_DOWNLOAD_ROOT`, which defaults to
 `~/Downloads/VidSeek`. These agree only on a default profile. If they disagree, every
-direct download is rejected as "outside VIDSEEK_DOWNLOAD_ROOT".
+direct download was rejected as "outside VIDSEEK_DOWNLOAD_ROOT" with no explanation.
 
-That rejection is no longer silent — `background.ts` now cancels the job and shows `!` on
-the badge — but the message does not explain the mismatch.
-
-**To close:** add a companion endpoint that reports the configured root, have the popup
-compare it against `chrome.downloads` behaviour on first run, and say plainly which two
-paths disagree. `GET /health` already exists and is a natural place to return it.
+**How it was closed:** `GET /health` now reports the job manager's configured
+`download_root`. When the companion rejects a Chrome download, `background.ts` compares
+Chrome's actual save folder (from `chrome.downloads.search`) against that value and stores
+a plain-language explanation of the mismatch, which the popup shows on reopen instead of
+the bare `!` badge (which still appears, as a quick-glance signal).
 
 ---
 

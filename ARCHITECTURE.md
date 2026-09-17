@@ -146,6 +146,7 @@ VidSeek-AI/
 │       ├── test_memory_segmentation.py             # Segment ID rendering, boundary validation and memory construction tests.
 │       ├── test_chapter_grouping.py                # Memory ID rendering, boundary validation and chapter construction tests.
 │       ├── test_web_video_api.py                   # Loopback API authentication tests.
+│       ├── test_health.py                          # /health download-root reporting tests.
 │       ├── test_auth_routes.py                     # Signup, login, /v1/auth/me and logout route tests.
 │       ├── test_web_video_downloader.py            # Download policy and cookie-jar tests.
 │       ├── test_web_video_jobs.py                  # Job lifecycle tests.

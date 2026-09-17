@@ -1,4 +1,4 @@
-import { cancelJob, getJob, reportBrowserDownload, retryWithCapture } from "./api";
+import { cancelJob, getHealth, getJob, reportBrowserDownload, retryWithCapture } from "./api";
 import { classifyMediaUrl, detectManifestDrm, installEmeMonitor, isLicenseTraffic, readEmeMonitor } from "./discovery";
 import type { BrowserCookie, ExtensionMessage, MediaCandidate, StopCaptureResult, TrackedJob } from "./types";
 
@@ -8,8 +8,40 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 
 const TRACKER_KEY = "activeVideoJob";
 const CAPTURE_KEY = "activeCapture";
+const LAST_ERROR_KEY = "lastJobError";
 const POLL_ALARM = "vidseek-job-poll";
 const TERMINAL = new Set(["complete", "partial_success", "cancelled"]);
+
+/** The folder a path sits in, comparing forward and back slashes alike. */
+function parentFolder(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const index = normalized.lastIndexOf("/");
+  return index === -1 ? normalized : normalized.slice(0, index);
+}
+
+/**
+ * When the companion rejects a Chrome download as outside `VIDSEEK_DOWNLOAD_ROOT`, the
+ * generic error says so but not where either side actually points. Comparing Chrome's
+ * real save folder against the companion's configured root turns that into something the
+ * user can act on instead of a bare "!" badge.
+ */
+async function describeDownloadRootMismatch(chromeDownloadPath: string): Promise<string | undefined> {
+  const health = await getHealth().catch(() => undefined);
+  if (!health?.download_root) return undefined;
+  const chromeFolder = parentFolder(chromeDownloadPath);
+  const companionRoot = parentFolder(`${health.download_root}/x`);
+  if (chromeFolder.toLowerCase() === companionRoot.toLowerCase()) return undefined;
+  return (
+    `Chrome saved the download to "${chromeFolder}", but VidSeek expects "${companionRoot}". ` +
+    "Change Chrome's download location (chrome://settings/downloads) or set VIDSEEK_DOWNLOAD_ROOT " +
+    "to match, then try again."
+  );
+}
+
+async function setLastJobError(message: string): Promise<void> {
+  await chrome.storage.session.set({ [LAST_ERROR_KEY]: message });
+  await chrome.action.setTitle({ title: message });
+}
 
 interface CapturedRequest {
   url: string;
@@ -88,9 +120,10 @@ async function cleanupTracker(tracker: TrackedJob): Promise<void> {
     await chrome.permissions.remove({ origins: tracker.grantedOrigins }).catch(() => false);
   }
   await chrome.permissions.remove({ permissions: ["cookies"] }).catch(() => false);
-  await chrome.storage.session.remove(TRACKER_KEY);
+  await chrome.storage.session.remove([TRACKER_KEY, LAST_ERROR_KEY]);
   await chrome.alarms.clear(POLL_ALARM);
   await chrome.action.setBadgeText({ text: "" });
+  await chrome.action.setTitle({ title: "" });
 }
 
 async function pollTrackedJob(): Promise<void> {
@@ -141,11 +174,13 @@ chrome.downloads.onChanged.addListener((delta) => {
     if (!item?.filename) return;
     try {
       await reportBrowserDownload(tracker.token, tracker.jobId, item.filename);
-    } catch {
+    } catch (error) {
       // downloads.onChanged fires once, so there is no second chance to hand the file
       // over. Leaving the job in awaiting_browser_download would strand it silently.
+      const mismatch = await describeDownloadRootMismatch(item.filename);
       await cancelJob(tracker.token, tracker.jobId).catch(() => undefined);
       await cleanupTracker(tracker);
+      await setLastJobError(mismatch || String(error));
       await chrome.action.setBadgeText({ text: "!" });
       return;
     }
@@ -419,12 +454,16 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
       }
       case "GET_TRACKED_JOB": {
         const current = await readCapture();
+        const lastError = (await chrome.storage.session.get(LAST_ERROR_KEY))[LAST_ERROR_KEY] as
+          | string
+          | undefined;
         return {
           ok: true,
           tracker: await readTracker(),
           // A capture with no jobId is a pre-download DRM verification, not a job retry.
           capturing: Boolean(current?.jobId),
-          verifying: Boolean(current) && !current?.jobId
+          verifying: Boolean(current) && !current?.jobId,
+          lastError
         };
       }
       case "CANCEL_TRACKED_JOB": {

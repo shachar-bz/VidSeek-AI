@@ -39,6 +39,15 @@ function describeDetail(detail: unknown): string {
   return "";
 }
 
+export interface CompanionHealth {
+  status: string;
+  download_root: string;
+}
+
+export async function getHealth(): Promise<CompanionHealth> {
+  return companionFetch<CompanionHealth>("/health");
+}
+
 export async function createSession(): Promise<string> {
   const response = await companionFetch<{ token: string }>("/v1/session", { method: "POST" });
   return response.token;

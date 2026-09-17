@@ -598,7 +598,13 @@ function stopPolling(): void {
 }
 
 async function restoreTrackedJob(): Promise<void> {
-  const response = await message<{ ok: boolean; tracker?: TrackedJob; capturing?: boolean; verifying?: boolean }>({
+  const response = await message<{
+    ok: boolean;
+    tracker?: TrackedJob;
+    capturing?: boolean;
+    verifying?: boolean;
+    lastError?: string;
+  }>({
     type: "GET_TRACKED_JOB"
   });
   if (response.verifying) {
@@ -613,7 +619,12 @@ async function restoreTrackedJob(): Promise<void> {
     );
     return;
   }
-  if (!response.tracker) return;
+  if (!response.tracker) {
+    // The job that hit this error is already gone; surface it once so the user knows why,
+    // rather than leaving the badge as the only trace.
+    if (response.lastError) setStatus("Chrome download was rejected", response.lastError);
+    return;
+  }
   capturing = Boolean(response.capturing);
   inspectButton.hidden = true;
   downloadButton.hidden = true;
