@@ -135,6 +135,15 @@ email-validator>=2.0
 sentence-transformers>=3.0
 # --- end shared embeddings module ---
 
+# --- conversation tools module ---
+# Remove this block together with backend/conversation_tools/ if the module is dropped.
+# Pydantic AI provides the tool-calling contract the conversational agent's tools are
+# written against (a typed function plus its docstring becomes a tool's schema and
+# description). No agent lives in this repo yet; this is only the dependency the tools
+# themselves are built with.
+pydantic-ai>=0.0.14
+# --- end conversation tools module ---
+
 # --- azure postgresql module ---
 # Remove this block together with backend/storage/postgres/ if the module is dropped.
 # Everything about a video that is not its bytes: the videos, transcript_segments and

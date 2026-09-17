@@ -36,3 +36,7 @@ class EmailAlreadyRegisteredError(ValueError):
     def __init__(self, email: str):
         super().__init__(f"An account already exists for {email}")
         self.email = email
+
+
+class VideoNotFoundError(KeyError):
+    """No video with the requested id exists."""
