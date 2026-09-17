@@ -141,11 +141,11 @@ them.
 **What each is for:**
 
 - `chapters` — one row per broad section of a video: a title, a summary and a start/end
-  timestamp range, linked to `video_id`. `backend/semantic_processing/chapters/` produces
+  timestamp range, linked to `video_id`. `backend/semantic_segmentation/chapters/` produces
   these and is tested.
 - `memories` — one row per semantic moment within a video: the original text, the model's
   summary and a timestamp range, linked to `video_id` and, once the grouping stage has run,
-  to `chapter_id`. `backend/semantic_processing/memories/` produces these and is tested.
+  to `chapter_id`. `backend/semantic_segmentation/memories/` produces these and is tested.
 
 Neither stage is called from anywhere: `segment_transcript` and `group_memories` appear
 only in their own packages and in the tests.
@@ -156,15 +156,13 @@ trims the tail). Then call them from `backend/services/video_download/video_reco
 after the transcript is written, which is the only place that has both the transcript and
 the `videos.id` the rows hang off.
 
-**The embedding decision is still open.** `memory_embeddings.embedding` and
-`chapter_embeddings.embedding` are declared as bare `vector` with no dimension, which
-pgvector allows but cannot index: a similarity search against them today is a sequential
-scan. Picking the embedding model fixes the dimension, and one migration then does both:
-
-```sql
-alter table public.memory_embeddings alter column embedding type vector(1536);
-create index on public.memory_embeddings using hnsw (embedding vector_cosine_ops);
-```
-
-They are separate tables rather than columns on `memories` and `chapters` for exactly this
-reason — an empty table can be altered freely, a column beside real rows cannot.
+**The embedding model is chosen for memories; `chapter_embeddings` is still open.**
+`memory_embeddings.embedding` is now `vector(384)`, matching the shared all-MiniLM-L6-v2
+model in `backend/services/embeddings/model.py`
+(`0010_memory_embeddings_video_chapter.sql`), and
+`backend/services/embeddings/memory_embedding/` populates it once `memories` and `chapters`
+have rows to read. No ANN index (hnsw or ivfflat) exists on it yet — retrieval and search
+strategy belong to a dedicated semantic search layer, added when one exists, rather than to
+the migration that only stores the vectors. `chapter_embeddings.embedding` is still a bare
+`vector` with no dimension, for the same reason 0007 left both that way: nothing produces a
+chapter embedding yet, and fixing the dimension before something does risks guessing wrong.

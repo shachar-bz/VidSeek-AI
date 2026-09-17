@@ -12,7 +12,9 @@
 -- stage has run, and this row should not disappear when a chapter is later deleted.
 --
 -- The embedding column's dimension was left unfixed in 0007 because no model had been
--- chosen yet. It is fixed here at 384, which is what makes the hnsw index below possible.
+-- chosen yet. It is fixed here at 384, matching the shared all-MiniLM-L6-v2 model. No ANN
+-- index (hnsw or ivfflat) is created on it: retrieval and search strategy belong to a
+-- dedicated semantic search layer, not to the migration that only stores the vectors.
 
 alter table public.memory_embeddings
     add column if not exists video_id uuid references public.videos (id) on delete cascade,
@@ -30,5 +32,3 @@ alter table public.memory_embeddings alter column embedding type vector(384);
 
 create index if not exists memory_embeddings_video_idx on public.memory_embeddings (video_id);
 create index if not exists memory_embeddings_chapter_idx on public.memory_embeddings (chapter_id);
-create index if not exists memory_embeddings_embedding_idx
-    on public.memory_embeddings using hnsw (embedding vector_cosine_ops);
