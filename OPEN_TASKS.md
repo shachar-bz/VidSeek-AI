@@ -68,23 +68,7 @@ second. The third needs the fragment fetches routed through the same gate.
 
 ---
 
-## 3. Chrome's download folder must match `VIDSEEK_DOWNLOAD_ROOT`
-
-**Status:** closed. **Problem:** `background.ts` asks Chrome to save to `VidSeek/<name>`,
-which Chrome resolves under whatever download folder the profile is configured with. The
-companion accepts local paths only under `VIDSEEK_DOWNLOAD_ROOT`, which defaults to
-`~/Downloads/VidSeek`. These agree only on a default profile. If they disagree, every
-direct download was rejected as "outside VIDSEEK_DOWNLOAD_ROOT" with no explanation.
-
-**How it was closed:** `GET /health` now reports the job manager's configured
-`download_root`. When the companion rejects a Chrome download, `background.ts` compares
-Chrome's actual save folder (from `chrome.downloads.search`) against that value and stores
-a plain-language explanation of the mismatch, which the popup shows on reopen instead of
-the bare `!` badge (which still appears, as a quick-glance signal).
-
----
-
-## 4. Jobs are never evicted
+## 3. Jobs are never evicted
 
 **Status:** open, low priority. **Problem:** `JobManager._jobs` only grows. A failed job
 that is still capture-eligible keeps its caption text (up to 50 × 2 MB) so the retry has
@@ -95,7 +79,7 @@ the companion clears everything today, which is why this has not bitten anyone.
 
 ---
 
-## 5. Firecrawl's containment check may reject valid transcripts
+## 4. Firecrawl's containment check may reject valid transcripts
 
 **Status:** unverified. **Problem:** `scrape_public_page_transcript` accepts the extracted
 transcript only if it appears verbatim inside the returned markdown. With
@@ -110,7 +94,7 @@ transcript being persisted as fact, so it should be loosened, not removed.
 
 ---
 
-## 6. `discoverPage` has no automated test
+## 5. `discoverPage` has no automated test
 
 **Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers
 `classifyMediaUrl`, `originPatterns` and `chooseDirectCandidate`, but not `discoverPage`
@@ -128,7 +112,7 @@ scope — so a test also guards against the two copies drifting apart.
 
 ---
 
-## 7. A missing FFmpeg can yield a silent video
+## 6. A missing FFmpeg can yield a silent video
 
 **Status:** partly handled. **Problem:** `_download_options` sets
 `merge_output_format: "mp4/mkv"` with `no_warnings: True`. If ffmpeg is absent, yt-dlp
@@ -146,7 +130,7 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 8. Nothing writes the chapters and memories tables
+## 7. Nothing writes the chapters and memories tables
 
 **Status:** the schema exists, the writers do not. `0005_chapters.sql`,
 `0006_memories.sql` and `0007_embeddings.sql` created `chapters`, `memories`,
