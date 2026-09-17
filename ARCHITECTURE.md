@@ -22,7 +22,9 @@ VidSeek-AI/
 │   ├── conversation_tools/                         # Pydantic AI tools the conversational agent calls while talking about a video.
 │   │   ├── __init__.py                             # Public interface of the conversation tools package.
 │   │   ├── deps.py                                 # ConversationDeps: per-run state injected into every tool's RunContext.
-│   │   └── get_video_metadata.py                   # Tool that looks up the current video's metadata via ctx.deps.video_id.
+│   │   └── get_video_info/                         # Tool that looks up the current video's metadata via ctx.deps.video_id.
+│   │       ├── __init__.py                         # Public interface of the get_video_info tool.
+│   │       └── tool.py                             # VideoMetadata model and the get_video_info tool function.
 │   ├── schemas/                                    # The Pydantic contract shared with the Chrome extension.
 │   │   ├── __init__.py                             # Public interface of the schema layer.
 │   │   ├── auth.py                                 # Signup, login and account-info request/response models.

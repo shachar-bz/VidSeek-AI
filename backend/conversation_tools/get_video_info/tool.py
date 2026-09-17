@@ -8,7 +8,7 @@ from pydantic_ai import RunContext
 from backend.core.errors import VideoNotFoundError
 from backend.storage.postgres import PostgresVideoRecords
 
-from .deps import ConversationDeps
+from ..deps import ConversationDeps
 
 
 class VideoMetadata(BaseModel):
@@ -20,7 +20,7 @@ class VideoMetadata(BaseModel):
     transcript_language: str | None
 
 
-def get_video_metadata(ctx: RunContext[ConversationDeps]) -> VideoMetadata:
+def get_video_info(ctx: RunContext[ConversationDeps]) -> VideoMetadata:
     """Look up the current video's metadata.
 
     Call this whenever you need the video's source URL, title, or transcript
