@@ -35,6 +35,7 @@ const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
 
 const appElement = document.querySelector<HTMLElement>("#app")!;
 const authScreenElement = document.querySelector<HTMLElement>("#auth")!;
+const authTextureContainer = document.querySelector<HTMLDivElement>("#auth-texture")!;
 const authTextureElement = document.querySelector<HTMLPreElement>("#auth-texture-art")!;
 const authWelcomeElement = document.querySelector<HTMLDivElement>("#auth-welcome")!;
 const authStatusElement = document.querySelector<HTMLParagraphElement>("#auth-status")!;
@@ -61,9 +62,38 @@ function setStatus(message: string, details = ""): void {
 
 const AUTH_STORAGE_KEY = "vidseekAuth";
 
-// Wide and tall enough to cover the screen at the backdrop's 6px type, plus the inset the
-// stylesheet gives it to drift inside. Anything past the edges is simply clipped.
-const AUTH_TEXTURE_SHAPE = { columns: 100, rows: 70 };
+// The panel is user-resizable (Chrome side panel, not a fixed popup), so the backdrop is
+// sized in JS from the container's actual box rather than a fixed column/row count baked
+// into the stylesheet — it has to fill whatever width/height Chrome gives it.
+let authTextureCharSize: { width: number; height: number } | undefined;
+
+/** Renders one probe character offscreen, in the backdrop's own font, to size a grid cell. */
+function measureAuthTextureCharSize(): { width: number; height: number } {
+  const probeLength = 20;
+  const probe = document.createElement("span");
+  probe.textContent = "#".repeat(probeLength);
+  probe.style.position = "fixed";
+  probe.style.visibility = "hidden";
+  probe.style.whiteSpace = "pre";
+  const style = getComputedStyle(authTextureElement);
+  probe.style.font = style.font;
+  probe.style.letterSpacing = style.letterSpacing;
+  document.body.appendChild(probe);
+  const width = probe.getBoundingClientRect().width / probeLength;
+  probe.remove();
+  const height = parseFloat(style.lineHeight);
+  return { width, height };
+}
+
+/** Redraws the backdrop to exactly cover the current size of its container. */
+function renderAuthTexture(): void {
+  const { width: containerWidth, height: containerHeight } = authTextureContainer.getBoundingClientRect();
+  if (containerWidth === 0 || containerHeight === 0) return;
+  authTextureCharSize ??= measureAuthTextureCharSize();
+  const columns = Math.ceil(containerWidth / authTextureCharSize.width);
+  const rows = Math.ceil(containerHeight / authTextureCharSize.height);
+  authTextureElement.textContent = textureBlock({ columns, rows });
+}
 
 let authSession: AuthSession | undefined;
 let authMode: "login" | "signup" = "login";
@@ -84,6 +114,7 @@ function renderAuth(): void {
   const signedIn = Boolean(authSession);
   authScreenElement.hidden = signedIn;
   appElement.hidden = !signedIn;
+  if (!signedIn) renderAuthTexture();
   if (authSession) {
     authStatusElement.textContent = `Signed in as ${authSession.user.display_name || authSession.user.email}`;
     return;
@@ -665,5 +696,13 @@ authBackButton.addEventListener("click", () => {
 authFormElement.addEventListener("submit", (event) => void handleAuthSubmit(event));
 authLogoutButton.addEventListener("click", () => void handleAuthLogout());
 
-authTextureElement.textContent = textureBlock(AUTH_TEXTURE_SHAPE);
+// Chrome lets the side panel be resized while it's open, so the backdrop is redrawn
+// whenever the panel's own box changes rather than only once at load.
+let authTextureResizeFrame: number | undefined;
+new ResizeObserver(() => {
+  if (authScreenElement.hidden) return;
+  if (authTextureResizeFrame !== undefined) cancelAnimationFrame(authTextureResizeFrame);
+  authTextureResizeFrame = requestAnimationFrame(renderAuthTexture);
+}).observe(authScreenElement);
+
 void restoreAuthState();
