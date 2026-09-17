@@ -4,9 +4,10 @@ This is the layer that outlives one machine, or is meant to. `blob` holds the vi
 themselves in an Azure Blob Storage container. `postgres` holds what describes them, in one
 Azure Database for PostgreSQL server: `videos`, one row per stored blob, with
 `transcript_segments` and `comments` hanging off it (the latter only ever populated for
-YouTube videos), and `memories`, `chapters` and their embedding tables waiting for something
-to produce them. The split between the two is the obvious one: bytes in Blob Storage,
-everything else in Postgres, joined by `videos.blob_name`.
+YouTube videos), and `memories`, `chapters` and `chapter_embeddings` still waiting for
+something to produce them -- `memory_embeddings` is the first of the four with a writer,
+`backend.services.embeddings.memory_embedding`. The split between the two is the obvious
+one: bytes in Blob Storage, everything else in Postgres, joined by `videos.blob_name`.
 
 Both are reached remotely. Nothing in this project is deployed to Azure — the backend is
 still the loopback companion — so these two connection strings are the whole of what makes a

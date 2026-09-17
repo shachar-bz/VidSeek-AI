@@ -48,6 +48,7 @@ VidSeek-AI/
 │   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
 │   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
+│   │       ├── memory_embeddings.py                # Reads a video's memories (with chapter title) and writes their embeddings.
 │   │       └── migrations/                         # SQL applied by the runner, in filename order.
 │   │           ├── 0001_extensions.sql             # Enables pgcrypto and pgvector.
 │   │           ├── 0002_videos.sql                 # Creates the videos table, its indexes and its updated_at trigger.
@@ -57,7 +58,8 @@ VidSeek-AI/
 │   │           ├── 0006_memories.sql               # Creates the memories table linked to a video and a chapter.
 │   │           ├── 0007_embeddings.sql             # Creates the memory_embeddings and chapter_embeddings tables.
 │   │           ├── 0008_users.sql                  # Creates the users table, its email index and its updated_at trigger.
-│   │           └── 0009_videos_user_id.sql         # Adds videos.user_id, linking a video to the account that requested it.
+│   │           ├── 0009_videos_user_id.sql         # Adds videos.user_id, linking a video to the account that requested it.
+│   │           └── 0010_memory_embeddings_video_chapter.sql  # Adds memory_embeddings.video_id/chapter_id and fixes its vector dimension.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -94,7 +96,11 @@ VidSeek-AI/
 │   │   │   └── formatting.py                       # Renders segments as the `[MM:SS-MM:SS] text` transcript.
 │   │   ├── embeddings/                             # Shared sentence-transformers embedding model, loaded once per process.
 │   │   │   ├── __init__.py                         # Public interface of the shared embeddings module.
-│   │   │   └── model.py                            # Loads and caches the all-MiniLM-L6-v2 model; embeds text into vectors.
+│   │   │   ├── model.py                            # Loads and caches the all-MiniLM-L6-v2 model; embeds text into vectors.
+│   │   │   └── memory_embedding/                   # Embeds a video's memories and stores the vectors in memory_embeddings.
+│   │   │       ├── __init__.py                     # Public interface of the memory embedding pipeline.
+│   │   │       ├── text.py                         # Renders a memory's chapter title and summary as embeddable text.
+│   │   │       └── pipeline.py                     # Reads a video's memories, embeds each one and stores the result.
 │   │   ├── shot_detection/                         # Shot boundary detection services.
 │   │   │   ├── __init__.py                         # Groups the shot detection services.
 │   │   │   ├── omni/                               # Shot boundary detection over a video file, on a GPU.
@@ -125,8 +131,8 @@ VidSeek-AI/
 │   │           ├── transcript.py                   # Transcript data model: caption segments or a wrapped ElevenLabs result.
 │   │           ├── pipeline.py                     # Downloads a video, its transcript and its top comments, falling back to ElevenLabs.
 │   │           └── downloads/                      # Local output folder for CLI downloads (gitignored).
-│   ├── semantic_processing/                        # What a transcript becomes once transcription is done.
-│   │   ├── __init__.py                             # Public interface of the semantic processing package.
+│   ├── semantic_segmentation/                       # What a transcript becomes once transcription is done.
+│   │   ├── __init__.py                             # Public interface of the semantic segmentation package.
 │   │   ├── chapters/                               # Pipeline stage three: semantic memories grouped into higher-level chapters by an LLM.
 │   │   │   ├── __init__.py                         # Public interface of the chapter grouping stage.
 │   │   │   ├── prompt.py                           # The grouping instruction sent to the model, as a docstring.
@@ -168,6 +174,8 @@ VidSeek-AI/
 │       ├── test_postgres_users.py                  # Users table read/write and duplicate-email tests.
 │       ├── test_postgres_transcript_segments.py    # Transcript segment batching and replacement tests.
 │       ├── test_postgres_comments.py               # Comment batching and replacement tests.
+│       ├── test_postgres_memory_embeddings.py      # Memory embedding read/write and replacement tests.
+│       ├── test_memory_embedding.py                # Embedding text rendering and embed-and-store pipeline tests.
 │       ├── test_postgres_migrations.py             # Migration ordering, one-time application and failure reporting tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
 ├── chrome-extension/                               # Internal Manifest V3 video download extension.

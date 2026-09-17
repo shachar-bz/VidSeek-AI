@@ -8,14 +8,18 @@ the runner two copies of its own module-level state. Import it by its full path 
 
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
+from .memory_embeddings import MemoryEmbedding, MemoryForEmbedding, PostgresMemoryEmbeddings
 from .settings import PostgresSettings, is_postgres_configured, load_postgres_settings
 from .transcript_segments import PostgresTranscriptSegments
 from .users import NewUser, PostgresUsers, StoredUser
 from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
 
 __all__ = [
+    "MemoryEmbedding",
+    "MemoryForEmbedding",
     "NewUser",
     "PostgresComments",
+    "PostgresMemoryEmbeddings",
     "PostgresSettings",
     "PostgresTranscriptSegments",
     "PostgresUsers",
