@@ -15,7 +15,7 @@ at the wrong part of the video. No test here reaches the network.
 
 import pytest
 
-from backend.semantic_processing.memories import (
+from backend.semantic_segmentation.memories import (
     MemoryBoundary,
     MemorySegmentationError,
     SegmentIndex,
