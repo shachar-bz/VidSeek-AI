@@ -4,13 +4,22 @@
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
+/* The extension runs as a Chrome side panel, not a fixed-size popup: fill whatever
+   width/height Chrome gives the panel (the user can resize it) instead of a fixed width. */
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  width: 340px;
 }
 
 main {
+  box-sizing: border-box;
+  height: 100%;
   padding: 18px;
+  overflow-y: auto;
 }
 
 h1 {
@@ -112,7 +121,8 @@ button:disabled {
 #auth {
   position: relative;
   overflow: hidden;
-  min-height: 520px;
+  box-sizing: border-box;
+  height: 100%;
   color: #1c1c1b;
   background: #f4f4f2;
   /* OpenAI Sans is not redistributable, so it is not bundled here: this picks it up on a
@@ -164,8 +174,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 520px;
-  padding: 0 14px;
+  height: 100%;
+  padding: 32px 14px;
 }
 
 /* `display` above would otherwise beat the hidden attribute, and both panels would show. */
@@ -174,8 +184,14 @@ button:disabled {
 }
 
 .auth-brand {
-  margin-top: 216px;
   text-align: center;
+}
+
+/* The welcome panel has no other content to anchor to, so its brand/actions pair is
+   centered with a pair of auto margins: that splits whatever height the panel gets
+   evenly above the brand and between the brand and the actions, at any panel size. */
+#auth-welcome .auth-brand {
+  margin-top: auto;
 }
 
 .auth-title {
@@ -199,8 +215,11 @@ button:disabled {
   flex-direction: column;
   gap: 9px;
   width: 130px;
+}
+
+#auth-welcome .auth-actions {
   margin-top: auto;
-  margin-bottom: 70px;
+  margin-bottom: 40px;
 }
 
 #auth .auth-pill {
@@ -243,8 +262,16 @@ button:disabled {
   cursor: pointer;
 }
 
+/* Unlike the welcome panel, the form has fields and actions stacked below the brand, so
+   it keeps a proportional (not auto-centered) top offset and lets the rest of the height
+   fall below the submit/back actions instead of pinning them to the bottom. */
 #auth-form .auth-brand {
-  margin-top: 116px;
+  margin-top: 12vh;
+}
+
+#auth-form .auth-actions {
+  margin-top: 22px;
+  margin-bottom: auto;
 }
 
 .auth-fields {

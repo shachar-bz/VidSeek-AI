@@ -5,8 +5,10 @@
   "version": "1.0.0",
   "minimum_chrome_version": "120",
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Download with VidSeek"
+    "default_title": "Open VidSeek"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "background": {
     "service_worker": "background.js",
@@ -18,6 +20,7 @@
     "debugger",
     "downloads",
     "scripting",
+    "sidePanel",
     "storage"
   ],
   "optional_permissions": ["cookies"],

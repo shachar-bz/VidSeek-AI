@@ -2,6 +2,10 @@ import { cancelJob, getJob, reportBrowserDownload, retryWithCapture } from "./ap
 import { classifyMediaUrl, detectManifestDrm, installEmeMonitor, isLicenseTraffic, readEmeMonitor } from "./discovery";
 import type { BrowserCookie, ExtensionMessage, MediaCandidate, StopCaptureResult, TrackedJob } from "./types";
 
+// Makes the action button open the side panel directly, matching a normal popup's click
+// behavior instead of requiring the user to right-click and pick "Open side panel".
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
+
 const TRACKER_KEY = "activeVideoJob";
 const CAPTURE_KEY = "activeCapture";
 const POLL_ALARM = "vidseek-job-poll";
