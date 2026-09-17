@@ -48,6 +48,7 @@ VidSeek-AI/
 │   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
 │   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
+│   │       ├── chapter_embeddings.py               # Reads a video's chapters and writes their embedding vectors.
 │   │       └── migrations/                         # SQL applied by the runner, in filename order.
 │   │           ├── 0001_extensions.sql             # Enables pgcrypto and pgvector.
 │   │           ├── 0002_videos.sql                 # Creates the videos table, its indexes and its updated_at trigger.
@@ -57,7 +58,8 @@ VidSeek-AI/
 │   │           ├── 0006_memories.sql               # Creates the memories table linked to a video and a chapter.
 │   │           ├── 0007_embeddings.sql             # Creates the memory_embeddings and chapter_embeddings tables.
 │   │           ├── 0008_users.sql                  # Creates the users table, its email index and its updated_at trigger.
-│   │           └── 0009_videos_user_id.sql         # Adds videos.user_id, linking a video to the account that requested it.
+│   │           ├── 0009_videos_user_id.sql         # Adds videos.user_id, linking a video to the account that requested it.
+│   │           └── 0011_chapter_embeddings_video_times.sql  # Adds video_id/start/end to chapter_embeddings and fixes its vector dimension.
 │   ├── services/                                   # Business logic, grouped by domain; imports no web framework.
 │   │   ├── __init__.py                             # Public interface of the service layer.
 │   │   ├── transcription/                          # Speech-to-text services.
@@ -94,7 +96,11 @@ VidSeek-AI/
 │   │   │   └── formatting.py                       # Renders segments as the `[MM:SS-MM:SS] text` transcript.
 │   │   ├── embeddings/                             # Shared sentence-transformers embedding model, loaded once per process.
 │   │   │   ├── __init__.py                         # Public interface of the shared embeddings module.
-│   │   │   └── model.py                            # Loads and caches the all-MiniLM-L6-v2 model; embeds text into vectors.
+│   │   │   ├── model.py                            # Loads and caches the all-MiniLM-L6-v2 model; embeds text into vectors.
+│   │   │   └── chapter_embedding/                  # Embeds a video's chapters and stores the vectors in chapter_embeddings.
+│   │   │       ├── __init__.py                     # Public interface of the chapter embedding pipeline.
+│   │   │       ├── text.py                         # Renders a chapter's title and summary as the text passed to embed_text.
+│   │   │       └── pipeline.py                     # Reads a video's chapters, embeds each and writes the vectors back.
 │   │   ├── shot_detection/                         # Shot boundary detection services.
 │   │   │   ├── __init__.py                         # Groups the shot detection services.
 │   │   │   ├── omni/                               # Shot boundary detection over a video file, on a GPU.
