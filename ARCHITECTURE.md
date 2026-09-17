@@ -92,6 +92,9 @@ VidSeek-AI/
 │   │   │   ├── transcript.py                       # Normalized transcript data model: ordered segments and their timing fidelity.
 │   │   │   ├── normalizer.py                       # Gathers a source's timed words or caption cues into readable segments.
 │   │   │   └── formatting.py                       # Renders segments as the `[MM:SS-MM:SS] text` transcript.
+│   │   ├── embeddings/                             # Shared sentence-transformers embedding model, loaded once per process.
+│   │   │   ├── __init__.py                         # Public interface of the shared embeddings module.
+│   │   │   └── model.py                            # Loads and caches the all-MiniLM-L6-v2 model; embeds text into vectors.
 │   │   ├── shot_detection/                         # Shot boundary detection services.
 │   │   │   ├── __init__.py                         # Groups the shot detection services.
 │   │   │   ├── omni/                               # Shot boundary detection over a video file, on a GPU.
