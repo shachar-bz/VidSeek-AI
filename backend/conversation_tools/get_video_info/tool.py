@@ -32,7 +32,7 @@ def get_video_info(ctx: RunContext[ConversationDeps]) -> VideoMetadata:
     Raises:
         VideoNotFoundError: No video exists with the current video id.
     """
-    stored = PostgresVideoRecords().get_by_id(ctx.deps.video_id)
+    stored = PostgresVideoRecords(ctx.deps.pool).get_by_id(ctx.deps.video_id)
     if stored is None:
         raise VideoNotFoundError(ctx.deps.video_id)
     return VideoMetadata(

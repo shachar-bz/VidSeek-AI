@@ -140,3 +140,73 @@ def test_deleting_embeddings_is_scoped_to_one_video() -> None:
 
     assert pool.statements[0] == f"delete from public.{TABLE_NAME} where video_id = %s::uuid"
     assert pool.recorded[0].parameters == (VIDEO_ID,)
+
+
+MATCH_ROWS = [
+    {
+        "text": "and that is why the alignment step runs before transcription is stored",
+        "summary": "Explains why alignment precedes storage.",
+        "chapter_title": "The transcription pipeline",
+        "start_seconds": 12.5,
+        "end_seconds": 31.0,
+    },
+    {
+        "text": "the second thing worth knowing about embeddings",
+        "summary": "Introduces embeddings.",
+        "chapter_title": None,
+        "start_seconds": 44.0,
+        "end_seconds": 58.25,
+    },
+]
+
+QUERY_VECTOR = [0.7, 0.8, 0.9]
+
+
+def test_search_orders_by_cosine_distance_and_filters_to_the_one_video() -> None:
+    store, pool = _store(MATCH_ROWS)
+    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+
+    statement = pool.statements[0]
+    assert "e.embedding <=> %s::vector" in statement
+    assert "where e.video_id = %s::uuid" in statement
+    assert pool.recorded[0].parameters == (VIDEO_ID, QUERY_VECTOR, 5)
+
+
+def test_search_reaches_the_video_through_the_embeddings_table_not_through_memories() -> None:
+    """The video filter is on `memory_embeddings.video_id`, which 0010 denormalized onto it
+    for exactly this: filtering through `memories` instead would join the whole table first.
+    """
+    store, pool = _store(MATCH_ROWS)
+    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+
+    statement = pool.statements[0]
+    assert "m.video_id" not in statement
+    assert "join public.memories m on m.id = e.memory_id" in statement
+
+
+def test_search_keeps_a_memory_that_was_never_grouped_into_a_chapter() -> None:
+    """A memory embedded before the chapter-grouping stage ran still matches, so the
+    chapter join is a left one and its title comes back as None rather than dropping the row.
+    """
+    store, pool = _store(MATCH_ROWS)
+    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+
+    assert "left join public.chapters" in pool.statements[0]
+    assert [match.chapter_title for match in matches] == ["The transcription pipeline", None]
+
+
+def test_search_answers_with_what_was_said_and_when() -> None:
+    store, _ = _store(MATCH_ROWS)
+    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+
+    assert len(matches) == len(MATCH_ROWS)
+    first = matches[0]
+    assert first.text == MATCH_ROWS[0]["text"]
+    assert first.summary == MATCH_ROWS[0]["summary"]
+    assert (first.start_seconds, first.end_seconds) == (12.5, 31.0)
+
+
+def test_search_of_a_video_with_nothing_embedded_returns_no_matches() -> None:
+    store, _ = _store([])
+
+    assert store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5) == []
