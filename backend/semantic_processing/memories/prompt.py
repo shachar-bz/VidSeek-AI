@@ -36,7 +36,7 @@ def memory_segmentation_prompt() -> str:
 
     * `start_segment_id`: the first transcript segment belonging to the memory
     * `end_segment_id`: the last transcript segment belonging to the memory
-    * `summary`: a short description of what happens or is discussed
+    * `summary`: a description of what happens or is discussed
 
     """
     return inspect.cleandoc(memory_segmentation_prompt.__doc__)
