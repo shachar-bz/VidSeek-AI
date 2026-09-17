@@ -169,6 +169,14 @@ class PostgresVideoRecords:
             ).fetchone()
         return StoredVideoRecord.from_row(row) if row else None
 
+    def get_by_id(self, video_id: str) -> StoredVideoRecord | None:
+        """The video with this id, or None if nothing describes it."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"select * from public.{TABLE_NAME} where id = %s::uuid", (video_id,)
+            ).fetchone()
+        return StoredVideoRecord.from_row(row) if row else None
+
     def find_by_source_url(self, source_url: str) -> list[StoredVideoRecord]:
         """Every video taken from one page, newest first.
 
