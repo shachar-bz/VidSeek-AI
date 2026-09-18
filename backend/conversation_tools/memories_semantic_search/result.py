@@ -14,11 +14,16 @@ from pydantic import BaseModel, Field
 class MemorySearchHit(BaseModel):
     """One moment of the video whose meaning is close to what was searched for."""
 
-    text: str = Field(description="What was actually said during this moment.")
-    summary: str = Field(description="One line describing what this moment is about.")
+    memory_id: str = Field(description="The id of the memory this moment is stored as.")
+    chapter_id: str | None = Field(
+        default=None,
+        description="The id of the chapter this moment belongs to, if it has one.",
+    )
     chapter_title: str | None = Field(
         default=None,
         description="The title of the chapter this moment belongs to, if it has one.",
     )
+    summary: str = Field(description="One line describing what this moment is about.")
+    text: str = Field(description="What was actually said during this moment.")
     start_seconds: float = Field(description="When this moment starts, in seconds from the beginning of the video.")
     end_seconds: float = Field(description="When this moment ends, in seconds from the beginning of the video.")

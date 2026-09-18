@@ -9,9 +9,14 @@ from backend.conversation_tools.memories_semantic_search import tool as tool_mod
 from backend.tests.fake_postgres import FakePool
 
 VIDEO_ID = "11111111-2222-3333-4444-555555555555"
+MEMORY_ID_1 = "aaaaaaaa-1111-1111-1111-111111111111"
+MEMORY_ID_2 = "bbbbbbbb-2222-2222-2222-222222222222"
+CHAPTER_ID = "66666666-7777-8888-9999-000000000000"
 
 ROWS = [
     {
+        "memory_id": MEMORY_ID_1,
+        "chapter_id": CHAPTER_ID,
         "text": "the aligner needs the audio at sixteen kilohertz, mono",
         "summary": "States the aligner's audio format.",
         "chapter_title": "Word alignment",
@@ -19,6 +24,8 @@ ROWS = [
         "end_seconds": 104.5,
     },
     {
+        "memory_id": MEMORY_ID_2,
+        "chapter_id": None,
         "text": "and we cache the checkpoint so it only downloads once",
         "summary": "Notes the checkpoint is cached.",
         "chapter_title": None,
@@ -85,16 +92,19 @@ def test_a_hit_carries_what_was_said_and_when(embedded_queries) -> None:
     hits, _ = _search("mono audio", ROWS)
 
     assert len(hits) == len(ROWS)
+    assert hits[0].memory_id == MEMORY_ID_1
+    assert hits[0].chapter_id == CHAPTER_ID
     assert hits[0].text == ROWS[0]["text"]
     assert hits[0].summary == ROWS[0]["summary"]
     assert hits[0].chapter_title == "Word alignment"
     assert (hits[0].start_seconds, hits[0].end_seconds) == (90.0, 104.5)
 
 
-def test_a_hit_from_an_ungrouped_memory_has_no_chapter_title(embedded_queries) -> None:
+def test_a_hit_from_an_ungrouped_memory_has_no_chapter_title_or_id(embedded_queries) -> None:
     hits, _ = _search("checkpoint caching", ROWS)
 
     assert hits[1].chapter_title is None
+    assert hits[1].chapter_id is None
 
 
 def test_a_video_with_nothing_embedded_yields_no_hits_rather_than_an_error(embedded_queries) -> None:

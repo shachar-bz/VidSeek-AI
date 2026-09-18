@@ -27,16 +27,19 @@ def memories_semantic_search(ctx: RunContext[ConversationDeps], query: str) -> l
         query: What to look for, in natural language.
 
     Returns:
-        Up to five moments, closest first, each with what was said and when it was said.
-        Empty when the video has no searchable content.
+        Up to five moments, closest first, each with what was said, when it was said, and
+        the ids of the memory and chapter it belongs to. Empty when the video has no
+        searchable content.
     """
     store = PostgresMemoryEmbeddings(ctx.deps.pool)
     matches = store.nearest_memories(ctx.deps.video_id, embed_text(query), TOP_K)
     return [
         MemorySearchHit(
-            text=match.text,
-            summary=match.summary,
+            memory_id=match.memory_id,
+            chapter_id=match.chapter_id,
             chapter_title=match.chapter_title,
+            summary=match.summary,
+            text=match.text,
             start_seconds=match.start_seconds,
             end_seconds=match.end_seconds,
         )

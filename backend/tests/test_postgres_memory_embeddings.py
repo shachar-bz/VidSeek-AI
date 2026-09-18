@@ -147,6 +147,8 @@ def test_deleting_embeddings_is_scoped_to_one_video() -> None:
 
 MATCH_ROWS = [
     {
+        "memory_id": MEMORY_ID_1,
+        "chapter_id": CHAPTER_ID,
         "text": "and that is why the alignment step runs before transcription is stored",
         "summary": "Explains why alignment precedes storage.",
         "chapter_title": "The transcription pipeline",
@@ -154,6 +156,8 @@ MATCH_ROWS = [
         "end_seconds": 31.0,
     },
     {
+        "memory_id": MEMORY_ID_2,
+        "chapter_id": None,
         "text": "the second thing worth knowing about embeddings",
         "summary": "Introduces embeddings.",
         "chapter_title": None,
@@ -204,9 +208,18 @@ def test_search_answers_with_what_was_said_and_when() -> None:
 
     assert len(matches) == len(MATCH_ROWS)
     first = matches[0]
+    assert first.memory_id == MEMORY_ID_1
+    assert first.chapter_id == CHAPTER_ID
     assert first.text == MATCH_ROWS[0]["text"]
     assert first.summary == MATCH_ROWS[0]["summary"]
     assert (first.start_seconds, first.end_seconds) == (12.5, 31.0)
+
+
+def test_search_leaves_the_chapter_id_none_when_ungrouped() -> None:
+    store, _ = _store(MATCH_ROWS)
+    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+
+    assert matches[1].chapter_id is None
 
 
 def test_search_of_a_video_with_nothing_embedded_returns_no_matches() -> None:
