@@ -24,7 +24,7 @@ class MemoryBoundary(BaseModel):
     end_segment_id: str = Field(
         description="The ID of the last transcript segment belonging to the memory."
     )
-    summary: str = Field(description="A short description of what happens or is discussed.")
+    summary: str = Field(description="A concise description of what happens or is discussed.")
 
 
 class TranscriptMemoryBoundaries(BaseModel):
