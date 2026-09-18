@@ -22,6 +22,10 @@ VidSeek-AI/
 │   ├── conversation_tools/                         # Pydantic AI tools the conversational agent calls while talking about a video.
 │   │   ├── __init__.py                             # Public interface of the conversation tools package.
 │   │   ├── deps.py                                 # ConversationDeps: per-run state injected into every tool's RunContext.
+│   │   ├── get_chapter_context/                    # Tool that reads one whole chapter of the current video.
+│   │   │   ├── __init__.py                         # Public interface of the get_chapter_context tool.
+│   │   │   ├── result.py                           # ChapterContext and ChapterMemory: a chapter as the agent receives it.
+│   │   │   └── tool.py                             # Reads the chapter and its memories, raising when this video has no such chapter.
 │   │   ├── get_video_info/                         # Tool that looks up the current video's metadata via ctx.deps.video_id.
 │   │   │   ├── __init__.py                         # Public interface of the get_video_info tool.
 │   │   │   └── tool.py                             # VideoMetadata model and the get_video_info tool function.
@@ -58,6 +62,7 @@ VidSeek-AI/
 │   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
 │   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
+│   │       ├── chapters.py                         # Reads one chapter of a video together with the memories grouped into it.
 │   │       ├── chapter_embeddings.py               # Reads a video's chapters and writes their embedding vectors.
 │   │       ├── memory_embeddings.py                # Writes a video's memory embeddings and searches them by vector distance.
 │   │       └── migrations/                         # SQL applied by the runner, in filename order.
@@ -191,7 +196,9 @@ VidSeek-AI/
 │       ├── test_postgres_transcript_segments.py    # Transcript segment batching and replacement tests.
 │       ├── test_postgres_comments.py               # Comment batching and replacement tests.
 │       ├── test_postgres_memory_embeddings.py      # Memory embedding read/write, replacement and nearest-memory search tests.
+│       ├── test_postgres_chapters.py               # Chapter and memory read, video scoping and empty chapter tests.
 │       ├── test_memories_semantic_search.py       # Query embedding, video scoping and hit mapping tests for the search tool.
+│       ├── test_get_chapter_context.py             # Video scoping, memory ordering and missing chapter tests for the chapter tool.
 │       ├── test_memory_embedding.py                # Embedding text rendering and embed-and-store pipeline tests.
 │       ├── test_postgres_migrations.py             # Migration ordering, one-time application and failure reporting tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
