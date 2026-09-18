@@ -37,9 +37,9 @@ def memories_semantic_search(ctx: RunContext[ConversationDeps], query: str) -> l
         MemorySearchHit(
             memory_id=match.memory_id,
             chapter_id=match.chapter_id,
-            text=match.text,
-            summary=match.summary,
             chapter_title=match.chapter_title,
+            summary=match.summary,
+            text=match.text,
             start_seconds=match.start_seconds,
             end_seconds=match.end_seconds,
         )

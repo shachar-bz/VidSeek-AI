@@ -19,11 +19,11 @@ class MemorySearchHit(BaseModel):
         default=None,
         description="The id of the chapter this moment belongs to, if it has one.",
     )
-    text: str = Field(description="What was actually said during this moment.")
-    summary: str = Field(description="One line describing what this moment is about.")
     chapter_title: str | None = Field(
         default=None,
         description="The title of the chapter this moment belongs to, if it has one.",
     )
+    summary: str = Field(description="One line describing what this moment is about.")
+    text: str = Field(description="What was actually said during this moment.")
     start_seconds: float = Field(description="When this moment starts, in seconds from the beginning of the video.")
     end_seconds: float = Field(description="When this moment ends, in seconds from the beginning of the video.")
