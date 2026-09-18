@@ -105,6 +105,7 @@ def test_memories_for_video_reads_the_chapter_title_alongside_the_summary() -> N
             "chapter_id": CHAPTER_ID,
             "chapter_title": "Getting started",
             "summary": "The host explains the setup.",
+            "text": "Okay, so first you plug it in.",
         }
     ]
     store, pool = _store(rows)
@@ -113,6 +114,7 @@ def test_memories_for_video_reads_the_chapter_title_alongside_the_summary() -> N
     assert len(memories) == 1
     assert memories[0].chapter_title == "Getting started"
     assert memories[0].summary == "The host explains the setup."
+    assert memories[0].text == "Okay, so first you plug it in."
     assert "left join public.chapters" in pool.statements[0]
     assert "order by m.memory_index" in pool.statements[0]
 
@@ -125,6 +127,7 @@ def test_memories_for_video_leaves_the_chapter_title_none_when_ungrouped() -> No
             "chapter_id": None,
             "chapter_title": None,
             "summary": "A moment with no chapter yet.",
+            "text": "Some raw speech.",
         }
     ]
     store, _ = _store(rows)

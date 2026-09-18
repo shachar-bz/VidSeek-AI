@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class MemoryForEmbedding:
-    """One memory as the embedding pipeline needs it: its own summary, and its chapter's
-    title if the chapter-grouping stage has grouped it into one yet.
+    """One memory as the embedding pipeline needs it: its own summary and raw text, and its
+    chapter's title if the chapter-grouping stage has grouped it into one yet.
     """
 
     memory_id: str
@@ -52,6 +52,7 @@ class MemoryForEmbedding:
     chapter_id: str | None
     chapter_title: str | None
     summary: str
+    text: str
 
 
 @dataclass(frozen=True)
@@ -78,10 +79,9 @@ class MemoryMatch:
     given the id then, rather than every caller carrying one it never uses.
 
     `text` is the speech the memory was built from and `summary` is the one line the
-    segmentation model wrote about it. The vector that was searched was built from the
-    summary and the chapter title, not from `text` -- see
-    `backend.services.embeddings.memory_embedding.text` -- so a match is a match on the
-    summary, and `text` is what that summary was summarizing.
+    segmentation model wrote about it. Both, along with the chapter title, are what the
+    vector that was searched was built from -- see
+    `backend.services.embeddings.memory_embedding.text`.
     """
 
     text: str
@@ -106,7 +106,8 @@ class PostgresMemoryEmbeddings:
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
                 "select m.id as memory_id, m.video_id as video_id, "
-                "m.chapter_id as chapter_id, c.title as chapter_title, m.summary as summary "
+                "m.chapter_id as chapter_id, c.title as chapter_title, m.summary as summary, "
+                "m.text as text "
                 "from public.memories m "
                 "left join public.chapters c on c.id = m.chapter_id "
                 "where m.video_id = %s::uuid order by m.memory_index",
@@ -119,6 +120,7 @@ class PostgresMemoryEmbeddings:
                 chapter_id=str(row["chapter_id"]) if row["chapter_id"] else None,
                 chapter_title=row["chapter_title"],
                 summary=row["summary"],
+                text=row["text"],
             )
             for row in rows
         ]
