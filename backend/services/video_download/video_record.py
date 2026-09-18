@@ -29,6 +29,7 @@ from backend.storage.blob import StoredVideo
 from backend.storage.postgres import (
     PostgresComments,
     PostgresTranscriptSegments,
+    PostgresUserVideos,
     PostgresVideoRecords,
     StoredVideoRecord,
     VideoRecord,
@@ -60,8 +61,10 @@ def record_job_video(
     anything to fetch; an empty sequence still means something (the fetch ran and found
     nothing) and is written as that, clearing any comments a previous run left behind.
 
-    `user_id` is None for a job the route never had a signed-in account for; the row is
-    still worth writing, just without an owner.
+    `user_id` is None for a job the route never had a signed-in account for, and the video
+    is still worth writing, just linked into nobody's library. When it is set, the video is
+    linked into that account's library rather than stamped onto the video row -- the same
+    video can already be, or later become, linked into another account's library too.
     """
     if not is_postgres_configured():
         logger.info("No database configured; %s is stored but unrecorded", stored_video.name)
@@ -74,7 +77,6 @@ def record_job_video(
             title=request.page_title,
             blob_container=stored_video.container,
             blob_name=stored_video.name,
-            user_id=user_id,
             file_size_bytes=stored_video.size_bytes,
             content_type=stored_video.content_type,
             transcript_source=transcript_source,
@@ -89,4 +91,6 @@ def record_job_video(
         PostgresTranscriptSegments().replace(stored.id, transcript.segments)
     if comments is not None:
         PostgresComments().replace(stored.id, comments)
+    if user_id is not None:
+        PostgresUserVideos().link(user_id, stored.id)
     return stored

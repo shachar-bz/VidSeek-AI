@@ -49,3 +49,12 @@ class ChapterNotFoundError(KeyError):
     nowhere: which of the two it was is not something a conversation about one video is
     told.
     """
+
+
+class VideoNotLinkedError(KeyError):
+    """The account has no library link for this video, so nothing can be attached to it.
+
+    Raised when starting a conversation about a video the account never linked, or has
+    since removed: `conversations.user_id, video_id` is a foreign key into `user_videos`,
+    and this is that constraint's violation given a name.
+    """

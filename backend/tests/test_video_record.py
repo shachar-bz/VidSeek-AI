@@ -87,10 +87,21 @@ class FakeVideoComments:
         return len(self.replaced[-1][1])
 
 
+class FakeUserVideos:
+    """Stands in for the `user_videos` table."""
+
+    def __init__(self):
+        self.linked: list[tuple[str, str]] = []
+
+    def link(self, user_id: str, video_id: str):
+        self.linked.append((user_id, video_id))
+
+
 def _record(
     records: FakeVideoRecords,
     segments: FakeTranscriptSegments | None = None,
     comments_store: FakeVideoComments | None = None,
+    user_videos: FakeUserVideos | None = None,
     *,
     configured: bool = True,
     transcript: NormalizedTranscript | None = None,
@@ -109,6 +120,11 @@ def _record(
             video_record,
             "PostgresComments",
             return_value=comments_store or FakeVideoComments(),
+        ),
+        patch.object(
+            video_record,
+            "PostgresUserVideos",
+            return_value=user_videos or FakeUserVideos(),
         ),
     ):
         return video_record.record_job_video(
@@ -138,18 +154,18 @@ def test_the_row_ties_the_stored_blob_back_to_the_page_it_came_from() -> None:
     assert stored is not None and stored.video == written
 
 
-def test_the_row_carries_the_account_that_started_the_job() -> None:
-    records = FakeVideoRecords()
-    _record(records, user_id="11111111-2222-3333-4444-555555555555")
+def test_the_video_is_linked_into_the_account_that_started_the_job() -> None:
+    records, user_videos = FakeVideoRecords(), FakeUserVideos()
+    _record(records, user_videos=user_videos, user_id="11111111-2222-3333-4444-555555555555")
 
-    assert records.upserted[0].user_id == "11111111-2222-3333-4444-555555555555"
+    assert user_videos.linked == [("11111111-2222-3333-4444-555555555555", VIDEO_ROW_ID)]
 
 
-def test_a_job_with_no_signed_in_account_records_an_ownerless_video() -> None:
-    records = FakeVideoRecords()
-    _record(records)
+def test_a_job_with_no_signed_in_account_links_nobody() -> None:
+    records, user_videos = FakeVideoRecords(), FakeUserVideos()
+    _record(records, user_videos=user_videos)
 
-    assert records.upserted[0].user_id is None
+    assert user_videos.linked == []
 
 
 def test_the_uploaded_blob_s_own_facts_are_taken_from_the_upload() -> None:
