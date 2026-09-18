@@ -129,3 +129,95 @@ def test_a_chapter_this_video_does_not_have_reads_as_none() -> None:
     store, _ = _store([])
 
     assert store.chapter_with_memories(VIDEO_ID, CHAPTER_ID) is None
+
+
+# The second read: a chapter named, with the chapters either side of it. The chapter's own
+# columns are unprefixed and each neighbour's are prefixed, which is what keeps three
+# chapters' worth of the same four columns apart in one row.
+NEIGHBOUR_ROW = {
+    "chapter_id": CHAPTER_ID,
+    "chapter_index": 2,
+    "title": "Pricing strategy",
+    "summary": CHAPTER_COLUMNS["summary"],
+    "preceding_id": "55555555-5555-5555-5555-555555555555",
+    "preceding_index": 1,
+    "preceding_title": "Finding the first customers",
+    "preceding_summary": "How the first ten customers were found.",
+    "following_id": "77777777-7777-7777-7777-777777777777",
+    "following_index": 3,
+    "following_title": "Hiring the first engineer",
+    "following_summary": "What the first engineering hire changed.",
+}
+
+# What the left joins answer with for the video's first chapter: itself, and no chapter
+# one index below it.
+FIRST_CHAPTER_NEIGHBOUR_ROW = {
+    **NEIGHBOUR_ROW,
+    "chapter_index": 0,
+    "preceding_id": None,
+    "preceding_index": None,
+    "preceding_title": None,
+    "preceding_summary": None,
+}
+
+
+def test_a_chapter_and_both_its_neighbours_come_back_from_one_read() -> None:
+    """Three chapters in one row rather than three reads: a caller wants a neighbour exactly
+    when it has run out of the chapter it was reading, so it needs all three at once.
+    """
+    store, pool = _store([NEIGHBOUR_ROW])
+    found = store.with_neighbours(VIDEO_ID, CHAPTER_ID)
+
+    assert found is not None
+    assert found.chapter.title == "Pricing strategy"
+    assert found.preceding is not None and found.preceding.chapter_index == 1
+    assert found.following is not None and found.following.title == "Hiring the first engineer"
+    assert len(pool.recorded) == 1
+
+
+def test_neighbours_are_the_chapters_one_index_either_side_of_this_one() -> None:
+    """0005_chapters.sql counts chapter_index from zero with no gaps, so adjacency is
+    arithmetic on the index rather than a search through the video's times.
+    """
+    store, pool = _store([NEIGHBOUR_ROW])
+    store.with_neighbours(VIDEO_ID, CHAPTER_ID)
+
+    assert "preceding.chapter_index = chapter.chapter_index - 1" in pool.statements[0]
+    assert "following.chapter_index = chapter.chapter_index + 1" in pool.statements[0]
+
+
+def test_the_neighbour_read_is_scoped_to_the_chapter_and_its_video() -> None:
+    store, pool = _store([NEIGHBOUR_ROW])
+    store.with_neighbours(VIDEO_ID, CHAPTER_ID)
+
+    assert "where chapter.id = %s::uuid and chapter.video_id = %s::uuid" in pool.statements[0]
+    assert pool.recorded[0].parameters == (CHAPTER_ID, VIDEO_ID)
+
+
+def test_naming_a_neighbour_does_not_read_its_memories() -> None:
+    """A neighbour is offered as somewhere to read next, and reading it is the next call's
+    job; naming three chapters should not cost three chapters' contents.
+    """
+    store, pool = _store([NEIGHBOUR_ROW])
+    found = store.with_neighbours(VIDEO_ID, CHAPTER_ID)
+
+    assert "public.memories" not in pool.statements[0]
+    assert not hasattr(found.following, "memories")
+
+
+def test_the_first_chapter_of_a_video_has_nothing_before_it() -> None:
+    """The video's own edge, not a missing row: the left join is what lets the chapter still
+    answer when there is no chapter one index below it.
+    """
+    store, _ = _store([FIRST_CHAPTER_NEIGHBOUR_ROW])
+    found = store.with_neighbours(VIDEO_ID, CHAPTER_ID)
+
+    assert found is not None
+    assert found.preceding is None
+    assert found.following is not None
+
+
+def test_neighbours_of_a_chapter_this_video_does_not_have_read_as_none() -> None:
+    store, _ = _store([])
+
+    assert store.with_neighbours(VIDEO_ID, CHAPTER_ID) is None
