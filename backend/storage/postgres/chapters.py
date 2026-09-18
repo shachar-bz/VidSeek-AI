@@ -5,7 +5,8 @@ and every memory inside it in order -- because that is the unit a conversation a
 video reasons in: a moment found by search is only meaningful against the section it sits
 in. `with_neighbours` answers the other question, asked by a caller that has read to the
 edge of a chapter and needs somewhere to go next: what is this chapter called, and what
-lies either side of it.
+lies either side of it. `video_outline` answers neither: it steps back and names every
+chapter of a video at once, for a caller that does not yet know which section it wants.
 
 This is the first read of `chapters` that is not part of embedding them, which is why the
 table finally has a module of its own. `chapter_embeddings.chapters_for_video` still reads
@@ -51,6 +52,32 @@ from public.chapters c
 left join public.memories m on m.chapter_id = c.id
 where c.id = %s::uuid and c.video_id = %s::uuid
 order by m.memory_index
+"""
+
+
+# Every chapter of a video, named and timed but without its memories. This is the whole of
+# a video's structure in one read, which is why nothing is joined to it: a caller asking how
+# the video is organized is asking about the sections, and pulling in their memories would
+# make the answer grow with the length of the video rather than with the number of chapters.
+#
+# Ordered by `chapter_index` rather than `start_seconds`, for the same reason
+# `CHAPTER_WITH_MEMORIES_SQL` orders memories by their index: 0005_chapters.sql counts the
+# index from zero with no gaps, so the two orders agree, but the index is unique per video
+# and therefore cannot tie.
+#
+# No limit. A video has as many chapters as it has sections, and half a video's structure
+# is not a structure.
+VIDEO_OUTLINE_SQL = """
+select
+    id as chapter_id,
+    chapter_index,
+    title,
+    summary,
+    start_seconds,
+    end_seconds
+from public.chapters
+where video_id = %s::uuid
+order by chapter_index
 """
 
 
@@ -140,6 +167,26 @@ class ChapterHeading:
 
 
 @dataclass(frozen=True)
+class StoredChapterOutline:
+    """One chapter of a video as it appears in the video's outline: named, placed and timed.
+
+    `ChapterHeading` is the same chapter without its times, and stays that way: a caller
+    naming a neighbour is offering somewhere to read next, where a timestamp says nothing,
+    while a caller reading the outline is deciding which part of the video to look at, where
+    the timing is half of what the decision is made on.
+
+    The chapter's memories are not carried, which is the whole point of the read.
+    """
+
+    chapter_id: str
+    chapter_index: int
+    title: str
+    summary: str
+    start_seconds: float
+    end_seconds: float
+
+
+@dataclass(frozen=True)
 class ChapterWithNeighbours:
     """A chapter, named, and the chapters either side of it.
 
@@ -205,6 +252,19 @@ class PostgresChapters:
             following=_to_heading(row, "following"),
         )
 
+    def video_outline(self, video_id: str) -> list[StoredChapterOutline]:
+        """Every chapter of this video, earliest first.
+
+        Empty for a video that has not been divided into chapters, and empty for a video id
+        that describes nothing at all. The two are not told apart here: this reads the
+        `chapters` table, which has nothing to say about whether a video exists, and a
+        caller that needs to tell them apart asks `PostgresVideoRecords.exists`.
+        """
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(VIDEO_OUTLINE_SQL, (video_id,)).fetchall()
+        return [_to_outline(row) for row in rows]
+
+
 
 def _to_memory(row) -> StoredChapterMemory:
     """One joined row's memory half, once it is known to hold a memory at all."""
@@ -213,6 +273,18 @@ def _to_memory(row) -> StoredChapterMemory:
         summary=row["memory_summary"],
         start_seconds=float(row["memory_start_seconds"]),
         end_seconds=float(row["memory_end_seconds"]),
+    )
+
+
+def _to_outline(row) -> StoredChapterOutline:
+    """One row of the outline read, as the chapter it describes."""
+    return StoredChapterOutline(
+        chapter_id=str(row["chapter_id"]),
+        chapter_index=int(row["chapter_index"]),
+        title=row["title"],
+        summary=row["summary"],
+        start_seconds=float(row["start_seconds"]),
+        end_seconds=float(row["end_seconds"]),
     )
 
 

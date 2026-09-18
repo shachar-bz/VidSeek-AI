@@ -33,6 +33,10 @@ VidSeek-AI/
 │   │   ├── get_video_info/                         # Tool that looks up the current video's metadata via ctx.deps.video_id.
 │   │   │   ├── __init__.py                         # Public interface of the get_video_info tool.
 │   │   │   └── tool.py                             # VideoMetadata model and the get_video_info tool function.
+│   │   ├── get_video_outline/                      # Tool that lists the current video's chapters without their contents.
+│   │   │   ├── __init__.py                         # Public interface of the get_video_outline tool.
+│   │   │   ├── result.py                           # VideoOutline and ChapterOutline: the video's structure as the agent receives it.
+│   │   │   └── tool.py                             # Reads every chapter in order, raising when the video id describes nothing.
 │   │   └── memories_semantic_search/               # Tool that finds the current video's moments closest in meaning to a query.
 │   │       ├── __init__.py                         # Public interface of the memories_semantic_search tool.
 │   │       ├── result.py                           # MemorySearchHit: one matched moment as the agent receives it.
@@ -63,11 +67,11 @@ VidSeek-AI/
 │   │       ├── connection.py                       # Builds the connection pool, and reads a timestamp column back as text.
 │   │       ├── migrate.py                          # Applies the migrations in order, once each, recording them as it goes.
 │   │       ├── users.py                            # Reads and writes the users table accounts sign in through.
-│   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes.
+│   │       ├── video_records.py                    # Reads and writes the videos table, keyed on the blob it describes, and whether one exists.
 │   │       ├── transcript_segments.py              # Reads and writes a video's transcript as timed segment rows.
 │   │       ├── comments.py                         # Reads and writes a YouTube video's top comments.
 │   │       ├── memories.py                         # Reads one memory of a video, and a run of memories inside one chapter.
-│   │       ├── chapters.py                         # Reads one chapter with the memories grouped into it, and a chapter's neighbours.
+│   │       ├── chapters.py                         # Reads one chapter with its memories, a chapter's neighbours, and a video's whole outline.
 │   │       ├── chapter_embeddings.py               # Reads a video's chapters and writes their embedding vectors.
 │   │       ├── memory_embeddings.py                # Writes a video's memory embeddings and searches them by vector distance.
 │   │       └── migrations/                         # SQL applied by the runner, in filename order.
@@ -206,6 +210,7 @@ VidSeek-AI/
 │       ├── test_memories_semantic_search.py       # Query embedding, video scoping and hit mapping tests for the search tool.
 │       ├── test_get_chapter_context.py             # Video scoping, memory ordering and missing chapter tests for the chapter tool.
 │       ├── test_get_memory_context.py              # Window, boundary, range clamping and unknown id tests for the memory context tool.
+│       ├── test_get_video_outline.py              # Chapter ordering, field, empty outline and unknown video tests for the outline tool.
 │       ├── test_memory_embedding.py                # Embedding text rendering and embed-and-store pipeline tests.
 │       ├── test_postgres_migrations.py             # Migration ordering, one-time application and failure reporting tests.
 │       └── test_video_record.py                    # Job video and transcript recording tests.
