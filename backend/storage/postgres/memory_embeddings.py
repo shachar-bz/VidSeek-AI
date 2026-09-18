@@ -74,16 +74,14 @@ class MemoryEmbedding:
 class MemoryMatch:
     """One memory a semantic search found, as the caller needs to answer with it.
 
-    Carries no ids. What a search is asked for is what was said and when, and every reader
-    of this so far wants exactly that; a caller that later needs the memory itself can be
-    given the id then, rather than every caller carrying one it never uses.
-
     `text` is the speech the memory was built from and `summary` is the one line the
     segmentation model wrote about it. Both, along with the chapter title, are what the
     vector that was searched was built from -- see
     `backend.services.embeddings.memory_embedding.text`.
     """
 
+    memory_id: str
+    chapter_id: str | None
     text: str
     summary: str
     chapter_title: str | None
@@ -146,7 +144,8 @@ class PostgresMemoryEmbeddings:
         """
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
-                "select m.text as text, m.summary as summary, c.title as chapter_title, "
+                "select e.memory_id as memory_id, e.chapter_id as chapter_id, "
+                "m.text as text, m.summary as summary, c.title as chapter_title, "
                 "m.start_seconds as start_seconds, m.end_seconds as end_seconds "
                 f"from public.{TABLE_NAME} e "
                 "join public.memories m on m.id = e.memory_id "
@@ -157,6 +156,8 @@ class PostgresMemoryEmbeddings:
             ).fetchall()
         return [
             MemoryMatch(
+                memory_id=str(row["memory_id"]),
+                chapter_id=str(row["chapter_id"]) if row["chapter_id"] else None,
                 text=row["text"],
                 summary=row["summary"],
                 chapter_title=row["chapter_title"],
