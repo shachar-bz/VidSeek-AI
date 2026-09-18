@@ -3,8 +3,8 @@
 import pytest
 from pydantic_ai import RunContext
 
-from backend.conversation_tools.deps import ConversationDeps
-from backend.conversation_tools.get_chapter_context import (
+from backend.video_agent.tools.deps import ConversationDeps
+from backend.video_agent.tools.get_chapter_context import (
     ChapterContext,
     ChapterMemory,
     get_chapter_context,

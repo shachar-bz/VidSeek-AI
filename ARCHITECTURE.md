@@ -8,12 +8,13 @@ VidSeek-AI/
 ├── backend/                                # Python backend.
 │   ├── api/                                # The HTTP layer, and the only package that imports FastAPI.
 │   │   └── routes/                         # One module per resource the companion exposes.
-│   ├── conversation_tools/                 # Pydantic AI tools the conversational agent calls while talking about a video; one directory per tool.
-│   │   ├── get_chapter_context/            # Reads one whole chapter of the current video.
-│   │   ├── get_memory_context/             # Reads one memory with the memories around it in its chapter.
-│   │   ├── get_video_info/                 # Looks up the current video's metadata.
-│   │   ├── get_video_outline/              # Lists the current video's chapters without their contents.
-│   │   └── memories_semantic_search/       # Finds the current video's moments closest in meaning to a query.
+│   ├── video_agent/                         # The conversational agent that talks about a video.
+│   │   └── tools/                          # Pydantic AI tools the agent calls; one directory per tool.
+│   │       ├── get_chapter_context/        # Reads one whole chapter of the current video.
+│   │       ├── get_memory_context/         # Reads one memory with the memories around it in its chapter.
+│   │       ├── get_video_info/             # Looks up the current video's metadata.
+│   │       ├── get_video_outline/          # Lists the current video's chapters without their contents.
+│   │       └── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
 │   ├── schemas/                            # The Pydantic contract shared with the Chrome extension.
 │   ├── core/                               # Cross-cutting foundations: config, errors, auth primitives, security.
 │   ├── storage/                            # Where a video's bytes and its records are kept.
@@ -56,4 +57,4 @@ VidSeek-AI/
 * `core/` imports nothing from other project packages.
 * `storage/` is the only path to PostgreSQL and Blob Storage.
 * `schemas/` is the contract shared with the extension; it depends only on `core/`.
-* `conversation_tools/` gets one directory per tool.
+* `video_agent/tools/` gets one directory per tool.

@@ -268,7 +268,7 @@ agent's context from empty, which is the point of the feature.
 ## 8. Retrieval
 
 **Tools only.** The agent is never given the raw transcript; it reaches the video's content
-exclusively through the existing Pydantic AI tools in `backend/conversation_tools/`:
+exclusively through the existing Pydantic AI tools in `backend/video_agent/tools/`:
 
 | Tool | What it gives the agent |
 |---|---|
