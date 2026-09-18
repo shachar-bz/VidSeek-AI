@@ -38,6 +38,6 @@ def chapter_grouping_prompt() -> str:
     start_memory_id: the first memory belonging to the chapter
     end_memory_id: the last memory belonging to the chapter
     title: a short, clear, human-readable name for the chapter. It should be briefly identify the main topic of the chapter and be useful for navigation
-    summary: a description of the broader topic or discussion covered by the chapter. It should describe the overall subject of the chapter rather than simply repeating or concatenating the individual memory summaries.
+    summary: a concise description of the broader topic or discussion covered by the chapter. It should describe the overall subject of the chapter rather than simply repeating or concatenating the individual memory summaries.
     """
     return inspect.cleandoc(chapter_grouping_prompt.__doc__)
