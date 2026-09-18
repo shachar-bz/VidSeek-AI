@@ -5,8 +5,9 @@ Both sides of that live here: `memories_for_video` and `replace` fill the table,
 
 Both reads join `memories` to `chapters`, which is why neither lives as a plain memory
 read: embedding a memory needs its chapter's title alongside it, and answering a search
-needs the memory's own text and times. Nothing else in the backend reads `memories` on its
-own yet, so there is no separate store module for that table to reuse.
+needs the memory's own text and times. The only other read of `memories` is the one
+`chapters.py` makes from the chapter's side, so the table still has no store module of its
+own for either to reuse.
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0007_embeddings.sql` and
 `migrations/0010_memory_embeddings_video_chapter.sql` applied.

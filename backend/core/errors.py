@@ -40,3 +40,12 @@ class EmailAlreadyRegisteredError(ValueError):
 
 class VideoNotFoundError(KeyError):
     """No video with the requested id exists."""
+
+
+class ChapterNotFoundError(KeyError):
+    """The video being talked about has no chapter with the requested id.
+
+    Raised for a chapter that exists under a different video as well as for one that exists
+    nowhere: which of the two it was is not something a conversation about one video is
+    told.
+    """

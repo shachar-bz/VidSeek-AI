@@ -1,8 +1,9 @@
 """The `chapter_embeddings` table: one vector per chapter, for semantic search.
 
 Reading a video's chapters for embedding is a plain read of `chapters`, unlike memories,
-which need a join to reach their chapter's title; nothing else in the backend reads
-`chapters` on its own yet, so there is no separate store module for that table to reuse.
+which need a join to reach their chapter's title. That read stays here rather than moving
+to `chapters.py`: what it selects is what a vector is built from, which is the embedding
+pipeline's business and changes with it, not what a reader of a chapter is shown.
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0007_embeddings.sql` and
 `migrations/0011_chapter_embeddings_video_times.sql` applied.

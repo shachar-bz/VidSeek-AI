@@ -7,6 +7,7 @@ the runner two copies of its own module-level state. Import it by its full path 
 """
 
 from .chapter_embeddings import ChapterEmbedding, ChapterForEmbedding, PostgresChapterEmbeddings
+from .chapters import PostgresChapters, StoredChapter, StoredChapterMemory
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
 from .memory_embeddings import (
@@ -28,12 +29,15 @@ __all__ = [
     "MemoryMatch",
     "NewUser",
     "PostgresChapterEmbeddings",
+    "PostgresChapters",
     "PostgresComments",
     "PostgresMemoryEmbeddings",
     "PostgresSettings",
     "PostgresTranscriptSegments",
     "PostgresUsers",
     "PostgresVideoRecords",
+    "StoredChapter",
+    "StoredChapterMemory",
     "StoredUser",
     "StoredVideoRecord",
     "VideoRecord",
