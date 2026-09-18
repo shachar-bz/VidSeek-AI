@@ -13,6 +13,7 @@ from .chapters import (
     PostgresChapters,
     StoredChapter,
     StoredChapterMemory,
+    StoredChapterOutline,
 )
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
@@ -48,6 +49,7 @@ __all__ = [
     "PostgresVideoRecords",
     "StoredChapter",
     "StoredChapterMemory",
+    "StoredChapterOutline",
     "StoredMemory",
     "StoredUser",
     "StoredVideoRecord",

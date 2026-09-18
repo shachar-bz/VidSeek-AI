@@ -177,6 +177,20 @@ class PostgresVideoRecords:
             ).fetchone()
         return StoredVideoRecord.from_row(row) if row else None
 
+    def exists(self, video_id: str) -> bool:
+        """Whether a video with this id is recorded, without reading the row.
+
+        `get_by_id` answers this too, but by fetching every column of a video a caller
+        that only wanted a yes or no is going to throw away. A caller guarding against an
+        id that describes nothing -- a conversation tool told which video it is about --
+        needs the answer, not the video.
+        """
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"select 1 from public.{TABLE_NAME} where id = %s::uuid", (video_id,)
+            ).fetchone()
+        return row is not None
+
     def find_by_source_url(self, source_url: str) -> list[StoredVideoRecord]:
         """Every video taken from one page, newest first.
 
