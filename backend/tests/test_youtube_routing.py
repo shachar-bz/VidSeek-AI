@@ -8,7 +8,8 @@ import pytest
 from backend.core.security import is_youtube_url
 from backend.schemas.browser import MediaCandidate, MediaKind
 from backend.schemas.video_jobs import CreateVideoJobRequest, JobStatus
-from backend.services.video_download.jobs import JobManager
+from backend.download_pipeline import AcquisitionRoute
+from backend.services.video_download.jobs import ROUTE_BY_ACQUISITION_MODE, JobManager
 
 YOUTUBE_URLS = [
     "https://youtube.com/watch?v=x",
@@ -47,7 +48,8 @@ def test_a_youtube_page_is_queued_on_the_youtube_pipeline(tmp_path: Path) -> Non
         job = manager.create(CreateVideoJobRequest(page_url="https://youtu.be/abc"))
     assert job.acquisition_mode == "youtube_pipeline"
     assert job.status == JobStatus.QUEUED
-    assert submit.call_args[0][0] == manager._run_youtube
+    assert submit.call_args[0][0] == manager._run
+    assert ROUTE_BY_ACQUISITION_MODE[job.acquisition_mode] is AcquisitionRoute.YOUTUBE
 
 
 def test_youtube_never_waits_for_a_chrome_download(tmp_path: Path) -> None:
@@ -69,7 +71,8 @@ def test_youtube_never_waits_for_a_chrome_download(tmp_path: Path) -> None:
         job = manager.create(request)
     assert job.acquisition_mode == "youtube_pipeline"
     assert job.status == JobStatus.QUEUED
-    assert submit.call_args[0][0] == manager._run_youtube
+    assert submit.call_args[0][0] == manager._run
+    assert ROUTE_BY_ACQUISITION_MODE[job.acquisition_mode] is AcquisitionRoute.YOUTUBE
 
 
 def test_a_non_youtube_page_still_uses_the_web_pipeline(tmp_path: Path) -> None:
@@ -79,4 +82,8 @@ def test_a_non_youtube_page_still_uses_the_web_pipeline(tmp_path: Path) -> None:
     ) as submit:
         job = manager.create(CreateVideoJobRequest(page_url="https://example.com/watch"))
     assert job.acquisition_mode == "companion_download"
-    assert submit.call_args[0][0] == manager._run_download
+    assert submit.call_args[0][0] == manager._run
+    assert (
+        ROUTE_BY_ACQUISITION_MODE[job.acquisition_mode]
+        is AcquisitionRoute.COMPANION_DOWNLOAD
+    )

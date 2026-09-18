@@ -19,9 +19,10 @@ from backend.schemas.video_jobs import JobPhase
 from backend.storage.blob import BlobVideoStorage, StoredVideo
 
 # The slice of a job's progress bar the upload owns. Everything before it reports up to
-# 0.85, and the job manager sets 1.0 once the result is recorded.
-PROGRESS_START = 0.9
-PROGRESS_END = 0.99
+# 0.85, segmentation and embedding split what is left above it, and the job manager sets
+# 1.0 once the result is recorded.
+PROGRESS_START = 0.86
+PROGRESS_END = 0.9
 
 UPLOAD_MESSAGE = "Uploading video to Azure Blob Storage"
 

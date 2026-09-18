@@ -44,6 +44,9 @@ class FakeCursor:
     The rows arrive through a callable rather than as a list, so that a pool answering reads
     in order hands over the next batch only once something actually fetches. A statement
     that writes and never fetches -- the trim half of a `replace` -- must not consume one.
+
+    Two fetches after one execute see the same rows; an execute after them starts again,
+    the same as a real cursor.
     """
 
     def __init__(self, next_rows: Callable[[], list[dict]], recorded: list[RecordedStatement]):
@@ -53,6 +56,11 @@ class FakeCursor:
 
     def execute(self, statement, parameters=None) -> FakeCursor:
         self._recorded.append(RecordedStatement(_as_text(statement), parameters))
+        # A real cursor's previous result set is gone the moment it is executed again, and
+        # a store that writes several rows through one cursor and reads each one's
+        # generated id back -- `PostgresChapters.replace` -- would otherwise be handed the
+        # first row's answer every time.
+        self._fetched = None
         return self
 
     def executemany(self, statement, rows) -> None:

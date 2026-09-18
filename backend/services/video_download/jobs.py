@@ -1,8 +1,19 @@
-"""Single-worker in-memory job orchestration for the local companion API."""
+"""Single-worker in-memory job state for the local companion API.
+
+What a job *does* is `backend.download_pipeline`'s: acquire the video, store it, divide it
+into memories and chapters, and embed them. What is left here is everything about a job that
+the pipeline has no opinion on — which of the three acquisition routes a page URL calls for,
+how far along the extension is told the work is, what a cancel request does to a run already
+under way, and when the browser-supplied cookies are wiped.
+
+The one piece of real judgment still in this module is how a pipeline result becomes a
+status. The pipeline reports what it could not do as problem codes and finishes anyway, and
+this is where that turns into `complete`, `partial_success` or `failed` and into the sentence
+the extension shows.
+"""
 
 from __future__ import annotations
 
-import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +32,16 @@ from backend.core.security import (
     validate_local_media_path,
     validate_remote_url,
 )
+from backend.download_pipeline import (
+    CHAPTER_GROUPING_FAILED,
+    EMBEDDING_FAILED,
+    RECORD_FAILED,
+    SEGMENTATION_FAILED,
+    AcquisitionRoute,
+    ProcessedVideo,
+    VideoStorageError,
+    run_download_pipeline,
+)
 from backend.schemas.browser import MediaKind
 from backend.schemas.video_jobs import (
     BrowserDownloadCompleteRequest,
@@ -30,21 +51,11 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
-from backend.storage.blob import StoredVideo
 
-from .video_record import record_job_video
-from .video_upload import upload_job_video
-from .web.downloader import DownloadedVideo
-from .web.pipeline import (
-    UNTIMED_TRANSCRIPT_ERROR,
-    download_and_transcribe,
-    process_downloaded_video,
-)
-from .youtube_job import run_youtube_job
+from .web.pipeline import UNTIMED_TRANSCRIPT_ERROR
 
 TRANSCRIPTION_FAILED = "transcription_failed"
 UPLOAD_FAILED = "upload_failed"
-RECORD_FAILED = "record_failed"
 
 # What a partially successful job says it kept, and what went wrong with the rest.
 SAVED_BY_TRANSCRIPT_PROBLEM = {
@@ -56,9 +67,29 @@ PROBLEM_DESCRIPTIONS = {
     UNTIMED_TRANSCRIPT_ERROR: "no timing could be measured",
     TRANSCRIPTION_FAILED: "transcription can be retried",
     RECORD_FAILED: "the video is in Blob Storage but was not recorded in the database",
+    SEGMENTATION_FAILED: "its moments could not be found",
+    CHAPTER_GROUPING_FAILED: "its moments were found but not grouped into chapters",
+    EMBEDDING_FAILED: "it is not searchable yet",
 }
 
-logger = logging.getLogger(__name__)
+# Which acquisition route each of `create`'s modes runs on. The mode is the name the
+# extension is given and the route is what the pipeline dispatches on; they are not one
+# value because `captured_request` is a second attempt down the companion's own route
+# rather than a route of its own.
+ROUTE_BY_ACQUISITION_MODE = {
+    "youtube_pipeline": AcquisitionRoute.YOUTUBE,
+    "companion_download": AcquisitionRoute.COMPANION_DOWNLOAD,
+    "captured_request": AcquisitionRoute.COMPANION_DOWNLOAD,
+    "browser_download": AcquisitionRoute.DOWNLOADED_FILE,
+}
+
+# What a job says when it could not obtain the video at all, named after the attempt that
+# failed rather than after the exception, which the extension has no use for.
+DOWNLOAD_FAILURE_BY_ACQUISITION_MODE = {
+    "youtube_pipeline": "YouTube download failed",
+    "companion_download": "Authenticated download failed",
+    "captured_request": "Authenticated download failed",
+}
 
 
 def _transcript_problem(transcript_error: str | None) -> str | None:
@@ -73,15 +104,18 @@ def _transcript_problem(transcript_error: str | None) -> str | None:
     return TRANSCRIPTION_FAILED if transcript_error else None
 
 
-def _partial_success_message(transcript_problem: str | None, record_problem: str | None) -> str:
+def _partial_success_message(transcript_problem: str | None, later_problems: list[str]) -> str:
     """What a job that produced something, but not everything, tells the extension.
 
-    At most two problems can arrive here. The transcript's half and the database half fail
-    independently, but the database half fails in only one way per job: recording a video
-    is attempted only once its upload has already returned a blob name.
+    The transcript problem leads, because it decides what the job can claim to have saved
+    at all; everything after it describes a video that is already stored. The later problems
+    are listed in the order the stages hit them, so the first named is the earliest thing
+    that went wrong and therefore the one most likely to explain the rest.
     """
-    problems = [problem for problem in (transcript_problem, record_problem) if problem]
-    described = " and ".join(PROBLEM_DESCRIPTIONS[problem] for problem in problems)
+    described = " and ".join(
+        PROBLEM_DESCRIPTIONS[problem]
+        for problem in ([transcript_problem] if transcript_problem else []) + later_problems
+    )
     return f"{SAVED_BY_TRANSCRIPT_PROBLEM[transcript_problem]}; {described}"
 
 
@@ -93,7 +127,7 @@ class _Job:
     phase: JobPhase
     acquisition_mode: str
     # The account that started this job, or None for a request nothing required a
-    # signed-in account for; carried through to the video row `_record_video` writes.
+    # signed-in account for; handed to the pipeline, which puts it on the video row.
     user_id: str | None = None
     progress: float = 0.0
     message: str = "Waiting"
@@ -192,9 +226,9 @@ class JobManager:
         with self._lock:
             self._jobs[job_id] = job
         if is_youtube:
-            self._executor.submit(self._run_youtube, job_id)
+            self._executor.submit(self._run, job_id, can_capture_on_failure=False)
         elif not direct_only:
-            self._executor.submit(self._run_download, job_id)
+            self._executor.submit(self._run, job_id, can_capture_on_failure=True)
         return job.public()
 
     def get(self, job_id: str) -> VideoJobResponse:
@@ -214,7 +248,9 @@ class JobManager:
                 raise JobStateConflictError("Job is not waiting for a Chrome download")
             job.status = JobStatus.QUEUED
             job.message = "Chrome download complete; queued for transcript processing"
-        self._executor.submit(self._run_existing_file, job_id, path)
+        self._executor.submit(
+            self._run, job_id, can_capture_on_failure=False, local_path=path
+        )
         return self.get(job_id)
 
     def retry_with_capture(self, job_id: str, payload: CaptureRetryRequest) -> VideoJobResponse:
@@ -234,7 +270,7 @@ class JobManager:
             job.can_capture = False
             job.acquisition_mode = "captured_request"
             job.cancel_event.clear()
-        self._executor.submit(self._run_download, job_id)
+        self._executor.submit(self._run, job_id, can_capture_on_failure=True)
         return self.get(job_id)
 
     def cancel(self, job_id: str) -> VideoJobResponse:
@@ -269,86 +305,79 @@ class JobManager:
             job.progress = min(max(value, 0.0), 1.0)
             job.message = message
 
-    def _run_youtube(self, job_id: str) -> None:
+    def _run(
+        self, job_id: str, *, can_capture_on_failure: bool, local_path: Path | None = None
+    ) -> None:
+        """Run one job's pipeline and record what it produced, or why it produced nothing.
+
+        One body for all three routes, because the pipeline is the same for all three once
+        the route is chosen. What still differs is only how a failure is reported: a
+        download the companion attempted itself can be retried with a request captured from
+        the browser, while a YouTube download cannot -- capturing a googlevideo request
+        would not help, since that route never used the browser's request in the first place
+        -- and neither can a file Chrome already downloaded, whose video is on disk and
+        whose failure was therefore in processing it.
+        """
         with self._lock:
             job = self._require(job_id)
             if job.status == JobStatus.CANCELLED:
                 return
             job.status = JobStatus.RUNNING
-            request = job.request
+            request, acquisition_mode, user_id = job.request, job.acquisition_mode, job.user_id
         try:
-            result = run_youtube_job(
+            processed = run_download_pipeline(
+                ROUTE_BY_ACQUISITION_MODE[acquisition_mode],
                 request=request,
                 download_root=self.download_root,
+                job_id=job_id,
+                acquisition_mode=acquisition_mode,
                 cancel_event=job.cancel_event,
                 progress_callback=lambda phase, value, message: self._progress(
                     job_id, phase, value, message
                 ),
+                user_id=user_id,
+                local_path=local_path,
             )
-            self._store_and_finish(job_id, result)
         except DownloadCancelled:
             self._mark_cancelled(job_id)
-        except Exception as error:
-            # No capture retry is offered: capturing a googlevideo request would not help,
-            # since the YouTube pipeline never used the browser's request in the first place.
+        except VideoStorageError as error:
             self._fail(
                 job_id,
-                "download_failed",
-                f"YouTube download failed ({type(error).__name__})",
+                UPLOAD_FAILED,
+                f"Storing the video in Blob Storage failed ({type(error.__cause__).__name__})",
                 can_capture=False,
             )
-
-    def _run_download(self, job_id: str) -> None:
-        with self._lock:
-            job = self._require(job_id)
-            if job.status == JobStatus.CANCELLED:
-                return
-            job.status = JobStatus.RUNNING
-            request = job.request
-        try:
-            result = download_and_transcribe(
-                request=request,
-                download_root=self.download_root,
-                cancel_event=job.cancel_event,
-                progress_callback=lambda phase, value, message: self._progress(
-                    job_id, phase, value, message
-                ),
-            )
-            self._store_and_finish(job_id, result)
-        except DownloadCancelled:
-            self._mark_cancelled(job_id)
         except UnsupportedMediaError as error:
             self._fail(job_id, "unsupported_media", str(error), can_capture=False)
         except Exception as error:
-            self._fail(
+            self._fail_acquisition(
                 job_id,
-                "download_failed",
-                f"Authenticated download failed ({type(error).__name__})",
-                can_capture=True,
+                error,
+                acquisition_mode=acquisition_mode,
+                can_capture=can_capture_on_failure,
+                local_path=local_path,
             )
+        else:
+            self._finish(job_id, processed)
 
-    def _run_existing_file(self, job_id: str, path: Path) -> None:
-        with self._lock:
-            job = self._require(job_id)
-            if job.status == JobStatus.CANCELLED:
-                return
-            job.status = JobStatus.RUNNING
-            request = job.request
-        try:
-            result = process_downloaded_video(
-                video=DownloadedVideo(title=request.page_title, video_path=path),
-                request=request,
-                cancel_event=job.cancel_event,
-                progress_callback=lambda phase, value, message: self._progress(
-                    job_id, phase, value, message
-                ),
-            )
-            self._store_and_finish(job_id, result)
-        except DownloadCancelled:
-            self._mark_cancelled(job_id)
-        except Exception as error:
+    def _fail_acquisition(
+        self,
+        job_id: str,
+        error: Exception,
+        *,
+        acquisition_mode: str,
+        can_capture: bool,
+        local_path: Path | None,
+    ) -> None:
+        """Report a run that never got as far as a stored video, in the route's own terms.
+
+        A file Chrome already downloaded is the one route whose failure here is partial
+        rather than total: the video is on disk and stays there, so the job keeps it and
+        says the transcript processing is what went wrong.
+        """
+        if local_path is not None:
             with self._lock:
-                job.video_path = str(path)
+                self._require(job_id).video_path = str(local_path)
             self._fail(
                 job_id,
                 "transcript_failed",
@@ -356,102 +385,58 @@ class JobManager:
                 can_capture=False,
                 partial=True,
             )
-
-    def _store_and_finish(self, job_id: str, result) -> None:
-        """Store the video in Blob Storage, describe it in the database, then finish the job.
-
-        Storage is not optional: Blob Storage is the video's only home, so a failure here
-        fails the job rather than falling back to the local copy the pipeline made to
-        transcribe it. Recording the video is not that kind of failure — the video and its
-        transcript files are already durable once the upload succeeds — so a database that
-        refuses the write is reported on the finished job rather than thrown away with it.
-        """
-        with self._lock:
-            if self._require(job_id).cancel_event.is_set():
-                raise DownloadCancelled("Job cancelled")
-        try:
-            stored_video = upload_job_video(
-                video_path=result.video_path,
-                job_id=job_id,
-                progress_callback=lambda phase, value, message: self._progress(
-                    job_id, phase, value, message
-                ),
-            )
-        except Exception as error:
-            logger.exception("Storing %s in Blob Storage failed", result.video_path)
-            self._fail(
-                job_id,
-                UPLOAD_FAILED,
-                f"Storing the video in Blob Storage failed ({type(error).__name__})",
-                can_capture=False,
-            )
             return
-        record_problem = self._record_video(job_id, result, stored_video)
-        self._finish(job_id, result, stored_video=stored_video, record_problem=record_problem)
+        attempt = DOWNLOAD_FAILURE_BY_ACQUISITION_MODE.get(
+            acquisition_mode, "Download failed"
+        )
+        self._fail(
+            job_id,
+            "download_failed",
+            f"{attempt} ({type(error).__name__})",
+            can_capture=can_capture,
+        )
 
-    def _record_video(self, job_id: str, result, stored_video: StoredVideo) -> str | None:
-        """Describe the uploaded video in the database, reporting a failure rather than raising.
+    def _finish(self, job_id: str, processed: ProcessedVideo) -> None:
+        """Publish a finished run's result, as complete or as complete-with-caveats.
 
-        The row can be written again later from the blob name alone, so a database that
-        is unreachable is worth reporting but not worth discarding a finished download
-        over. Nothing here is retried: the upload has already happened, and a second
-        attempt against a project that just refused one is unlikely to be answered
-        differently within the life of the job.
+        Everything the pipeline reports as a problem describes a video that is already in
+        Blob Storage: text with no timing on it, a row that was not written, moments that
+        were not found, vectors that were not built. None of those is worth failing a job
+        that produced a stored video, so all of them come back as `partial_success` with the
+        earliest problem as the code -- while a run that never stored the video at all
+        raised long before reaching here.
         """
+        acquired = processed.acquired
         with self._lock:
             job = self._require(job_id)
-            request, acquisition_mode, user_id = job.request, job.acquisition_mode, job.user_id
-        try:
-            record_job_video(
-                stored_video=stored_video,
-                request=request,
-                job_id=job_id,
-                acquisition_mode=acquisition_mode,
-                transcript_source=result.transcript_source,
-                transcript=result.normalized_transcript,
-                comments=result.comments,
-                user_id=user_id,
-            )
-        except Exception:
-            logger.exception("Recording %s in the database failed", stored_video.name)
-            return RECORD_FAILED
-        return None
-
-    def _finish(
-        self,
-        job_id: str,
-        result,
-        *,
-        stored_video: StoredVideo,
-        record_problem: str | None = None,
-    ) -> None:
-        with self._lock:
-            job = self._require(job_id)
-            # The video now lives only in Blob Storage; the local copy made for transcription
-            # is gone.
+            # The video now lives only in Blob Storage; the local copy made for
+            # transcription is gone.
             job.video_path = None
             job.transcript_text_path = (
-                str(result.transcript_text_path) if result.transcript_text_path else None
+                str(acquired.transcript_text_path) if acquired.transcript_text_path else None
             )
             job.transcript_json_path = (
-                str(result.transcript_json_path) if result.transcript_json_path else None
+                str(acquired.transcript_json_path) if acquired.transcript_json_path else None
             )
-            job.transcript_source = result.transcript_source
-            job.comments_path = str(result.comments_path) if result.comments_path else None
-            job.video_storage_key = stored_video.name
+            job.transcript_source = acquired.transcript_source
+            job.comments_path = str(acquired.comments_path) if acquired.comments_path else None
+            job.video_storage_key = processed.stored_video.name
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
-            transcript_problem = _transcript_problem(result.transcript_error)
-            if transcript_problem or record_problem:
-                # A transcript with no timing is still text, and a video not yet described
-                # in the database is still safely stored -- neither costs the job its result, so
-                # both are reported rather than failing a job that otherwise finished.
+            transcript_problem = _transcript_problem(acquired.transcript_error)
+            later_problems = list(processed.problems)
+            if transcript_problem or later_problems:
                 job.status = JobStatus.PARTIAL_SUCCESS
-                job.error_code = transcript_problem or record_problem
-                job.message = _partial_success_message(transcript_problem, record_problem)
+                job.error_code = transcript_problem or later_problems[0]
+                job.message = _partial_success_message(transcript_problem, later_problems)
             else:
                 job.status = JobStatus.COMPLETE
-                job.message = "Video uploaded; transcript saved"
+                job.message = (
+                    f"Video uploaded; transcript saved; {processed.memory_count} moments "
+                    f"in {processed.chapter_count} chapters indexed"
+                    if processed.is_searchable
+                    else "Video uploaded; transcript saved"
+                )
             self._discard_secrets(job_id)
 
     def _fail(
