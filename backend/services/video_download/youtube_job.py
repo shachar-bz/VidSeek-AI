@@ -103,7 +103,7 @@ def run_youtube_job(
         cancel_event=cancel_event,
     )
 
-    progress_callback(JobPhase.TRANSCRIPT_LOOKUP, 0.9, "Saving transcript")
+    progress_callback(JobPhase.TRANSCRIPT_LOOKUP, 0.8, "Saving transcript")
     video_path = Path(result.video_path)
     artifact = _artifact(result)
     text_path, json_path = persist_transcript(video_path, artifact)

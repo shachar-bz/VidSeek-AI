@@ -121,7 +121,7 @@ def test_a_capture_retry_cannot_interleave_with_the_previous_runs_cleanup(tmp_pa
         def do_retry() -> None:
             with (
                 patch("backend.services.video_download.jobs.validate_remote_url"),
-                patch.object(manager, "_run_download"),
+                patch.object(manager, "_run"),
             ):
                 manager.retry_with_capture(
                     job_id,
@@ -183,11 +183,11 @@ def test_the_account_that_started_a_job_is_threaded_to_its_recorded_video(tmp_pa
                 return_value=video_path,
             ),
             patch(
-                "backend.services.video_download.jobs.process_downloaded_video",
+                "backend.download_pipeline.acquisition.process_downloaded_video",
                 return_value=result,
             ),
-            patch("backend.services.video_download.jobs.upload_job_video", return_value=STORED),
-            patch("backend.services.video_download.jobs.record_job_video") as record_mock,
+            patch("backend.download_pipeline.video_storage.upload_job_video", return_value=STORED),
+            patch("backend.download_pipeline.video_storage.record_job_video") as record_mock,
         ):
             manager.complete_browser_download(
                 created.job_id, BrowserDownloadCompleteRequest(local_path=str(video_path))
@@ -244,10 +244,10 @@ def run_to_completion(
             "backend.services.video_download.jobs.validate_local_media_path",
             return_value=video_path,
         ),
-        patch("backend.services.video_download.jobs.process_downloaded_video", return_value=result),
-        patch("backend.services.video_download.jobs.upload_job_video", **upload),
+        patch("backend.download_pipeline.acquisition.process_downloaded_video", return_value=result),
+        patch("backend.download_pipeline.video_storage.upload_job_video", **upload),
         patch(
-            "backend.services.video_download.jobs.record_job_video",
+            "backend.download_pipeline.video_storage.record_job_video",
             **(record or {"return_value": None}),
         ),
     ):

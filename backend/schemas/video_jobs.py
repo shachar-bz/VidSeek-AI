@@ -33,6 +33,13 @@ class JobPhase(str, Enum):
     TRANSCRIPT_LOOKUP = "transcript_lookup"
     TRANSCRIPTION = "transcription"
     UPLOAD = "upload"
+    # What happens to a video once it is stored: its transcript is divided into memories
+    # and grouped into chapters, and both are turned into the vectors a search matches
+    # against. Slow enough to be worth naming separately -- each is a model call over the
+    # whole video -- and the only part of the job the extension would otherwise watch sit
+    # at "uploading" for minutes.
+    SEGMENTATION = "segmentation"
+    EMBEDDING = "embedding"
     COMPLETE = "complete"
 
 

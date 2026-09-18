@@ -10,6 +10,7 @@ from .chapter_embeddings import ChapterEmbedding, ChapterForEmbedding, PostgresC
 from .chapters import (
     ChapterHeading,
     ChapterWithNeighbours,
+    NewChapter,
     PostgresChapters,
     StoredChapter,
     StoredChapterMemory,
@@ -17,7 +18,7 @@ from .chapters import (
 )
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
-from .memories import PostgresMemories, StoredMemory
+from .memories import NewMemory, PostgresMemories, StoredMemory
 from .memory_embeddings import (
     MemoryEmbedding,
     MemoryForEmbedding,
@@ -37,6 +38,8 @@ __all__ = [
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",
+    "NewChapter",
+    "NewMemory",
     "NewUser",
     "PostgresChapterEmbeddings",
     "PostgresChapters",

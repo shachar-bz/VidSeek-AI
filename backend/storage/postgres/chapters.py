@@ -8,10 +8,13 @@ edge of a chapter and needs somewhere to go next: what is this chapter called, a
 lies either side of it. `video_outline` answers neither: it steps back and names every
 chapter of a video at once, for a caller that does not yet know which section it wants.
 
-This is the first read of `chapters` that is not part of embedding them, which is why the
-table finally has a module of its own. `chapter_embeddings.chapters_for_video` still reads
-the table for the embedding pipeline, and stays there: it selects what a vector is built
-from, not what a reader is shown.
+`replace` is the other half: the writer the chapter-grouping stage had been missing, which
+is what finally gives the rows the reads above were written against something to read. It
+lives here rather than beside the stage that produces them because `storage` is the only
+package that talks to PostgreSQL.
+
+`chapter_embeddings.chapters_for_video` still reads the table for the embedding pipeline,
+and stays there: it selects what a vector is built from, not what a reader is shown.
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0005_chapters.sql` and
 `migrations/0006_memories.sql` applied.
@@ -19,9 +22,13 @@ Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0005_chapters.sql` a
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .connection import connection
+
+logger = logging.getLogger(__name__)
 
 # One chapter and its memories in a single round trip. The chapter's columns repeat on
 # every row, which is the price of not paying for a second query.
@@ -199,11 +206,87 @@ class ChapterWithNeighbours:
     following: ChapterHeading | None
 
 
+# One chapter written in place, keyed on the position it occupies in the video. Matches
+# `chapters_video_index_unique` in 0005_chapters.sql.
+#
+# `returning id` is what makes the memory writer possible: a memory points at the chapter
+# it was grouped into, and the chapter's id is generated here rather than known in advance,
+# so it has to come back out of the write that produced it.
+UPSERT_CHAPTER_SQL = """
+insert into public.chapters
+    (video_id, chapter_index, title, summary, start_seconds, end_seconds, model)
+values (%s::uuid, %s, %s, %s, %s, %s, %s)
+on conflict (video_id, chapter_index) do update set
+    title = excluded.title,
+    summary = excluded.summary,
+    start_seconds = excluded.start_seconds,
+    end_seconds = excluded.end_seconds,
+    model = excluded.model
+returning id
+"""
+
+
+@dataclass(frozen=True)
+class NewChapter:
+    """One chapter as it is handed to `replace`, before the database has given it an id.
+
+    `StoredChapter` is the same chapter read back, with its id and its memories. The two
+    are kept apart for the reason `NewUser` and `StoredUser` are: what a caller supplies
+    and what a row answers with are not the same set of fields, and one type covering both
+    would make every field the writer cannot know optional.
+    """
+
+    chapter_index: int
+    title: str
+    summary: str
+    start_seconds: float
+    end_seconds: float
+    model: str | None = None
+
+
 class PostgresChapters:
     """The `chapters` table, as the rest of the backend sees it."""
 
     def __init__(self, pool=None):
         self._pool = pool
+
+    def replace(self, video_id: str, chapters: Sequence[NewChapter]) -> list[str]:
+        """Make this video's stored chapters exactly `chapters`, and return their ids in order.
+
+        Written as an upsert followed by a trim, the same as `PostgresTranscriptSegments`
+        and `PostgresComments` and in the same single transaction, so a re-run never leaves
+        the video with no chapters at all: every position is overwritten in place, and only
+        the positions the new grouping does not reach are removed. The trim relies on the
+        grouping stage's guarantee that `chapter_index` runs from zero with no gaps, which
+        is what makes "everything at or past the new length" the right thing to delete.
+
+        Trimming a chapter does not take its memories with it -- `memories.chapter_id` is
+        `on delete set null` -- so a memory whose chapter disappeared is left ungrouped
+        rather than deleted, which is the state every memory is in before grouping runs.
+        `PostgresMemories.replace` is expected to follow and point them at the new chapters.
+
+        The ids come back in `chapter_index` order, which is the order they were written in,
+        so a caller can match the id at position *n* to the chapter it handed over at *n*.
+        Written one statement per chapter rather than with `executemany`, because each one's
+        generated id has to be read back and a video has as many chapters as it has
+        sections -- dozens, not the thousands a transcript has segments.
+        """
+        ordered = sorted(chapters, key=lambda chapter: chapter.chapter_index)
+        chapter_ids: list[str] = []
+        with connection(self._pool) as open_connection:
+            with open_connection.cursor() as cursor:
+                for chapter in ordered:
+                    row = cursor.execute(
+                        UPSERT_CHAPTER_SQL, _to_chapter_values(video_id, chapter)
+                    ).fetchone()
+                    chapter_ids.append(str(row["id"]))
+                cursor.execute(
+                    "delete from public.chapters "
+                    "where video_id = %s::uuid and chapter_index >= %s",
+                    (video_id, len(ordered)),
+                )
+        logger.info("Stored %d chapters for video %s", len(chapter_ids), video_id)
+        return chapter_ids
 
     def chapter_with_memories(self, video_id: str, chapter_id: str) -> StoredChapter | None:
         """This video's chapter `chapter_id`, with its memories in order.
@@ -264,6 +347,19 @@ class PostgresChapters:
             rows = open_connection.execute(VIDEO_OUTLINE_SQL, (video_id,)).fetchall()
         return [_to_outline(row) for row in rows]
 
+
+
+def _to_chapter_values(video_id: str, chapter: NewChapter) -> tuple:
+    """One chapter as the parameters of `UPSERT_CHAPTER_SQL`, in its column order."""
+    return (
+        video_id,
+        chapter.chapter_index,
+        chapter.title,
+        chapter.summary,
+        chapter.start_seconds,
+        chapter.end_seconds,
+        chapter.model,
+    )
 
 
 def _to_memory(row) -> StoredChapterMemory:

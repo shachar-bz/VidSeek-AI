@@ -42,6 +42,7 @@ VidSeek-AI/
 │   ├── semantic_segmentation/              # What a transcript becomes once transcription is done.
 │   │   ├── memories/                       # Stage two: a transcript divided into semantic memories by an LLM.
 │   │   └── chapters/                       # Stage three: memories grouped into higher-level chapters by an LLM.
+│   ├── download_pipeline/                  # The order one video runs through: download, store, segment, embed.
 │   └── tests/                              # Automated backend companion tests.
 ├── chrome-extension/                       # Internal Manifest V3 video download extension.
 │   ├── public/                             # Static files copied into the extension build.
@@ -54,6 +55,9 @@ VidSeek-AI/
 
 * `api/` is the only package that imports FastAPI.
 * `services/` imports no web framework.
+* `download_pipeline/` holds the order the stages run in and nothing else; every stage
+  calls a service or a store rather than doing the work itself. Nothing imports it but
+  `services/video_download/jobs.py`, which is where a job becomes a pipeline run.
 * `core/` imports nothing from other project packages.
 * `storage/` is the only path to PostgreSQL and Blob Storage.
 * `schemas/` is the contract shared with the extension; it depends only on `core/`.
