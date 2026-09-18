@@ -8,15 +8,21 @@ VIDEO_ID = "11111111-2222-3333-4444-555555555555"
 
 
 def test_a_memory_in_a_chapter_is_rendered_with_its_chapter_title_first() -> None:
-    text = build_embedding_text("Getting started", "The host explains the setup.")
+    text = build_embedding_text(
+        "Getting started", "The host explains the setup.", "Okay, so first you plug it in."
+    )
 
-    assert text == "chapter title: Getting started\nmemory summary: The host explains the setup."
+    assert text == (
+        "chapter title: Getting started\n"
+        "memory summary: The host explains the setup.\n"
+        "memory text: Okay, so first you plug it in."
+    )
 
 
 def test_a_memory_with_no_chapter_yet_has_no_chapter_title_line() -> None:
-    text = build_embedding_text(None, "A moment with no chapter yet.")
+    text = build_embedding_text(None, "A moment with no chapter yet.", "Some raw speech.")
 
-    assert text == "memory summary: A moment with no chapter yet."
+    assert text == "memory summary: A moment with no chapter yet.\nmemory text: Some raw speech."
 
 
 def test_embed_memories_for_video_embeds_each_memory_and_stores_the_result(monkeypatch) -> None:
@@ -27,6 +33,7 @@ def test_embed_memories_for_video_embeds_each_memory_and_stores_the_result(monke
             "chapter_id": "66666666-7777-8888-9999-000000000000",
             "chapter_title": "Getting started",
             "summary": "The host explains the setup.",
+            "text": "Okay, so first you plug it in.",
         }
     ]
     pool = FakePool(rows=rows)
@@ -44,7 +51,11 @@ def test_embed_memories_for_video_embeds_each_memory_and_stores_the_result(monke
     written = embed_memories_for_video(VIDEO_ID, pool=pool)
 
     assert written == 1
-    assert embedded_texts == ["chapter title: Getting started\nmemory summary: The host explains the setup."]
+    assert embedded_texts == [
+        "chapter title: Getting started\n"
+        "memory summary: The host explains the setup.\n"
+        "memory text: Okay, so first you plug it in."
+    ]
     # recorded[0] is memories_for_video's own read; the batch write is recorded[1].
     stored = pool.recorded[1].parameters[0]
     assert stored[0] == rows[0]["memory_id"]

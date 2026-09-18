@@ -29,7 +29,7 @@ def embed_memories_for_video(video_id: str, *, pool=None) -> int:
 
     embeddings = []
     for memory in memories:
-        text = build_embedding_text(memory.chapter_title, memory.summary)
+        text = build_embedding_text(memory.chapter_title, memory.summary, memory.text)
         vector = embed_text(text)
         embeddings.append(
             MemoryEmbedding(
