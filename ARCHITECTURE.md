@@ -234,5 +234,6 @@ VidSeek-AI/
     ├── tsconfig.json                               # Strict TypeScript configuration.
     └── vite.config.ts                              # Deterministic extension bundle configuration.
 └── frontend/                                       # Reserved for future web frontend applications.
-    └── README.md                                   # Notes that this folder is a placeholder.
+    ├── README.md                                   # Notes that this folder is a placeholder.
+    └── WEBSITE_FUNCTIONALITY.md                    # What the planned web app does, page by page, and what the backend must gain for it.
 ```
