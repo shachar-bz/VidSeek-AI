@@ -3,8 +3,8 @@
 import pytest
 from pydantic_ai import ModelRetry, RunContext
 
-from backend.conversation_tools.deps import ConversationDeps
-from backend.conversation_tools.get_memory_context import MAX_CONTEXT_RANGE, get_memory_context
+from backend.video_agent.tools.deps import ConversationDeps
+from backend.video_agent.tools.get_memory_context import MAX_CONTEXT_RANGE, get_memory_context
 from backend.tests.fake_postgres import FakePool
 
 VIDEO_ID = "11111111-2222-3333-4444-555555555555"

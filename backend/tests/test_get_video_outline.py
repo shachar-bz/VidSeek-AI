@@ -3,8 +3,8 @@
 import pytest
 from pydantic_ai import RunContext
 
-from backend.conversation_tools.deps import ConversationDeps
-from backend.conversation_tools.get_video_outline import ChapterOutline, get_video_outline
+from backend.video_agent.tools.deps import ConversationDeps
+from backend.video_agent.tools.get_video_outline import ChapterOutline, get_video_outline
 from backend.core.errors import VideoNotFoundError
 from backend.tests.fake_postgres import FakePool
 

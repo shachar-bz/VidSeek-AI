@@ -3,9 +3,9 @@
 import pytest
 from pydantic_ai import RunContext
 
-from backend.conversation_tools.deps import ConversationDeps
-from backend.conversation_tools.memories_semantic_search import TOP_K, memories_semantic_search
-from backend.conversation_tools.memories_semantic_search import tool as tool_module
+from backend.video_agent.tools.deps import ConversationDeps
+from backend.video_agent.tools.memories_semantic_search import TOP_K, memories_semantic_search
+from backend.video_agent.tools.memories_semantic_search import tool as tool_module
 from backend.tests.fake_postgres import FakePool
 
 VIDEO_ID = "11111111-2222-3333-4444-555555555555"
