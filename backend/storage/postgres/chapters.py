@@ -1,8 +1,11 @@
-"""The `chapters` table, read together with the memories grouped into each chapter.
+"""The `chapters` table: a chapter's contents, and where it sits among the other chapters.
 
-The one read here answers the whole of a chapter at once -- its title and summary, and
-every memory inside it in order -- because that is the unit a conversation about a video
-reasons in: a moment found by search is only meaningful against the section it sits in.
+`chapter_with_memories` answers the whole of a chapter at once -- its title and summary,
+and every memory inside it in order -- because that is the unit a conversation about a
+video reasons in: a moment found by search is only meaningful against the section it sits
+in. `with_neighbours` answers the other question, asked by a caller that has read to the
+edge of a chapter and needs somewhere to go next: what is this chapter called, and what
+lies either side of it.
 
 This is the first read of `chapters` that is not part of embedding them, which is why the
 table finally has a module of its own. `chapter_embeddings.chapters_for_video` still reads
@@ -83,6 +86,72 @@ class StoredChapter:
     memories: list[StoredChapterMemory]
 
 
+# A chapter and the two chapters either side of it, in a single round trip. The neighbours
+# are found at `chapter_index` one either side: 0005_chapters.sql counts the index from
+# zero with no gaps, so adjacency is arithmetic rather than a search through the video's
+# times.
+#
+# Scoped on `video_id` as well as the chapter's own id, for the same reason
+# `CHAPTER_WITH_MEMORIES_SQL` is.
+#
+# Left joins, so the first and last chapters of a video still answer with themselves. A
+# null neighbour there is the video's own edge rather than a missing row.
+#
+# Each side's columns are prefixed, because all three chapters are the same four columns
+# and would otherwise collide in one row.
+CHAPTER_WITH_NEIGHBOURS_SQL = """
+select
+    chapter.id as chapter_id,
+    chapter.chapter_index as chapter_index,
+    chapter.title as title,
+    chapter.summary as summary,
+    preceding.id as preceding_id,
+    preceding.chapter_index as preceding_index,
+    preceding.title as preceding_title,
+    preceding.summary as preceding_summary,
+    following.id as following_id,
+    following.chapter_index as following_index,
+    following.title as following_title,
+    following.summary as following_summary
+from public.chapters chapter
+left join public.chapters preceding
+    on preceding.video_id = chapter.video_id
+    and preceding.chapter_index = chapter.chapter_index - 1
+left join public.chapters following
+    on following.video_id = chapter.video_id
+    and following.chapter_index = chapter.chapter_index + 1
+where chapter.id = %s::uuid and chapter.video_id = %s::uuid
+"""
+
+
+@dataclass(frozen=True)
+class ChapterHeading:
+    """A chapter reduced to what names it: its position, its title and its one-line summary.
+
+    Not `StoredChapter`, which carries the chapter's memories and timing. A caller pointing
+    at a neighbouring chapter is offering the model somewhere to read next, and reading it
+    is the next call's job; naming three chapters should not cost three chapters' contents.
+    """
+
+    chapter_id: str
+    chapter_index: int
+    title: str
+    summary: str
+
+
+@dataclass(frozen=True)
+class ChapterWithNeighbours:
+    """A chapter, named, and the chapters either side of it.
+
+    `preceding` is None at the video's first chapter and `following` at its last: the
+    section boundary is the video's own edge, and there is nowhere further to read.
+    """
+
+    chapter: ChapterHeading
+    preceding: ChapterHeading | None
+    following: ChapterHeading | None
+
+
 class PostgresChapters:
     """The `chapters` table, as the rest of the backend sees it."""
 
@@ -113,6 +182,29 @@ class PostgresChapters:
             memories=[_to_memory(row) for row in rows if row["memory_id"] is not None],
         )
 
+    def with_neighbours(self, video_id: str, chapter_id: str) -> ChapterWithNeighbours | None:
+        """This video's chapter `chapter_id`, named, and the chapters either side of it.
+
+        None when the video has no such chapter, for the same reason and with the same
+        discretion as `chapter_with_memories`.
+        """
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                CHAPTER_WITH_NEIGHBOURS_SQL, (chapter_id, video_id)
+            ).fetchone()
+        if row is None:
+            return None
+        return ChapterWithNeighbours(
+            chapter=ChapterHeading(
+                chapter_id=str(row["chapter_id"]),
+                chapter_index=int(row["chapter_index"]),
+                title=row["title"],
+                summary=row["summary"],
+            ),
+            preceding=_to_heading(row, "preceding"),
+            following=_to_heading(row, "following"),
+        )
+
 
 def _to_memory(row) -> StoredChapterMemory:
     """One joined row's memory half, once it is known to hold a memory at all."""
@@ -121,4 +213,16 @@ def _to_memory(row) -> StoredChapterMemory:
         summary=row["memory_summary"],
         start_seconds=float(row["memory_start_seconds"]),
         end_seconds=float(row["memory_end_seconds"]),
+    )
+
+
+def _to_heading(row, prefix: str) -> ChapterHeading | None:
+    """One side's chapter out of a `with_neighbours` row, or None where the video ends."""
+    if not row[f"{prefix}_id"]:
+        return None
+    return ChapterHeading(
+        chapter_id=str(row[f"{prefix}_id"]),
+        chapter_index=int(row[f"{prefix}_index"]),
+        title=row[f"{prefix}_title"],
+        summary=row[f"{prefix}_summary"],
     )

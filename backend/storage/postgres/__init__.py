@@ -7,9 +7,16 @@ the runner two copies of its own module-level state. Import it by its full path 
 """
 
 from .chapter_embeddings import ChapterEmbedding, ChapterForEmbedding, PostgresChapterEmbeddings
-from .chapters import PostgresChapters, StoredChapter, StoredChapterMemory
+from .chapters import (
+    ChapterHeading,
+    ChapterWithNeighbours,
+    PostgresChapters,
+    StoredChapter,
+    StoredChapterMemory,
+)
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
+from .memories import PostgresMemories, StoredMemory
 from .memory_embeddings import (
     MemoryEmbedding,
     MemoryForEmbedding,
@@ -24,6 +31,8 @@ from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
 __all__ = [
     "ChapterEmbedding",
     "ChapterForEmbedding",
+    "ChapterHeading",
+    "ChapterWithNeighbours",
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",
@@ -31,6 +40,7 @@ __all__ = [
     "PostgresChapterEmbeddings",
     "PostgresChapters",
     "PostgresComments",
+    "PostgresMemories",
     "PostgresMemoryEmbeddings",
     "PostgresSettings",
     "PostgresTranscriptSegments",
@@ -38,6 +48,7 @@ __all__ = [
     "PostgresVideoRecords",
     "StoredChapter",
     "StoredChapterMemory",
+    "StoredMemory",
     "StoredUser",
     "StoredVideoRecord",
     "VideoRecord",

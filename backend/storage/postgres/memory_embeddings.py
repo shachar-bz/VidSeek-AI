@@ -3,11 +3,10 @@
 Both sides of that live here: `memories_for_video` and `replace` fill the table, and
 `nearest_memories` is the search itself, which is what the vectors were ever written for.
 
-Both reads join `memories` to `chapters`, which is why neither lives as a plain memory
-read: embedding a memory needs its chapter's title alongside it, and answering a search
-needs the memory's own text and times. The only other read of `memories` is the one
-`chapters.py` makes from the chapter's side, so the table still has no store module of its
-own for either to reuse.
+Both reads join `memories` to `chapters`, which is why neither moved to `memories.py`
+when that module was added: embedding a memory needs its chapter's title alongside it, and
+answering a search needs the memory's own text and times, so both are reads of the join
+rather than of either table.
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0007_embeddings.sql` and
 `migrations/0010_memory_embeddings_video_chapter.sql` applied.
