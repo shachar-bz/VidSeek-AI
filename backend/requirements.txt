@@ -141,7 +141,13 @@ sentence-transformers>=3.0
 # written against (a typed function plus its docstring becomes a tool's schema and
 # description). No agent lives in this repo yet; this is only the dependency the tools
 # themselves are built with.
-pydantic-ai>=0.0.14
+#
+# The floor was `>=0.0.14`, which was the current release when the tools were written and
+# is now three years and two major versions behind what is actually installed. That is not
+# a harmless loose bound: anyone reading this line to find out which API to write the agent
+# against would write 0.0.x code, and Pydantic AI's agent and streaming surfaces are not
+# recognisable across that gap. Pinned to the major that is installed and tested.
+pydantic-ai>=2.45,<3
 # --- end conversation tools module ---
 
 # --- azure postgresql module ---
