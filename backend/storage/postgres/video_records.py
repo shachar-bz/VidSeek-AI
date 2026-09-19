@@ -21,6 +21,8 @@ from dataclasses import asdict, dataclass, fields
 
 from psycopg import sql
 
+from backend.core.source_urls import normalize_source_url
+
 from .connection import connection, iso_text
 
 TABLE_NAME = "videos"
@@ -64,6 +66,13 @@ class VideoRecord:
     file_size_bytes: int | None = None
     content_type: str | None = None
     job_id: str | None = None
+
+    # The deduplication key: `source_url` reduced to what identifies the video, by
+    # `normalize_source_url`. Left settable here for the same reason every other field is --
+    # `to_row` sends whatever it holds -- but `PostgresVideoRecords.upsert` overwrites it
+    # with the value freshly computed from `source_url` before writing, so this column can
+    # never drift from the function that defines it (`migrations/0019_videos_normalized_source_url.sql`).
+    normalized_source_url: str | None = None
 
     def to_row(self) -> dict:
         """The column values to write, nulls included.
@@ -141,8 +150,14 @@ class PostgresVideoRecords:
         Replacing rather than appending matches how the container already behaves: a second
         run of the same job overwrites the blob under that name, so a second row would
         describe a file that no longer exists.
+
+        `normalized_source_url` is computed here from `record.source_url` rather than taken
+        from `record`, so that whatever the caller passed for it is never what actually gets
+        written -- the column has exactly one definition, and trusting a caller to have
+        applied it correctly would give it a second one.
         """
         row = record.to_row()
+        row["normalized_source_url"] = normalize_source_url(record.source_url)
         values = [row[name] for name in COLUMN_NAMES]
         with connection(self._pool) as open_connection:
             written = open_connection.execute(upsert_statement(), values).fetchone()
@@ -187,26 +202,58 @@ class PostgresVideoRecords:
             ).fetchone()
         return row is not None
 
-    def find_by_source_url(self, source_url: str) -> list[StoredVideoRecord]:
-        """Every video taken from one page, newest first.
+    def find_by_source_url(self, user_id: str, source_url: str) -> list[StoredVideoRecord]:
+        """This account's videos taken from one page, newest first.
 
         A list rather than a single row: the same page can be downloaded again after its
-        video changes, and both uploads are real blobs in the container.
+        video changes, and both uploads are real blobs in the container. Joined through
+        `user_videos` rather than filtered on `videos` alone -- a video is a shared row, so
+        without that join this would hand back every account's video from that page, not
+        just the caller's own library.
         """
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
-                f"select * from public.{TABLE_NAME} "
-                "where source_url = %s order by created_at desc",
-                (source_url,),
+                f"select v.* from public.{TABLE_NAME} v "
+                "join public.user_videos uv on uv.video_id = v.id "
+                "where uv.user_id = %s::uuid and v.source_url = %s "
+                "order by v.created_at desc",
+                (user_id, source_url),
             ).fetchall()
         return [StoredVideoRecord.from_row(row) for row in rows]
 
-    def recent(self, limit: int = DEFAULT_LIST_LIMIT) -> list[StoredVideoRecord]:
-        """The most recently recorded videos, newest first."""
+    def find_by_normalized_source_url(self, source_url: str) -> StoredVideoRecord | None:
+        """The video already recorded for this page, by its deduplication key, or None.
+
+        `source_url` is a candidate page URL -- the one a job is about to download -- and is
+        normalized here rather than by the caller, the same way `upsert` normalizes it before
+        writing, so the two never compare a normalized value against a raw one. This is the
+        lookup a job creation runs before downloading anything
+        (`migrations/0019_videos_normalized_source_url.sql`); at most one row can match,
+        because that migration's unique index guarantees it. Not scoped to one account's
+        library on purpose: the point of this lookup is to find a video regardless of who
+        else already has it, so that it can be linked rather than downloaded again.
+        """
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"select * from public.{TABLE_NAME} where normalized_source_url = %s limit 1",
+                (normalize_source_url(source_url),),
+            ).fetchone()
+        return StoredVideoRecord.from_row(row) if row else None
+
+    def recent(self, user_id: str, limit: int = DEFAULT_LIST_LIMIT) -> list[StoredVideoRecord]:
+        """The most recently added videos in this account's library, newest link first.
+
+        Scoped through `user_videos` for the same reason `find_by_source_url` is: a video
+        row is shared, and this must show what one account has in their library, not every
+        video anyone has ever recorded.
+        """
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
-                f"select * from public.{TABLE_NAME} order by created_at desc limit %s",
-                (limit,),
+                f"select v.* from public.{TABLE_NAME} v "
+                "join public.user_videos uv on uv.video_id = v.id "
+                "where uv.user_id = %s::uuid "
+                "order by uv.added_at desc limit %s",
+                (user_id, limit),
             ).fetchall()
         return [StoredVideoRecord.from_row(row) for row in rows]
 
