@@ -1,4 +1,4 @@
-"""The four stages in order: one video, from a URL the extension sent to vectors that can be searched.
+"""The five stages from a captured video URL to durable, searchable generated artifacts.
 
 1. Acquire — download the video and get a timed transcript beside it, whichever of the
    three ways it has to be obtained (`acquisition`).
@@ -7,22 +7,23 @@
 3. Segment — divide the transcript into memories, group those into chapters, store both
    (`segmentation`).
 4. Embed — turn the memories and chapters into vectors (`embedding`).
+5. Insights — generate the video's summary, takeaways and suggested questions (`insights`).
 
 Each stage is a module of its own and each one is callable on its own; this is only the
-order and the handover between them. None of the work happens here, and none of it happens
-in this package at all — every stage calls a service that already existed.
+order and the handover between them. This module performs no stage work itself; each stage
+delegates generation or processing to a service and owns only its durable handoff.
 
 The stages divide at a sharp line. The first two either produce a video that exists
-somewhere durable or raise, because there is no half of a video worth keeping. The last two
+somewhere durable or raise, because there is no half of a video worth keeping. The last three
 describe a video that is already safe, so they report what they could not do and the run
-finishes anyway: the codes come back on `ProcessedVideo.problems`, and re-running either
+finishes anyway: the codes come back on `ProcessedVideo.problems`, and re-running any such
 stage later needs nothing this process still holds.
 
 Cancellation is checked between stages, which is the same granularity the download services
 offer: a stage that has started runs to completion, and the run stops at the next boundary.
 Where it stops changes once the video is stored, though. Before then a cancel raises and the
 run has no result, which is right because there is nothing to report. Afterwards the video is
-in Blob Storage whatever anyone now wants, so a cancel skips the two model-driven stages and
+in Blob Storage whatever anyone now wants, so a cancel skips the remaining model-driven stages and
 the run returns what it has -- reporting a stored video as cancelled would be untrue, and
 spending several minutes of model time on a video somebody asked to stop would be worse.
 """
@@ -39,6 +40,7 @@ from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
 
 from .acquisition import AcquisitionRoute, acquire_video
 from .embedding import embed_video
+from .insights import generate_and_store_insights
 from .result import ProcessedVideo
 from .segmentation import segment_and_store
 from .video_storage import store_video
@@ -48,6 +50,9 @@ SEGMENTATION_MESSAGE = "Finding the video's moments and chapters"
 
 EMBEDDING_PROGRESS = 0.97
 EMBEDDING_MESSAGE = "Making the video searchable"
+
+INSIGHTS_PROGRESS = 0.99
+INSIGHTS_MESSAGE = "Generating video insights"
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +70,7 @@ def run_download_pipeline(
     local_path: Path | None = None,
     pool=None,
 ) -> ProcessedVideo:
-    """Take one video all the way from `route` to its stored vectors.
+    """Take one video from `route` to stored vectors and generated insights.
 
     Raises `DownloadCancelled` if the run was cancelled at a stage boundary,
     `VideoStorageError` if Blob Storage would not take the video, and whatever the download
@@ -125,6 +130,22 @@ def run_download_pipeline(
     embedded = embed_video(storage.video_id, pool=pool)
     problems.extend(embedded.problems)
 
+    if cancel_event.is_set():
+        return ProcessedVideo(
+            acquired=acquired,
+            stored_video=storage.stored_video,
+            video_id=storage.video_id,
+            memory_count=segmented.memory_count,
+            chapter_count=segmented.chapter_count,
+            memory_embedding_count=embedded.memory_count,
+            chapter_embedding_count=embedded.chapter_count,
+            problems=tuple(problems),
+        )
+
+    progress_callback(JobPhase.INSIGHTS, INSIGHTS_PROGRESS, INSIGHTS_MESSAGE)
+    insights = generate_and_store_insights(storage.video_id, pool=pool)
+    problems.extend(insights.problems)
+
     return ProcessedVideo(
         acquired=acquired,
         stored_video=storage.stored_video,
@@ -140,7 +161,7 @@ def run_download_pipeline(
 def _reason_to_stop_after_storage(
     acquired, video_id: str | None, cancel_event: threading.Event
 ) -> str | None:
-    """Why stages three and four will not run, or None when they will. For the log line only.
+    """Why stages three through five will not run, or None when they will. For the log line only.
 
     Nothing is added to `problems` for any of these, because whatever a caller needs to know
     is already there. No `videos` row means either a write that failed, which is already

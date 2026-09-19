@@ -37,6 +37,10 @@ CHAPTER_GROUPING_FAILED = "chapter_grouping_failed"
 # anything this run still holds.
 EMBEDDING_FAILED = "embedding_failed"
 
+# The video's durable chapters and memories remain available, but the summary, takeaways
+# and suggested questions could not be generated or stored.
+INSIGHT_GENERATION_FAILED = "insight_generation_failed"
+
 
 class VideoStorageError(RuntimeError):
     """Blob Storage would not take the video, which costs the run its result.

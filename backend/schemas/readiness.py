@@ -12,10 +12,11 @@ whether they ever will. A job that finished with `segmentation_failed` therefore
 `understanding` permanently, which is the truth about that video -- the browsable half works
 and the rest never arrived -- and the job's own message is what explains why it stopped.
 
-Chat is gated on `ready` and nothing else. Retrieval is tools-only, and every retrieval tool
-but `get_video_info` reads memories, chapters or embeddings, so a video that has not reached
-`ready` has nothing for the agent to find. `ReadinessStage.allows_chat` is that rule, kept
-beside the stages rather than restated at each call site.
+Chat is gated on fully processed results: both `ready` and `partial`. Retrieval is tools-only,
+and every retrieval tool but `get_video_info` reads memories, chapters or embeddings, so a
+video that is still processing has nothing for the agent to find. `partial` differs only in
+timestamp reliability, not capability. `ReadinessStage.allows_chat` keeps that rule beside
+the stages rather than restating it at each call site.
 """
 
 from __future__ import annotations

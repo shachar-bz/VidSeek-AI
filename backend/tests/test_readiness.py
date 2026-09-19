@@ -33,6 +33,7 @@ EVERYTHING = VideoArtifacts(
         (JobPhase.UPLOAD, ReadinessStage.TRANSCRIBING),
         (JobPhase.SEGMENTATION, ReadinessStage.UNDERSTANDING),
         (JobPhase.EMBEDDING, ReadinessStage.UNDERSTANDING),
+        (JobPhase.INSIGHTS, ReadinessStage.UNDERSTANDING),
     ],
 )
 def test_a_running_job_is_staged_by_its_phase(phase: JobPhase, expected: ReadinessStage) -> None:
@@ -106,7 +107,15 @@ def test_a_job_that_left_nothing_browsable_is_failed(code: str) -> None:
     assert stage == ReadinessStage.FAILED
 
 
-@pytest.mark.parametrize("code", ["segmentation_failed", "chapter_grouping_failed", "embedding_failed"])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "segmentation_failed",
+        "chapter_grouping_failed",
+        "embedding_failed",
+        "insight_generation_failed",
+    ],
+)
 def test_a_job_that_stopped_after_the_transcript_leaves_a_browsable_video(code: str) -> None:
     # The player and the transcript work and the chapters never arrived. `understanding` is
     # the truth about that video; the job's own message is what explains that it stopped.

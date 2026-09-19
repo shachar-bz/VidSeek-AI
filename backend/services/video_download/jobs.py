@@ -1,10 +1,10 @@
 """Single-worker job state for the local companion API, in memory while a job runs.
 
 What a job *does* is `backend.download_pipeline`'s: acquire the video, store it, divide it
-into memories and chapters, and embed them. What is left here is everything about a job that
-the pipeline has no opinion on — which of the three acquisition routes a page URL calls for,
-how far along the extension is told the work is, what a cancel request does to a run already
-under way, and when the browser-supplied cookies are wiped.
+into memories and chapters, embed them, and generate insights. What is left here is everything
+about a job that the pipeline has no opinion on — which of the three acquisition routes a page
+URL calls for, how far along the extension is told the work is, what a cancel request does to a
+run already under way, and when the browser-supplied cookies are wiped.
 
 The one piece of real judgment still in this module is how a pipeline result becomes a
 status. The pipeline reports what it could not do as problem codes and finishes anyway, and
@@ -46,6 +46,7 @@ from backend.core.security import (
 from backend.download_pipeline import (
     CHAPTER_GROUPING_FAILED,
     EMBEDDING_FAILED,
+    INSIGHT_GENERATION_FAILED,
     RECORD_FAILED,
     SEGMENTATION_FAILED,
     AcquisitionRoute,
@@ -95,6 +96,7 @@ PROBLEM_DESCRIPTIONS = {
     SEGMENTATION_FAILED: "its moments could not be found",
     CHAPTER_GROUPING_FAILED: "its moments were found but not grouped into chapters",
     EMBEDDING_FAILED: "it is not searchable yet",
+    INSIGHT_GENERATION_FAILED: "its generated insights are not available yet",
 }
 
 # Which acquisition route each of `create`'s modes runs on. The mode is the name the
