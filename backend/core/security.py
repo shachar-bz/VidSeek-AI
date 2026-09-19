@@ -171,3 +171,27 @@ def probe_media_file(path: Path) -> None:
     streams = json.loads(process.stdout or "{}").get("streams") or []
     if not any(stream.get("codec_type") == "video" for stream in streams):
         raise ValueError("Downloaded file contains no video stream")
+
+
+def probe_media_duration_seconds(path: Path) -> float | None:
+    """This media file's duration, or None if ffprobe could not report one.
+
+    Unlike `probe_media_file`, never raises: a video whose length cannot be measured --
+    ffprobe missing, the process failing, or the format section carrying no usable number --
+    is still a video worth keeping, just one with an unset `duration_seconds`.
+    """
+    try:
+        process = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    try:
+        duration = float(json.loads(process.stdout or "{}")["format"]["duration"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return duration if duration > 0 else None

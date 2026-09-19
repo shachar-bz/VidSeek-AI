@@ -49,13 +49,16 @@ def record_job_video(
     transcript: NormalizedTranscript | None = None,
     comments: Sequence[CommentEntry] | None = None,
     user_id: str | None = None,
+    duration_seconds: float | None = None,
 ) -> StoredVideoRecord | None:
     """Write the video's row, transcript and comments, or None when no database is configured.
 
-    `duration_seconds` and `source_video_id` are left unset: neither pipeline reports them
-    today, and guessing them from a filename would put something in the table that nobody
-    measured. The transcript's own duration is not borrowed for the video's either — it is
-    where the last person stopped talking, which is not where the video ends.
+    `duration_seconds` comes from ffprobe on the local file, by whichever caller still has
+    it; None means it could not be measured, not that it is zero. `source_video_id` is left
+    unset: no pipeline reports it today, and guessing it from a filename would put something
+    in the table that nobody measured. The transcript's own duration is not borrowed for the
+    video's either — it is where the last person stopped talking, which is not where the
+    video ends.
 
     `comments` is None for every pipeline but YouTube's, which is the only one with
     anything to fetch; an empty sequence still means something (the fetch ran and found
@@ -85,6 +88,7 @@ def record_job_video(
                 transcript.timing_fidelity.value if transcript else None
             ),
             job_id=job_id,
+            duration_seconds=duration_seconds,
         )
     )
     if transcript is not None:

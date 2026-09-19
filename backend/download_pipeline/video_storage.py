@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from backend.core.security import probe_media_duration_seconds
 from backend.schemas.video_jobs import CreateVideoJobRequest
 from backend.services.video_download.video_record import record_job_video
 from backend.services.video_download.video_upload import upload_job_video
@@ -57,7 +58,14 @@ def store_video(
     `acquisition_mode` is the job manager's own name for how the video was obtained, and is
     written to the row as its `source`; it is passed through rather than derived from the
     route so that the value the extension was told matches the value the database keeps.
+
+    Duration is probed here, on `acquired.video_path`, because this is the last point that
+    file still exists: `upload_job_video` deletes the local copy the moment the upload
+    returns. A file ffprobe cannot measure still gets stored -- `probe_media_duration_seconds`
+    reports that as None rather than raising, and a video is worth keeping with or without
+    its length.
     """
+    duration_seconds = probe_media_duration_seconds(acquired.video_path)
     try:
         stored_video = upload_job_video(
             video_path=acquired.video_path,
@@ -78,6 +86,7 @@ def store_video(
             transcript=acquired.normalized_transcript,
             comments=acquired.comments,
             user_id=user_id,
+            duration_seconds=duration_seconds,
         )
     except Exception:
         logger.exception("Recording %s in the database failed", stored_video.name)

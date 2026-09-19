@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict, dataclass, fields
 
+import psycopg
 from psycopg import sql
 
 from backend.core.source_urls import normalize_source_url
@@ -155,12 +156,31 @@ class PostgresVideoRecords:
         from `record`, so that whatever the caller passed for it is never what actually gets
         written -- the column has exactly one definition, and trusting a caller to have
         applied it correctly would give it a second one.
+
+        Two jobs can both look this page up, find nothing, and start downloading before
+        either has written a row -- the lookup a job creation runs first narrows that window
+        but cannot close it. `CONFLICT_COLUMNS` is this statement's own conflict target, so
+        a `UniqueViolation` escaping it can only be the other unique index, on
+        `normalized_source_url` (`migrations/0019_videos_normalized_source_url.sql`): a
+        second job recorded this page's video microseconds first. Its row is the canonical
+        one, so it is returned in place of raising -- the loser's bytes stay in Blob Storage,
+        unreferenced by any row, rather than costing that job a spurious failure over a video
+        that is in fact recorded.
         """
         row = record.to_row()
         row["normalized_source_url"] = normalize_source_url(record.source_url)
         values = [row[name] for name in COLUMN_NAMES]
-        with connection(self._pool) as open_connection:
-            written = open_connection.execute(upsert_statement(), values).fetchone()
+        try:
+            with connection(self._pool) as open_connection:
+                written = open_connection.execute(upsert_statement(), values).fetchone()
+        except psycopg.errors.UniqueViolation:
+            winner = self.find_by_normalized_source_url(record.source_url)
+            if winner is None:
+                raise
+            logger.info(
+                "Lost a race to record %s; reusing %s instead", record.source_url, winner.id
+            )
+            return winner
         if written is None:
             raise RuntimeError(
                 f"The {TABLE_NAME} upsert for {record.blob_name} was accepted "

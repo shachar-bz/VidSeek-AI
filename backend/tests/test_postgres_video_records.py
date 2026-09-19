@@ -1,5 +1,8 @@
 """Tests for the PostgreSQL settings and the `videos` table the backend writes through."""
 
+from contextlib import contextmanager
+
+import psycopg
 import pytest
 
 from backend.core.source_urls import normalize_source_url
@@ -95,6 +98,57 @@ def test_an_upsert_that_returns_no_row_is_an_error_rather_than_a_silent_success(
     records, _ = _records([])
 
     with pytest.raises(RuntimeError, match="returned no row"):
+        records.upsert(RECORD)
+
+
+def _racing_pool(rows: list[dict]) -> tuple[FakePool, dict]:
+    """A pool whose first connection raises a unique violation, as a second job's would.
+
+    Every connection after the first behaves normally, which is what lets the retried
+    lookup inside `upsert`'s own race handling succeed.
+    """
+    pool = FakePool(rows=rows)
+    real_connection = pool.connection
+    calls = {"count": 0}
+
+    @contextmanager
+    def racing_connection():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise psycopg.errors.UniqueViolation(
+                "duplicate key value violates unique constraint "
+                '"videos_normalized_source_url_unique_idx"'
+            )
+        with real_connection() as connection:
+            yield connection
+
+    pool.connection = racing_connection
+    return pool, calls
+
+
+def test_losing_a_race_to_record_the_same_page_reuses_the_winners_row() -> None:
+    # Two jobs can both look this page up, find nothing, and start downloading before
+    # either has written a row; the second one's insert collides with the other unique
+    # index this table has, on normalized_source_url, rather than the one this statement
+    # names in its own ON CONFLICT clause.
+    winner_row = {**ROW, "id": "99999999-9999-9999-9999-999999999999"}
+    pool, calls = _racing_pool([winner_row])
+    records = PostgresVideoRecords(pool=pool)
+
+    winner = records.upsert(RECORD)
+
+    assert winner.id == winner_row["id"]
+    assert calls["count"] == 2
+
+
+def test_a_unique_violation_with_no_winner_to_find_is_not_swallowed() -> None:
+    # If the row this collided with cannot be found by the very key it collided on,
+    # something other than the expected race happened, and that should surface rather
+    # than be reported as an ordinary write.
+    pool, _ = _racing_pool([])
+    records = PostgresVideoRecords(pool=pool)
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
         records.upsert(RECORD)
 
 
