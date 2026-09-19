@@ -70,12 +70,17 @@ second. The third needs the fragment fetches routed through the same gate.
 
 ## 3. Jobs are never evicted
 
-**Status:** open, low priority. **Problem:** `JobManager._jobs` only grows. A failed job
-that is still capture-eligible keeps its caption text (up to 50 × 2 MB) so the retry has
-something to work with, and nothing ever drops it.
+**Status:** open; the schema for the fix now exists. **Problem:** `JobManager._jobs` only
+grows. A failed job that is still capture-eligible keeps its caption text (up to 50 × 2 MB)
+so the retry has something to work with, and nothing ever drops it.
 
-**To close:** evict terminal jobs older than some age, or keep the most recent N. Restarting
-the companion clears everything today, which is why this has not bitten anyone.
+**To close:** `0018_video_jobs.sql` creates the `video_jobs` table a job's status, phase,
+progress, message and error code now belong in. Once the manager writes there, the
+in-memory dict only has to hold what a *running* job needs — the cancel event, the
+browser-supplied cookies and headers, the caption text a capture retry works from — and a
+terminal job can be dropped from it entirely, because everything anyone reads afterwards is
+a row. The website needs that table anyway: a hosted page cannot see a dict in the
+companion's memory, and a restart loses every job in flight.
 
 ---
 
@@ -130,40 +135,26 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 7. Nothing writes the chapters and memories tables
+## 7. Chapters, memories and embeddings — closed
 
-**Status:** the schema exists, the writers do not. `0005_chapters.sql`,
-`0006_memories.sql` and `0007_embeddings.sql` created `chapters`, `memories`,
-`chapter_embeddings` and `memory_embeddings` during the move to Azure, so the shape is
-settled; what is missing is a store for each and something in the request path that calls
-them.
+**Status:** closed. Kept here because this entry was the longest-standing gap in the
+project and its absence would read as an oversight.
 
-**What each is for:**
+`backend/download_pipeline/` now runs all four stages of a job in order — acquire, store,
+segment, embed — so every finished video is divided into memories, grouped into chapters
+and embedded without anything else being asked to trigger it:
 
-- `chapters` — one row per broad section of a video: a title, a summary and a start/end
-  timestamp range, linked to `video_id`. `backend/semantic_segmentation/chapters/` produces
-  these and is tested.
-- `memories` — one row per semantic moment within a video: the original text, the model's
-  summary and a timestamp range, linked to `video_id` and, once the grouping stage has run,
-  to `chapter_id`. `backend/semantic_segmentation/memories/` produces these and is tested.
+- `segmentation.py` calls `segment_transcript` and `group_memories`, and writes both
+  through `PostgresMemories.replace` and `PostgresChapters.replace`.
+- `embedding.py` calls `embed_memories_for_video` and `embed_chapters_for_video`.
+- Both are reported as problem codes rather than raising, so a model that will not answer
+  costs a video its chapters and not its download.
 
-Neither stage is called from anywhere: `segment_transcript` and `group_memories` appear
-only in their own packages and in the tests.
+`0012_chapters_memories_written.sql` corrected what those two tables say about themselves,
+and `0021_embedding_ann_indexes.sql` added the hnsw index on both `vector(384)` embedding
+columns that 0007, 0010 and 0011 each deferred while nothing was writing them.
 
-**To close:** add `backend/storage/postgres/chapters.py` and `memories.py`, mirroring
-`transcript_segments.py` (a `replace` that upserts every position in one transaction and
-trims the tail). Then call them from `backend/services/video_download/video_record.py`,
-after the transcript is written, which is the only place that has both the transcript and
-the `videos.id` the rows hang off.
-
-**The embedding model is chosen, and both embedding tables have writers now.**
-`memory_embeddings.embedding` and `chapter_embeddings.embedding` are `vector(384)`, matching
-the shared all-MiniLM-L6-v2 model in `backend/services/embeddings/model.py`
-(`0010_memory_embeddings_video_chapter.sql` and `0011_chapter_embeddings_video_times.sql`).
-`backend/services/embeddings/memory_embedding/` and
-`backend/services/embeddings/chapter_embedding/` populate them from whatever rows
-`memories` and `chapters` already hold; neither is called from the request path yet, so
-closing this task's `memories`/`chapters` gap is also what gives the embedding pipelines
-something to run against automatically. No ANN index (hnsw or ivfflat) exists on either
-column — retrieval and search strategy belong to a dedicated semantic search layer, added
-when one exists, rather than to the migrations that only store the vectors.
+**What is still not produced anywhere:** a video's generated summary, key takeaways and
+suggested questions. `0020_video_insights.sql` creates the table they belong in;
+§12.4 of `frontend/WEBSITE_FUNCTIONALITY.md` is what has to fill it, as a fifth pipeline
+stage after embedding. Until it does, no video reaches the website's `ready` stage.

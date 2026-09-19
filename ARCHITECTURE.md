@@ -48,7 +48,10 @@ VidSeek-AI/
 │   ├── public/                             # Static files copied into the extension build.
 │   ├── src/                                # Extension discovery, API, background and popup source.
 │   └── tests/                              # Extension helper unit tests.
-└── frontend/                               # Reserved for future web frontend applications.
+└── frontend/                               # The VidSeek website: a React + Vite single-page app.
+    ├── src/                                # Pages, components and the API client.
+    │   └── api/                            # The wire contract, and the one place fetch is called.
+    └── tests/                              # Website unit tests, run by Vitest under jsdom.
 ```
 
 ## Rules
@@ -60,5 +63,13 @@ VidSeek-AI/
   `services/video_download/jobs.py`, which is where a job becomes a pipeline run.
 * `core/` imports nothing from other project packages.
 * `storage/` is the only path to PostgreSQL and Blob Storage.
-* `schemas/` is the contract shared with the extension; it depends only on `core/`.
+* `schemas/` is the contract shared with the extension and the website; it depends only on
+  `core/`, imports no web framework, and reaches no database. Assembling one of its models
+  out of several tables is `api/`'s work, not its own.
 * `video_agent/tools/` gets one directory per tool.
+* `frontend/src/api/` is the only place the website calls `fetch`; a page asks it for data
+  rather than building a request itself. `frontend/src/api/types.ts` mirrors
+  `backend/schemas/` field for field, the same way `chrome-extension/src/types.ts` does,
+  and is the only declaration of the wire format the website is written against.
+* The website adds no way to put a video into the system — the extension remains the only
+  one — which is why nothing under `frontend/` calls `/v1/video-jobs`.

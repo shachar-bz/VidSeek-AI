@@ -92,6 +92,20 @@ def test_a_table_is_never_created_before_the_extension_it_needs() -> None:
     assert names.index("0002_videos.sql") < names.index("0003_transcript_segments.sql")
     assert names.index("0005_chapters.sql") < names.index("0006_memories.sql")
     assert names.index("0006_memories.sql") < names.index("0007_embeddings.sql")
+    # The website's tables: sessions and video_jobs reference users, video_insights and the
+    # deduplication column reference videos, and an ANN index cannot be built until 0010
+    # and 0011 have fixed each embedding column's dimension.
+    assert names.index("0008_users.sql") < names.index("0017_sessions.sql")
+    assert names.index("0008_users.sql") < names.index("0018_video_jobs.sql")
+    assert names.index("0002_videos.sql") < names.index("0018_video_jobs.sql")
+    assert names.index("0002_videos.sql") < names.index("0019_videos_normalized_source_url.sql")
+    assert names.index("0002_videos.sql") < names.index("0020_video_insights.sql")
+    assert names.index("0010_memory_embeddings_video_chapter.sql") < names.index(
+        "0021_embedding_ann_indexes.sql"
+    )
+    assert names.index("0011_chapter_embeddings_video_times.sql") < names.index(
+        "0021_embedding_ann_indexes.sql"
+    )
 
 
 def test_a_fresh_database_has_every_migration_pending() -> None:
