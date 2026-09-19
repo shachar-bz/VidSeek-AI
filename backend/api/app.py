@@ -13,7 +13,7 @@ from backend.core import config
 from backend.core.auth import UserAuthRegistry
 from backend.core.security import SessionRegistry
 from backend.services.video_download.jobs import JobManager
-from backend.storage.postgres import PostgresUsers
+from backend.storage.postgres import PostgresSessions, PostgresUsers
 
 from .routes import auth, health, sessions, video_jobs
 
@@ -26,14 +26,17 @@ def create_app(
     job_manager: JobManager | None = None,
     user_auth_registry: UserAuthRegistry | None = None,
     users_store: PostgresUsers | None = None,
+    sessions_store: PostgresSessions | None = None,
 ) -> FastAPI:
     """Build the companion app with injectable state for tests."""
     registry = session_registry or SessionRegistry.from_environment()
     manager = job_manager or JobManager(config.download_root())
-    auth_registry = user_auth_registry or UserAuthRegistry()
-    # Nothing is queried yet: PostgresUsers only reaches the pool when a route actually
-    # calls it, so building this needs no database, the same as every other Postgres store.
+    # Nothing is queried yet: these Postgres stores only reach the pool when a route
+    # actually calls them, so building them needs no database, the same as every other
+    # Postgres store.
     store = users_store or PostgresUsers()
+    durable_sessions = sessions_store or PostgresSessions()
+    auth_registry = user_auth_registry or UserAuthRegistry(durable_sessions)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -45,6 +48,7 @@ def create_app(
     app.state.job_manager = manager
     app.state.user_auth_registry = auth_registry
     app.state.users_store = store
+    app.state.sessions_store = durable_sessions
 
     # Starlette runs the last-registered middleware outermost, so CORS must be added
     # before the loopback gate to keep running inside it, as it did before this split.

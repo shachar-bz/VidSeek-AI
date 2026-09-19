@@ -9,7 +9,7 @@ from backend.core.auth import UserAuthRegistry, hash_password
 from backend.core.security import SessionRegistry
 from backend.schemas.video_jobs import JobPhase, JobStatus, VideoJobResponse
 from backend.services.video_download.jobs import JobManager
-from backend.storage.postgres import PostgresUsers
+from backend.storage.postgres import PostgresSessions, PostgresUsers
 from backend.tests.fake_postgres import FakePool
 
 USER_ROW = {
@@ -19,6 +19,15 @@ USER_ROW = {
     "display_name": None,
     "created_at": "2026-09-14T10:00:00+00:00",
     "updated_at": "2026-09-14T10:00:00+00:00",
+}
+
+SESSION_ROW = {
+    "id": "22222222-3333-4444-5555-666666666666",
+    "user_id": USER_ROW["id"],
+    "surface": "extension",
+    "created_at": "2026-09-14T10:00:00+00:00",
+    "last_used_at": "2026-09-14T10:00:00+00:00",
+    "expires_at": "2026-09-21T10:00:00+00:00",
 }
 
 
@@ -127,8 +136,8 @@ def test_starting_work_requires_a_signed_in_account(tmp_path: Path) -> None:
 
 def test_starting_work_records_which_account_asked_for_it(tmp_path: Path) -> None:
     registry = SessionRegistry({"allowed"})
-    auth_registry = UserAuthRegistry()
-    user_token = auth_registry.issue(USER_ROW["id"])
+    auth_registry = UserAuthRegistry(PostgresSessions(pool=FakePool(rows=[SESSION_ROW])))
+    user_token = auth_registry.issue(USER_ROW["id"], "extension")
     manager = RecordingJobManager(tmp_path)
     app = create_app(
         session_registry=registry,
