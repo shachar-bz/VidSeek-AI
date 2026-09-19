@@ -1,60 +1,61 @@
-# Together AI — Style Reference
-> Research console on glacier paper
+# Mercury — Style Reference
+> Alpine banking at blue hour
 
-**Theme:** mixed
+**Theme:** dark
 
-Together AI reads as a research-grade console on glacier-white paper: stark black-on-white typography, near-zero chrome, and pastel data cards (blush, peach, sky, mint) that act as colored sticky-notes on an otherwise monochrome page. The single dark band — a near-black navy research section — is the dramatic inversion that gives the system its contrast and signals depth-of-work. Hierarchy is built through type weight and scale rather than color, and a thin periwinkle accent (#bdbbff) appears as small dashes and underlines to mark active states. Pastel backgrounds are decorative, not decorative-only: they tag metric categories. Components are sharp-cornered (4px), low-elevation, and rely on the monospace label family to feel like a lab notebook.
+Mercury operates in an alpine banking aesthetic: a near-black canvas (#171721) sets a cinematic, observatory-like atmosphere where content surfaces float as subtly lighter graphite cards. The interface is overwhelmingly monochromatic — ivory text on onyx, with a single vivid cobalt (#5266eb) acting as the only chromatic punctuation, reserved exclusively for the primary 'Open account' action. Typography carries the weight of expression: a custom display face at intermediate weight 480 (neither bold nor light) paired with a refined body face at weight 400, creating a voice that is confident but never loud. Components are flat and borderless, relying on the 12px-radius graphite card lift and pill-shaped controls to define structure rather than shadows. The full-bleed photographic hero — misty mountains with a solitary desk — establishes aspiration before the product UI takes over, and every subsequent surface maintains that hushed, premium darkness.
 
 ## Tokens — Colors
 
 | Name | Value | Token | Role |
 |------|-------|-------|------|
-| Obsidian | `#000000` | `--color-obsidian` | Dark supporting neutral for text, icons, and strong contrast. Do not promote it to the primary CTA color |
-| Paper White | `#ffffff` | `--color-paper-white` | Page canvas, card surfaces on light theme, text on dark surfaces |
-| Slate | `#4d4d4d` | `--color-slate` | Muted secondary text, subdued metadata, low-emphasis body copy |
-| Hairline | `#d6d6d6` | `--color-hairline` | Hairline borders, table dividers, input outlines |
-| Midnight Ink | `#010120` | `--color-midnight-ink` | Dark surface (research section background) — near-black navy that reads as deeper than pure black, giving the dark band a tinted, on-brand cast |
-| Periwinkle | `#bdbbff` | `--color-periwinkle` | Accent dashes, active indicators, small UI punctuation — the system's only mid-saturation chromatic accent, used sparingly as underlines and section markers |
-| Mint Cyan | `#c8f6f9` | `--color-mint-cyan` | Gray supporting accent for decorative details and low-frequency emphasis. |
-| Sky | `#c1dff9` | `--color-sky` | Gray supporting accent for decorative details and low-frequency emphasis. |
-| Blush | `#fde3f6` | `--color-blush` | Light supporting surface for subtle backgrounds and section separation. |
-| Peach | `#ffdccd` | `--color-peach` | Card background — used for the third stat tile, warm counterweight to the cool pinks and blues |
+| Onyx Canvas | `#171721` | `--color-onyx-canvas` | Dominant page background, hero overlay base, footer and section canvases |
+| Graphite Card | `#1e1e2a` | `--color-graphite-card` | Elevated card and section surfaces — one step lighter than the canvas to create quiet separation |
+| Obsidian Button | `#272735` | `--color-obsidian-button` | Secondary button fills, inline form backgrounds, subtle interactive surfaces |
+| Slate Border | `#70707d` | `--color-slate-border` | Medium-weight dividers and structural borders between content blocks |
+| Mist Border | `#e2e3ed` | `--color-mist-border` | Light hairline borders, ghost-button outlines, input edges — light-on-dark border |
+| Ash Text | `#c3c3cc` | `--color-ash-text` | Muted body copy, helper text, secondary labels — reduced hierarchy without losing legibility |
+| Ivory Text | `#ededf3` | `--color-ivory-text` | Primary text, icons, nav items, ghost-button strokes and text — the dominant foreground color across the system |
+| Cobalt | `#5266eb` | `--color-cobalt` | Violet action color for filled buttons, selected navigation states, and focused conversion moments. |
+| Pure White | `#ffffff` | `--color-pure-white` | Text and icon fills on cobalt primary buttons for maximum contrast |
 
 ## Tokens — Typography
 
-### The Future — Primary sans-serif for body, nav, headings, and hero — the sole display and text family. Aggressive negative tracking at display sizes (-0.03em at 64px) tightens headlines into compact, near-condensed blocks. Tight line-heights (1.10 at display) keep multi-line headlines visually dense rather than airy. · `--font-the-future`
-- **Substitute:** Inter Tight, Satoshi, General Sans
-- **Weights:** 400, 500
-- **Sizes:** 14, 16, 18, 22, 28, 40, 64
-- **Line height:** 1.10–1.40
-- **Letter spacing:** -1.92px at 64px, -0.80px at 40px, -0.42px at 28px, -0.22px at 22px, -0.18px at 18px, -0.16px at 16px, -0.14px at 14px
-- **Role:** Primary sans-serif for body, nav, headings, and hero — the sole display and text family. Aggressive negative tracking at display sizes (-0.03em at 64px) tightens headlines into compact, near-condensed blocks. Tight line-heights (1.10 at display) keep multi-line headlines visually dense rather than airy.
+### arcadia — Body and UI typeface — handles navigation, body copy, buttons, inputs, labels, and supporting text at weight 400 for body and 480 for emphasis. The intermediate weight scale (360, 420, 480) instead of standard (300/400/600) gives Mercury's text a distinctly calibrated feel — never bold, never thin, always measured · `--font-arcadia`
+- **Substitute:** Inter
+- **Weights:** 360, 400, 420, 480
+- **Sizes:** 12px, 14px, 16px, 18px, 21px
+- **Line height:** 1.00–1.50
+- **Letter spacing:** 0.005em at 14px, 0.01em at 12px
+- **Role:** Body and UI typeface — handles navigation, body copy, buttons, inputs, labels, and supporting text at weight 400 for body and 480 for emphasis. The intermediate weight scale (360, 420, 480) instead of standard (300/400/600) gives Mercury's text a distinctly calibrated feel — never bold, never thin, always measured
 
-### PP Neue Montreal Mono — Monospace for labels, category badges, button text, and technical metadata — the lab-notebook voice that signals research credibility. Slightly positive tracking (0.005–0.007em) keeps mono caps readable at small sizes. · `--font-pp-neue-montreal-mono`
-- **Substitute:** JetBrains Mono, IBM Plex Mono, Geist Mono
-- **Weights:** 400, 500
-- **Sizes:** 10, 11, 13, 16
-- **Line height:** 1.00–1.40
-- **Letter spacing:** 0.07px at 10px, 0.08px at 11px, 0.09px at 13px, 0.11px at 16px
-- **Role:** Monospace for labels, category badges, button text, and technical metadata — the lab-notebook voice that signals research credibility. Slightly positive tracking (0.005–0.007em) keeps mono caps readable at small sizes.
+### arcadiaDisplay — Headline and display typeface — used at weight 480 for all heading sizes from 28px through 65px, with 530 reserved for the largest display moments. Tight line-heights (1.1–1.2) and positive letter-spacing (0.01–0.02em) give display copy a wide-set, architectural quality rather than compressed editorial tightness · `--font-arcadiadisplay`
+- **Substitute:** Söhne Breit
+- **Weights:** 360, 480, 530
+- **Sizes:** 21px, 24px, 28px, 32px, 42px, 49px, 65px
+- **Line height:** 1.10–1.20
+- **Letter spacing:** 0.01em at 42px, 0.015em at 32px, 0.02em at 24px
+- **Role:** Headline and display typeface — used at weight 480 for all heading sizes from 28px through 65px, with 530 reserved for the largest display moments. Tight line-heights (1.1–1.2) and positive letter-spacing (0.01–0.02em) give display copy a wide-set, architectural quality rather than compressed editorial tightness
 
 ### Type Scale
 
 | Role | Size | Line Height | Letter Spacing | Token |
 |------|------|-------------|----------------|-------|
-| caption | 14px | 1.25 | -0.14px | `--text-caption` |
-| body-sm | 16px | 1.3 | -0.16px | `--text-body-sm` |
-| body | 18px | 1.3 | -0.18px | `--text-body` |
-| subheading | 22px | 1.25 | -0.22px | `--text-subheading` |
-| heading-sm | 28px | 1.2 | -0.42px | `--text-heading-sm` |
-| heading | 40px | 1.15 | -0.8px | `--text-heading` |
-| display | 64px | 1.1 | -1.92px | `--text-display` |
+| caption | 12px | 1 | 0.12px | `--text-caption` |
+| body-sm | 14px | 1 | 0.07px | `--text-body-sm` |
+| body | 16px | 1.5 | — | `--text-body` |
+| body-lg | 18px | 1.35 | — | `--text-body-lg` |
+| subheading | 21px | 1.35 | — | `--text-subheading` |
+| heading-sm | 28px | 1.2 | 0.42px | `--text-heading-sm` |
+| heading | 32px | 1.15 | 0.48px | `--text-heading` |
+| heading-lg | 42px | 1.15 | 0.42px | `--text-heading-lg` |
+| display | 65px | 1.1 | — | `--text-display` |
 
 ## Tokens — Spacing & Shapes
 
 **Base unit:** 4px
 
-**Density:** comfortable
+**Density:** spacious
 
 ### Spacing Scale
 
@@ -68,156 +69,149 @@ Together AI reads as a research-grade console on glacier-white paper: stark blac
 | 24 | 24px | `--spacing-24` |
 | 32 | 32px | `--spacing-32` |
 | 40 | 40px | `--spacing-40` |
-| 48 | 48px | `--spacing-48` |
-| 64 | 64px | `--spacing-64` |
-| 80 | 80px | `--spacing-80` |
-| 88 | 88px | `--spacing-88` |
-| 100 | 100px | `--spacing-100` |
-| 120 | 120px | `--spacing-120` |
+| 56 | 56px | `--spacing-56` |
+| 72 | 72px | `--spacing-72` |
+| 112 | 112px | `--spacing-112` |
+| 128 | 128px | `--spacing-128` |
 
 ### Border Radius
 
 | Element | Value |
 |---------|-------|
-| tabs | 4px |
-| cards | 4px |
-| badges | 4px |
-| inputs | 4px |
-| buttons | 4px |
-
-### Shadows
-
-| Name | Value | Token |
-|------|-------|-------|
-| xl | `rgba(1, 1, 32, 0.1) -10px 0px 75px 0px` | `--shadow-xl` |
+| nav | 40px |
+| tags | 40px |
+| cards | 12px |
+| inputs | 32px |
+| buttons | 32px |
+| default | 4px |
 
 ### Layout
 
 - **Page max-width:** 1200px
-- **Section gap:** 40-80px
-- **Card padding:** 16-24px
-- **Element gap:** 8-16px
+- **Section gap:** 72px
+- **Card padding:** 32px
+- **Element gap:** 12px
 
 ## Components
 
-### Primary Dark Button
-**Role:** High-emphasis action (START BUILDING, SIGN IN)
+### Primary CTA Button (Cobalt)
+**Role:** The sole chromatic action in the system — reserved for the most important conversion
 
-Filled black (#000000) background, white text in PP Neue Montreal Mono 13px weight 500, 4px radius, padding 8px 16px. No border. Black-on-black hover (no color shift). Inline arrow icon (→) on SIGN IN variant.
+Filled with #5266eb Cobalt, white text at 16px arcadia weight 400, 32px border-radius (pill), 0px vertical padding with 20px horizontal padding for inline contexts, 40px vertical padding when standalone. No border, no shadow. The vivid blue against the dark canvas makes this button the gravitational center of any page.
 
-### Ghost Button
-**Role:** Secondary action (CONTACT SALES)
+### Ghost Outline Button
+**Role:** Secondary or tertiary action on dark backgrounds
 
-Transparent background, 1px border in #d6d6d6 or currentColor, black text in PP Neue Montreal Mono 13px weight 500, 4px radius, padding 8px 16px. Hover darkens text to #000000.
+Transparent background, 1px solid #ededf3 Ivory border, Ivory text at 16px arcadia weight 400, 40px border-radius (pill). Zero padding top/bottom with 20px horizontal padding. Used for navigation links and secondary CTAs where a filled button would overpower the layout.
 
-### Announcement Bar
-**Role:** Top-of-page news strip
+### Navigation Pill Link
+**Role:** Top-bar navigation items with optional dropdown caret
 
-Full-width #000000 background, white centered text in The Future 14px weight 400, padding 8px vertical. Sits above the nav with no separator.
+Transparent background, no border, Ivory text at 16px arcadia weight 400, 40px border-radius, 0px vertical / 20px horizontal padding. Floats over the hero image and transitions to a solid dark fill on scroll via backdrop-blur.
 
-### Sticky Navigation
-**Role:** Primary site navigation
+### Graphite Card
+**Role:** Content grouping surface — product features, feature blocks, and section containers
 
-White (#ffffff) background, 1200px max-width container, 16–24px vertical padding. Logo (gradient mark + wordmark) left, nav links center (The Future 16px, weight 400, #000000), CTA cluster right (Ghost + Primary). Sticky with a soft navy-tinted horizontal glow on scroll: rgba(1,1,32,0.1) -10px 0px 75px 0px.
+Background #1e1e2a, 12px border-radius, 32px padding on all sides, no shadow, no border. The one-step lift from the #171721 canvas creates separation through subtle value contrast rather than elevation. Cards sit flat on the dark plane.
 
-### Hero Section
-**Role:** Above-the-fold introduction
+### Email Capture Input (Pill, Left-Half)
+**Role:** Hero email input with attached submit button
 
-Two-column split on white. Left: display headline at 64px The Future weight 500 (#000000), continuation line at 64px weight 400 in #4d4d4d, supporting subtext at 18px weight 400 in #4d4d4d, Primary + Ghost button pair. Right: abstract 3D illustration of translucent gradient shapes (blue, purple, orange rings and a diamond) with floating labels in mono.
+Transparent background, 1px solid #ededf3 Ivory border on left side only, Ivory text at 16px arcadia weight 400, border-radius 32px 0px 0px 32px (left-side pill, flat right edge where it meets the button), 20px left padding. Placeholder text in #c3c3cc Ash.
 
-### Stat Metric Card
-**Role:** Performance headline tile (Faster Inference, Lower Cost, Faster Pre-training)
+### Full-Bleed Hero Section
+**Role:** Above-the-fold brand statement with photographic atmosphere
 
-Solid pastel fill (one of #c1dff9, #fde3f6, #ffdccd, #c8f6f9), 4px radius, padding 20–24px. Small mono label top-left with directional arrow (↑ FASTER INFERENCE, ↓ LOWER COST). Giant metric number in The Future 64px weight 500 #000000. Single-line caption below in The Future 14–16px weight 400 #4d4d4d. No border, no shadow — the fill IS the card.
+100vw × ~100vh, no padding constraints, centered content stack. Headline in arcadiaDisplay at 65px weight 480, subtext in arcadia at 18px weight 480. A full-bleed photographic background (atmospheric landscape) sits behind a subtle dark overlay. Content max-width ~640px centered vertically and horizontally.
 
-### Platform Tab Card
-**Role:** Category selector for the Full-stack cloud section (Inference, Compute, Model shaping)
+### Transparent Top Navigation Bar
+**Role:** Primary site navigation overlaid on hero
 
-White background card with 4px radius, centered label in The Future 22px weight 500. Active state: pastel fill (#c8f6f9 mint) replaces the white surface, providing color-on-color contrast without a border or shadow change. Padding 20–24px vertical.
+Full-width, fixed or sticky, transparent background over the hero image. Brand mark (Mercury logo with concentric-circle icon) on the left, nav links centered (Products, Solutions, Resources, About, Pricing), Log in text link and Cobalt 'Open account' pill button on the right. Uses backdrop-blur(8px or 20px) on scroll to create frosted-glass separation.
 
-### Research Paper Card
-**Role:** Featured publication tile in the dark research section
+### Disclaimer Banner
+**Role:** Legal/regulatory footnote strip at page bottom
 
-Dark card on Midnight Ink (#010120) background — card fill is a slightly lighter navy tone derived from the surface. 4px radius, padding 24–32px. Category badge top-center (PP Neue Montreal Mono 11px weight 500, white on translucent periwinkle or white on dark). Paper title centered in The Future 22px weight 500 white. Author list in PP Neue Montreal Mono 11px weight 400 in muted white (#4d4d4d equivalent at low opacity). A small periwinkle (#bdbbff) dash sits to the left edge of each card as a visual link.
+Dark background (matches canvas or slightly lighter), small text at 12px arcadia weight 480 with 0.01em letter-spacing, centered or left-aligned, subtle Ivory or Ash text color. Minimal visual weight — present but never distracting.
 
-### Category Badge
-**Role:** Compact label for paper type or section tag
+### Section Container
+**Role:** Horizontal content wrapper between hero and footer
 
-PP Neue Montreal Mono 11px weight 500, uppercase, white text on dark surface. No background fill (sits directly on the card). Tracking slightly positive for mono legibility.
-
-### Trusted-By Logo Row
-**Role:** Social proof strip
-
-Single horizontal row of grayscale partner logos in #4d4d4d, separated by generous whitespace. Small 'TRUSTED BY' label in PP Neue Montreal Mono 11px weight 500 #4d4d4d to the left. No logos are colored — all are desaturated to preserve the monochrome system.
-
-### Hero Illustration
-**Role:** Brand-defining 3D visual on the hero
-
-Abstract 3D render: translucent gradient rings, a central spherical form, and a faceted orange diamond shape, with small mono labels (PRODUCTION INFERENCE, OPTIMIZED TRAINING, CUTTING-EDGE RESEARCH) anchoring the shapes like callouts. Glossy, smooth, dimensional — not flat illustration. Gradient palette runs blue → purple → orange across the three main forms.
+Full-width dark canvas (#171721) with inner content constrained to 1200px max-width, 72px vertical padding. Contains 2- or 3-column grids of Graphite Cards or text+image splits.
 
 ## Do's and Don'ts
 
 ### Do
-- Set body and heading text in The Future with aggressive negative tracking at large sizes (-0.03em at 64px, -0.02em at 40px)
-- Use mono (PP Neue Montreal Mono) for all labels, badges, button text, and technical metadata — the mono voice is the system's research credibility signal
-- Use 4px radius for every card, button, badge, and input — the sharp corner is a defining trait
-- Place at most one dark band per page, using #010120 (near-black navy, not pure black) to create a deliberate inversion
-- Apply pastel card backgrounds (#c1dff9, #fde3f6, #ffdccd, #c8f6f9) as category-coded fills, not as decoration — each pastel should tag a distinct metric or topic
-- Reserve #bdbbff periwinkle for small UI punctuation: active indicators, section dashes, underlines — never as a surface fill or large block
-- Keep the sticky nav the only element with shadow; use the navy-tinted horizontal glow rgba(1,1,32,0.1) -10px 0px 75px 0px
+- Use Cobalt #5266eb exclusively for the single primary action per page — never as a decorative accent, icon fill, or secondary button
+- Set all cards to #1e1e2a with 12px radius and 32px padding — rely on the one-step value lift from the canvas, not shadows, for separation
+- Apply arcadiaDisplay weight 480 (not 600/700) for all headings — the intermediate weight is Mercury's signature restraint
+- Use 32px or 40px pill radius for all interactive controls (buttons, inputs, nav items) — sharp 4px corners are reserved for structural elements only
+- Set body text at 16px arcadia weight 400 with 1.5 line-height — this is the density baseline for all content
+- Maintain 72px vertical rhythm between major sections — spacious density is part of the premium feel
+- Use ivory #ededf3 on ghost/outline buttons for both border and text — never use a chromatic color for secondary actions
 
 ### Don't
-- Don't introduce drop shadows on cards, buttons, or sections — the system is flat by design
-- Don't use pure white text on pure black surfaces — use #ffffff on #010120 so the dark band reads as brand-tinted, not generic dark mode
-- Don't color trusted-by or partner logos — keep them desaturated to #4d4d4d so they don't compete with the pastel stat cards
-- Don't round corners above 4px for standard UI; large radii (8px, 16px) break the sharp, editorial feel
-- Don't use color to indicate hierarchy on light surfaces — use type weight (400 vs 500) and size instead, matching the headline pattern of one bold line + one lighter continuation line
-- Don't add gradients to UI chrome; gradients belong only in the hero 3D illustration
-- Don't mix the two font families casually — mono stays in labels/badges/buttons, sans stays in body and headings
+- Do not use multiple bright accent colors — Cobalt is the only chromatic note; introducing greens, reds, or oranges breaks the monochrome discipline
+- Do not add drop shadows to cards or components — separation comes from the graphite-on-onyx value difference alone
+- Do not use bold weights (700+) for headings — arcadiaDisplay at 480 is the ceiling
+- Do not use sharp corners (0–4px) on buttons, inputs, or nav items — the pill shape is non-negotiable
+- Do not use #ffffff for body text — always #ededf3 Ivory; pure white on dark creates harsh, cold contrast
+- Do not place Cobalt-filled elements next to each other without at least 32px gap — the vivid color creates visual competition when clustered
+- Do not use bright or saturated backgrounds for sections — every surface is either #171721 (canvas) or #1e1e2a (card); no mid-gray or colored bands
 
 ## Surfaces
 
 | Level | Name | Value | Purpose |
 |-------|------|-------|---------|
-| 1 | Paper Canvas | `#ffffff` | Default page background across hero, stats, and platform sections |
-| 2 | Midnight Band | `#010120` | Dark research section — the single inverted surface that breaks the light theme |
+| 0 | Onyx Canvas | `#171721` | Base page background — hero overlay, section canvases, footer |
+| 1 | Graphite Card | `#1e1e2a` | Elevated content surface — product cards, feature blocks, form containers |
+| 2 | Obsidian Button | `#272735` | Interactive surface — secondary button fills, inline form attachments |
 
 ## Elevation
 
-- **Sticky Navigation:** `rgba(1, 1, 32, 0.1) -10px 0px 75px 0px`
+Mercury deliberately avoids shadows. All elevation is communicated through value contrast alone — the graphite card (#1e1e2a) sits one step lighter than the onyx canvas (#171721), creating perceptible separation without any drop shadow. This flat aesthetic keeps the interface feeling modern, digital, and weightless, letting the photographic hero imagery and cobalt accent do the emotional work.
 
 ## Imagery
 
-Imagery is dominated by a single abstract 3D illustration on the hero: translucent gradient geometric forms (rings, a central sphere, a faceted orange diamond) in a blue→purple→orange palette, glossy and dimensional, floating against white space with small mono callout labels. No photography anywhere on the site. No flat illustration or iconographic graphics. The 3D style is the brand's only visual mark beyond typography and the pastel card system. Icons throughout the UI are mono outlines drawn from the system weight.
+Cinematic full-bleed photography dominates the hero — atmospheric, aspirational landscapes (misty mountains, isolated desks in nature) that position banking as a contemplative, elevated experience. Photography is high-quality, slightly desaturated with cool tones, and treated with a subtle dark overlay to maintain text legibility. Below the hero, imagery shifts to product UI screenshots and abstract atmospheric backgrounds. No illustrations, no icons-as-art — visuals are photographic or purely functional. Icon style throughout the UI is minimal line/glyph style in Ivory, appearing in nav, buttons, and form elements.
 
 ## Layout
 
-Full-width sections with 1200px max-width centered content. Nav: top bar with logo left, links center, CTA cluster right. Hero: asymmetric two-column split — text block left (50%), 3D illustration right (50%) on white. Stats: three equal pastel cards in a row. Platform section: centered header, then three tab cards in a row with the active tab recolored. Research section: full-bleed dark band (#010120) with a horizontally scrollable row of four paper cards, section header left-aligned, nav arrows right. Section gaps run 40–80px; card padding runs 16–24px; element gaps run 8–16px on a 4px base grid.
+Full-bleed dark canvas throughout. Hero is 100vw full-bleed photographic with centered headline + subtext + email-capture form stack (max-width ~640px). Below hero, content flows in 1200px max-width sections with 72px vertical padding, alternating between text-left/image-right 2-column splits and 3-column card grids for product features. Navigation is a transparent top bar overlaid on the hero, transitioning to a frosted-glass (backdrop-blur) solid dark fill on scroll. Footer is dark with disclaimer text. Vertical rhythm is generous — spacious density with large breathing room between sections. No sidebar navigation; all navigation lives in the top bar.
 
 ## Agent Prompt Guide
 
-Quick Color Reference:
-- text: #000000
-- background: #ffffff
-- border: #d6d6d6
-- accent: #bdbbff
-- dark surface: #010120
-- primary action: no distinct CTA color
+**Quick Color Reference**
+- Background (canvas): #171721 Onyx
+- Card surface: #1e1e2a Graphite
+- Primary text: #ededf3 Ivory
+- Muted text: #c3c3cc Ash
+- Border: #e2e3ed Mist
+- primary action: #5266eb (filled action)
 
-Example Component Prompts:
-1. Create a stat metric card: 4px radius, 24px padding, fill #c1dff9 sky blue. Top-left label in PP Neue Montreal Mono 11px weight 500 #000000 reading '↑ FASTER INFERENCE'. Metric number in The Future 64px weight 500 #000000 reading '2x'. Caption below in The Future 14px weight 400 #4d4d4d reading 'powered by cutting-edge research.'
-2. Create a research paper card on #010120 background: 4px radius, 32px padding, slightly lighter navy card fill. Centered category badge in PP Neue Montreal Mono 11px weight 500 white reading 'AGENTS'. Title in The Future 22px weight 500 white, centered. Author list in PP Neue Montreal Mono 11px weight 400 #4d4d4d. Small #bdbbff periwinkle dash to the left edge.
-3. Create a platform tab card: 4px radius, 20px vertical padding, white background. Centered label 'Inference' in The Future 22px weight 500 #000000. Active state: fill becomes #c8f6f9 mint cyan.
-No distinct primary action color was observed; use the extracted neutral button treatments instead of inventing a filled CTA color.
-5. Create a ghost button: transparent background, 1px #d6d6d6 border, 4px radius, padding 8px 16px. Label in PP Neue Montreal Mono 13px weight 500 #000000 reading 'CONTACT SALES'.
+**Example Component Prompts**
+
+1. Create a product feature card: background #1e1e2a Graphite, 12px border-radius, 32px padding all sides, no shadow. Heading at 28px arcadiaDisplay weight 480, letter-spacing 0.015em, color #ededf3 Ivory. Body text at 16px arcadia weight 400, line-height 1.5, color #ededf3 Ivory.
+
+2. Create a primary CTA button: background #5266eb Cobalt, white text at 16px arcadia weight 400, 32px border-radius (pill), no border, no shadow, 12px vertical / 24px horizontal padding. Text is 'Open account' or equivalent action label.
+
+3. Create a ghost/outline button: transparent background, 1px solid #ededf3 Ivory border, #ededf3 text at 16px arcadia weight 400, 40px border-radius, 10px vertical / 20px horizontal padding.
+
+4. Create a hero section: full-bleed (100vw), full-viewport height, photographic landscape background with dark overlay. Headline at 65px arcadiaDisplay weight 480, line-height 1.1, color #ffffff, centered. Subtext at 18px arcadia weight 480, color #ededf3 Ivory, centered, max-width 520px.
+
+5. Create an inline email capture form: flex row, no gap. Input — transparent background, 1px solid #ededf3 Ivory border (left + top + bottom only), #ededf3 text at 16px arcadia weight 400, placeholder in #c3c3cc Ash, border-radius 32px 0 0 32px, 14px vertical / 20px horizontal padding. Button — #5266eb Cobalt fill, white text at 16px arcadia weight 400, border-radius 0 32px 32px 0, 14px vertical / 24px horizontal padding, no border.
+
+## Typography Philosophy
+
+Mercury's type system uses two custom faces — arcadia for UI/body and arcadiaDisplay for headlines — both built on an intermediate weight axis (360, 420, 480, 530) that avoids the conventional bold/light binary. Heading weight 480 is the signature: it is heavier than regular but distinctly lighter than semibold, creating a voice that asserts without shouting. Display sizes use tight line-heights (1.1–1.15) with positive letter-spacing (0.01–0.02em), giving large text an architectural, wide-set quality. Body text stays at 16px weight 400 with generous 1.5 line-height. The overall effect is a voice that is measured, premium, and digitally native — never editorial, never corporate.
 
 ## Similar Brands
 
-- **Anthropic** — Same clean light-paper aesthetic with a single dark inversion section, tight sans-serif display type, and mono labels for technical credibility
-- **Hugging Face** — Pastel category-coded cards on a white canvas with mono badges, and a research-credibility layout where papers and models are the hero content
-- **Linear** — Sharp 4px corners, almost shadowless surfaces, aggressive negative tracking on large display type, and near-monochrome palette with a single chromatic accent
-- **Modal Labs** — Devtools-for-AI branding with a single bold headline + lighter continuation line pattern, pastel stat tiles, and dark research/feature bands as visual punctuation
-- **Vercel** — Black-on-white editorial typography with tight letter-spacing, a sole dark hero variant, and minimal UI chrome that lets type and 3D illustration carry the brand
+- **Wise** — Same dark-canvas + single-accent-color approach to fintech, with pill-shaped controls and flat card surfaces
+- **Ramp** — Similar graphite-on-dark card system with minimalist borderless components and a restrained primary accent
+- **Brex** — Dark-mode fintech aesthetic with comparable flat card elevation and confident intermediate-weight typography
+- **Linear** — Same whisper-weight typography philosophy and dark monochrome canvas with a single chromatic action color
+- **Stripe** — Shared approach to generous spacing, intermediate-weight display type, and letting one accent color carry the brand
 
 ## Quick Start
 
@@ -226,47 +220,51 @@ No distinct primary action color was observed; use the extracted neutral button 
 ```css
 :root {
   /* Colors */
-  --color-obsidian: #000000;
-  --color-paper-white: #ffffff;
-  --color-slate: #4d4d4d;
-  --color-hairline: #d6d6d6;
-  --color-midnight-ink: #010120;
-  --color-periwinkle: #bdbbff;
-  --color-mint-cyan: #c8f6f9;
-  --color-sky: #c1dff9;
-  --color-blush: #fde3f6;
-  --color-peach: #ffdccd;
+  --color-onyx-canvas: #171721;
+  --color-graphite-card: #1e1e2a;
+  --color-obsidian-button: #272735;
+  --color-slate-border: #70707d;
+  --color-mist-border: #e2e3ed;
+  --color-ash-text: #c3c3cc;
+  --color-ivory-text: #ededf3;
+  --color-cobalt: #5266eb;
+  --color-pure-white: #ffffff;
 
   /* Typography — Font Families */
-  --font-the-future: 'The Future', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-pp-neue-montreal-mono: 'PP Neue Montreal Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-arcadia: 'arcadia', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-arcadiadisplay: 'arcadiaDisplay', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Typography — Scale */
-  --text-caption: 14px;
-  --leading-caption: 1.25;
-  --tracking-caption: -0.14px;
-  --text-body-sm: 16px;
-  --leading-body-sm: 1.3;
-  --tracking-body-sm: -0.16px;
-  --text-body: 18px;
-  --leading-body: 1.3;
-  --tracking-body: -0.18px;
-  --text-subheading: 22px;
-  --leading-subheading: 1.25;
-  --tracking-subheading: -0.22px;
+  --text-caption: 12px;
+  --leading-caption: 1;
+  --tracking-caption: 0.12px;
+  --text-body-sm: 14px;
+  --leading-body-sm: 1;
+  --tracking-body-sm: 0.07px;
+  --text-body: 16px;
+  --leading-body: 1.5;
+  --text-body-lg: 18px;
+  --leading-body-lg: 1.35;
+  --text-subheading: 21px;
+  --leading-subheading: 1.35;
   --text-heading-sm: 28px;
   --leading-heading-sm: 1.2;
-  --tracking-heading-sm: -0.42px;
-  --text-heading: 40px;
+  --tracking-heading-sm: 0.42px;
+  --text-heading: 32px;
   --leading-heading: 1.15;
-  --tracking-heading: -0.8px;
-  --text-display: 64px;
+  --tracking-heading: 0.48px;
+  --text-heading-lg: 42px;
+  --leading-heading-lg: 1.15;
+  --tracking-heading-lg: 0.42px;
+  --text-display: 65px;
   --leading-display: 1.1;
-  --tracking-display: -1.92px;
 
   /* Typography — Weights */
+  --font-weight-w360: 360;
   --font-weight-regular: 400;
-  --font-weight-medium: 500;
+  --font-weight-w420: 420;
+  --font-weight-w480: 480;
+  --font-weight-w530: 530;
 
   /* Spacing */
   --spacing-unit: 4px;
@@ -278,37 +276,36 @@ No distinct primary action color was observed; use the extracted neutral button 
   --spacing-24: 24px;
   --spacing-32: 32px;
   --spacing-40: 40px;
-  --spacing-48: 48px;
-  --spacing-64: 64px;
-  --spacing-80: 80px;
-  --spacing-88: 88px;
-  --spacing-100: 100px;
-  --spacing-120: 120px;
+  --spacing-56: 56px;
+  --spacing-72: 72px;
+  --spacing-112: 112px;
+  --spacing-128: 128px;
 
   /* Layout */
   --page-max-width: 1200px;
-  --section-gap: 40-80px;
-  --card-padding: 16-24px;
-  --element-gap: 8-16px;
+  --section-gap: 72px;
+  --card-padding: 32px;
+  --element-gap: 12px;
 
   /* Border Radius */
   --radius-md: 4px;
   --radius-lg: 8px;
-  --radius-2xl: 16px;
+  --radius-xl: 12px;
+  --radius-3xl: 32px;
+  --radius-3xl-2: 40px;
 
   /* Named Radii */
-  --radius-tabs: 4px;
-  --radius-cards: 4px;
-  --radius-badges: 4px;
-  --radius-inputs: 4px;
-  --radius-buttons: 4px;
-
-  /* Shadows */
-  --shadow-xl: rgba(1, 1, 32, 0.1) -10px 0px 75px 0px;
+  --radius-nav: 40px;
+  --radius-tags: 40px;
+  --radius-cards: 12px;
+  --radius-inputs: 32px;
+  --radius-buttons: 32px;
+  --radius-default: 4px;
 
   /* Surfaces */
-  --surface-paper-canvas: #ffffff;
-  --surface-midnight-band: #010120;
+  --surface-onyx-canvas: #171721;
+  --surface-graphite-card: #1e1e2a;
+  --surface-obsidian-button: #272735;
 }
 ```
 
@@ -317,43 +314,44 @@ No distinct primary action color was observed; use the extracted neutral button 
 ```css
 @theme {
   /* Colors */
-  --color-obsidian: #000000;
-  --color-paper-white: #ffffff;
-  --color-slate: #4d4d4d;
-  --color-hairline: #d6d6d6;
-  --color-midnight-ink: #010120;
-  --color-periwinkle: #bdbbff;
-  --color-mint-cyan: #c8f6f9;
-  --color-sky: #c1dff9;
-  --color-blush: #fde3f6;
-  --color-peach: #ffdccd;
+  --color-onyx-canvas: #171721;
+  --color-graphite-card: #1e1e2a;
+  --color-obsidian-button: #272735;
+  --color-slate-border: #70707d;
+  --color-mist-border: #e2e3ed;
+  --color-ash-text: #c3c3cc;
+  --color-ivory-text: #ededf3;
+  --color-cobalt: #5266eb;
+  --color-pure-white: #ffffff;
 
   /* Typography */
-  --font-the-future: 'The Future', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-pp-neue-montreal-mono: 'PP Neue Montreal Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-arcadia: 'arcadia', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-arcadiadisplay: 'arcadiaDisplay', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Typography — Scale */
-  --text-caption: 14px;
-  --leading-caption: 1.25;
-  --tracking-caption: -0.14px;
-  --text-body-sm: 16px;
-  --leading-body-sm: 1.3;
-  --tracking-body-sm: -0.16px;
-  --text-body: 18px;
-  --leading-body: 1.3;
-  --tracking-body: -0.18px;
-  --text-subheading: 22px;
-  --leading-subheading: 1.25;
-  --tracking-subheading: -0.22px;
+  --text-caption: 12px;
+  --leading-caption: 1;
+  --tracking-caption: 0.12px;
+  --text-body-sm: 14px;
+  --leading-body-sm: 1;
+  --tracking-body-sm: 0.07px;
+  --text-body: 16px;
+  --leading-body: 1.5;
+  --text-body-lg: 18px;
+  --leading-body-lg: 1.35;
+  --text-subheading: 21px;
+  --leading-subheading: 1.35;
   --text-heading-sm: 28px;
   --leading-heading-sm: 1.2;
-  --tracking-heading-sm: -0.42px;
-  --text-heading: 40px;
+  --tracking-heading-sm: 0.42px;
+  --text-heading: 32px;
   --leading-heading: 1.15;
-  --tracking-heading: -0.8px;
-  --text-display: 64px;
+  --tracking-heading: 0.48px;
+  --text-heading-lg: 42px;
+  --leading-heading-lg: 1.15;
+  --tracking-heading-lg: 0.42px;
+  --text-display: 65px;
   --leading-display: 1.1;
-  --tracking-display: -1.92px;
 
   /* Spacing */
   --spacing-4: 4px;
@@ -364,19 +362,16 @@ No distinct primary action color was observed; use the extracted neutral button 
   --spacing-24: 24px;
   --spacing-32: 32px;
   --spacing-40: 40px;
-  --spacing-48: 48px;
-  --spacing-64: 64px;
-  --spacing-80: 80px;
-  --spacing-88: 88px;
-  --spacing-100: 100px;
-  --spacing-120: 120px;
+  --spacing-56: 56px;
+  --spacing-72: 72px;
+  --spacing-112: 112px;
+  --spacing-128: 128px;
 
   /* Border Radius */
   --radius-md: 4px;
   --radius-lg: 8px;
-  --radius-2xl: 16px;
-
-  /* Shadows */
-  --shadow-xl: rgba(1, 1, 32, 0.1) -10px 0px 75px 0px;
+  --radius-xl: 12px;
+  --radius-3xl: 32px;
+  --radius-3xl-2: 40px;
 }
 ```
