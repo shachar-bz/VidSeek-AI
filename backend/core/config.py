@@ -59,3 +59,14 @@ def extension_ids() -> set[str]:
     """The comma-separated allowlist of extension ids permitted to open a session."""
     raw_ids = get("VIDSEEK_EXTENSION_IDS") or ""
     return {item.strip() for item in raw_ids.split(",") if item.strip()}
+
+
+def website_origins() -> set[str]:
+    """The comma-separated allowlist of VidSeek website origins, e.g. `https://app.vidseek.ai`.
+
+    A user account signing in from the website is verified against this set rather than a
+    Chrome extension id, so the two surfaces can be told apart without trusting anything the
+    client says about itself.
+    """
+    raw_origins = get("VIDSEEK_WEBSITE_ORIGINS") or ""
+    return {item.strip() for item in raw_origins.split(",") if item.strip()}

@@ -1,32 +1,31 @@
-"""Password hashing and the bearer tokens a logged-in user's requests carry.
+"""Password hashing and the durable bearer tokens a signed-in user's requests carry.
 
 This is a separate concept from `SessionRegistry` in `core.security`, which proves a
 request came from an allowed Chrome extension installation, not from any particular person.
-`UserAuthRegistry` proves the opposite: which account, if any, is signed in on this
-installation. The two tokens travel in the same `Authorization: Bearer` header shape but are
-never compared against each other, so a route can require one, the other, both or neither.
+`UserAuthRegistry` proves the opposite: which account, if any, is signed in. The two tokens
+travel in the same `Authorization: Bearer` header shape but are never compared against each
+other, so a route can require one, the other, both or neither.
 
-Tokens live in memory only, exactly like `SessionRegistry`'s do, and are lost when the
-companion process restarts. That is an accepted limitation here too: the extension notices
-its stored token no longer verifies and sends the user back to the login form rather than
-silently losing their session mid-use.
+Tokens are backed by the `sessions` table (`backend.storage.postgres.sessions`) rather than
+an in-process dictionary, so one sign-in is recognised by both the website and the Chrome
+extension and survives a process restart.
 """
 
 from __future__ import annotations
 
 import secrets
-import threading
-import time
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
 
-# Long enough that a signed-in user is not asked to log in again every time the companion
-# happens to still be running, short enough that a token copied out of extension storage
-# does not stay valid forever.
+from backend.storage.postgres.sessions import PostgresSessions, StoredSession
+
+# Long enough that a signed-in user is not asked to log in again every time they return,
+# short enough that a token copied out of storage does not stay valid forever.
 AUTH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
 
 # bcrypt silently ignores any byte past 72, so a longer password would compare equal to a
-# truncated one without this the request is rejected instead, at the schema layer.
+# truncated one without this; the request is rejected instead, at the schema layer.
 MAX_PASSWORD_LENGTH = 72
 
 
@@ -50,39 +49,44 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 class UserAuthRegistry:
-    """Issues and verifies the bearer tokens login and signup hand back to the extension."""
+    """Issues and verifies the bearer tokens login and signup hand back, via `sessions`.
 
-    def __init__(self, ttl_seconds: int = AUTH_TOKEN_TTL_SECONDS):
+    The raw token is generated and returned here, once, and never stored: `PostgresSessions`
+    persists only its SHA-256 digest, so a leaked database dump carries no live credential.
+    """
+
+    def __init__(
+        self,
+        sessions_store: PostgresSessions | None = None,
+        ttl_seconds: int = AUTH_TOKEN_TTL_SECONDS,
+    ):
+        self._sessions = sessions_store if sessions_store is not None else PostgresSessions()
         self._ttl_seconds = ttl_seconds
-        self._tokens: dict[str, tuple[str, float]] = {}
-        self._lock = threading.Lock()
 
-    def issue(self, user_id: str) -> str:
-        """A fresh token bound to `user_id`, replacing none of that user's other sessions."""
+    def issue(self, user_id: str, surface: str) -> str:
+        """A fresh token bound to `user_id` and `surface`, replacing none of that user's
+        other sessions."""
         token = secrets.token_urlsafe(32)
-        with self._lock:
-            self._prune_locked()
-            self._tokens[token] = (user_id, time.monotonic() + self._ttl_seconds)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._ttl_seconds)
+        self._sessions.create(user_id, token, surface, expires_at)
         return token
 
-    def verify(self, token: str) -> str | None:
-        """The user id `token` was issued to, refreshing its TTL, or None if it is not live."""
-        with self._lock:
-            self._prune_locked()
-            record = self._tokens.get(token)
-            if not record:
-                return None
-            user_id, _ = record
-            self._tokens[token] = (user_id, time.monotonic() + self._ttl_seconds)
-            return user_id
+    def verify(self, token: str) -> StoredSession | None:
+        """The live session `token` belongs to, or None if it is unknown, expired or revoked.
+
+        `PostgresSessions.verify` bumps `last_used_at` in the same statement that checks
+        expiry, so there is no separate bookkeeping write whose failure could be mistaken for
+        a successful authorization: the check and the update either both happen or neither
+        does.
+        """
+        if not token:
+            return None
+        return self._sessions.verify(token)
 
     def revoke(self, token: str) -> None:
-        """Forget one token, for logout. Verifying it afterwards behaves as if it never existed."""
-        with self._lock:
-            self._tokens.pop(token, None)
-
-    def _prune_locked(self) -> None:
-        now = time.monotonic()
-        expired = [token for token, (_, expiry) in self._tokens.items() if expiry <= now]
-        for token in expired:
-            self._tokens.pop(token, None)
+        """End the session `token` belongs to, for logout. An unknown token is not an error."""
+        if not token:
+            return
+        stored = self._sessions.verify(token)
+        if stored:
+            self._sessions.revoke(stored.user_id, stored.id)
