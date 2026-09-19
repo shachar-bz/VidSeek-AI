@@ -28,10 +28,13 @@ from .memory_embeddings import (
 )
 from .messages import PostgresMessages, StoredMessage
 from .pinned_answers import PinnedAnswerForVideo, PostgresPinnedAnswers, StoredPinnedAnswer
+from .sessions import PostgresSessions, StoredSession, hash_token
 from .settings import PostgresSettings, is_postgres_configured, load_postgres_settings
 from .transcript_segments import PostgresTranscriptSegments
 from .user_videos import PostgresUserVideos, StoredUserVideo
 from .users import NewUser, PostgresUsers, StoredUser
+from .video_insights import NewVideoInsights, PostgresVideoInsights, StoredVideoInsights
+from .video_jobs import PostgresVideoJobs, StoredVideoJob, VideoJob
 from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
 
 __all__ = [
@@ -45,6 +48,7 @@ __all__ = [
     "NewChapter",
     "NewMemory",
     "NewUser",
+    "NewVideoInsights",
     "PinnedAnswerForVideo",
     "PostgresChapterEmbeddings",
     "PostgresChapters",
@@ -54,10 +58,13 @@ __all__ = [
     "PostgresMemoryEmbeddings",
     "PostgresMessages",
     "PostgresPinnedAnswers",
+    "PostgresSessions",
     "PostgresSettings",
     "PostgresTranscriptSegments",
     "PostgresUserVideos",
     "PostgresUsers",
+    "PostgresVideoInsights",
+    "PostgresVideoJobs",
     "PostgresVideoRecords",
     "StoredChapter",
     "StoredChapterMemory",
@@ -66,12 +73,17 @@ __all__ = [
     "StoredMemory",
     "StoredMessage",
     "StoredPinnedAnswer",
+    "StoredSession",
     "StoredUser",
     "StoredUserVideo",
+    "StoredVideoInsights",
+    "StoredVideoJob",
     "StoredVideoRecord",
+    "VideoJob",
     "VideoRecord",
     "build_pool",
     "connection",
+    "hash_token",
     "is_postgres_configured",
     "iso_text",
     "load_postgres_settings",

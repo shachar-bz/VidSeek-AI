@@ -2,6 +2,7 @@
 
 import pytest
 
+from backend.core.source_urls import normalize_source_url
 from backend.storage.postgres import (
     PostgresSettings,
     PostgresVideoRecords,
@@ -19,9 +20,13 @@ URL = (
 )
 SETTINGS = PostgresSettings(url=URL)
 
+USER_ID = "99999999-9999-9999-9999-999999999999"
+
+SOURCE_URL = "https://www.youtube.com/watch?v=abc"
+
 RECORD = VideoRecord(
     source="youtube_pipeline",
-    source_url="https://www.youtube.com/watch?v=abc",
+    source_url=SOURCE_URL,
     title="A Talk",
     blob_container="videos",
     blob_name="videos/job-42/clip.mp4",
@@ -29,6 +34,7 @@ RECORD = VideoRecord(
     content_type="video/mp4",
     transcript_source="youtube_captions",
     job_id="job-42",
+    normalized_source_url=normalize_source_url(SOURCE_URL),
 )
 
 ROW = {
@@ -111,10 +117,46 @@ def test_a_blob_nothing_describes_is_absence_rather_than_an_error() -> None:
 
 def test_the_videos_from_one_page_come_back_newest_first() -> None:
     records, pool = _records([ROW, ROW])
-    found = records.find_by_source_url(RECORD.source_url)
+    found = records.find_by_source_url(USER_ID, RECORD.source_url)
 
     assert len(found) == 2
-    assert "order by created_at desc" in pool.statements[0]
+    assert "order by v.created_at desc" in pool.statements[0]
+
+
+def test_find_by_source_url_is_scoped_to_the_callers_own_library() -> None:
+    # A video row is shared, so without the join to user_videos this would hand back every
+    # account's video from that page, not just the caller's own.
+    records, pool = _records([ROW])
+    records.find_by_source_url(USER_ID, RECORD.source_url)
+
+    assert "join public.user_videos uv on uv.video_id = v.id" in pool.statements[0]
+    assert "uv.user_id = %s::uuid" in pool.statements[0]
+    assert pool.recorded[0].parameters == (USER_ID, RECORD.source_url)
+
+
+def test_the_video_already_recorded_for_a_page_is_found_by_its_normalized_url() -> None:
+    records, pool = _records([ROW])
+    found = records.find_by_normalized_source_url("https://youtu.be/abc?si=tracking")
+
+    assert found is not None and found.video == RECORD
+    assert "normalized_source_url = %s" in pool.statements[0]
+    assert pool.recorded[0].parameters == (RECORD.normalized_source_url,)
+
+
+def test_a_page_with_no_recorded_video_is_absence_rather_than_an_error() -> None:
+    records, _ = _records([])
+
+    assert records.find_by_normalized_source_url(RECORD.source_url) is None
+
+
+def test_the_most_recent_videos_are_scoped_to_the_callers_own_library() -> None:
+    records, pool = _records([ROW, ROW])
+    found = records.recent(USER_ID)
+
+    assert len(found) == 2
+    assert "join public.user_videos uv on uv.video_id = v.id" in pool.statements[0]
+    assert "uv.user_id = %s::uuid" in pool.statements[0]
+    assert "order by uv.added_at desc" in pool.statements[0]
 
 
 def test_deleting_a_row_leaves_the_stored_blob_alone() -> None:
