@@ -78,6 +78,21 @@ def test_a_job_belonging_to_someone_else_is_absence_rather_than_an_error() -> No
     assert jobs.get(JOB.id, USER_ID) is None
 
 
+def test_a_job_is_read_back_by_id_alone_for_the_companions_own_poll() -> None:
+    jobs, pool = _jobs([ROW])
+    found = jobs.get_by_id(JOB.id)
+
+    assert found is not None and found.job == JOB
+    assert "user_id" not in pool.statements[0]
+    assert pool.recorded[0].parameters == (JOB.id,)
+
+
+def test_get_by_id_of_a_job_nobody_recorded_is_absence_rather_than_an_error() -> None:
+    jobs, _ = _jobs([])
+
+    assert jobs.get_by_id(JOB.id) is None
+
+
 def test_a_users_jobs_come_back_newest_first() -> None:
     jobs, pool = _jobs([ROW, ROW])
     found = jobs.list_for_user(USER_ID)

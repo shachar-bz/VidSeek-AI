@@ -1,4 +1,4 @@
-"""Single-worker in-memory job state for the local companion API.
+"""Single-worker job state for the local companion API, in memory while a job runs.
 
 What a job *does* is `backend.download_pipeline`'s: acquire the video, store it, divide it
 into memories and chapters, and embed them. What is left here is everything about a job that
@@ -10,10 +10,21 @@ The one piece of real judgment still in this module is how a pipeline result bec
 status. The pipeline reports what it could not do as problem codes and finishes anyway, and
 this is where that turns into `complete`, `partial_success` or `failed` and into the sentence
 the extension shows.
+
+With a database configured, this module is no longer the only place a job's status lives.
+Every externally meaningful change -- status, phase, progress, message, error code,
+video_id -- is mirrored to `video_jobs` as it happens, and a job that reaches a status
+nothing can still act on (complete, partial success, or an outright cancel; not a failure,
+which `retry_with_capture` can still act on) is dropped from the in-memory dictionary once
+that mirror write lands, so this process only ever holds what an active run needs: secrets
+and cancellation state. A page whose video is already recorded skips the pipeline
+altogether -- `create` checks `videos.normalized_source_url` first and reports a completed
+job without ever entering this dictionary.
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -51,11 +62,25 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
+from backend.storage.postgres import (
+    PostgresUserVideos,
+    PostgresVideoJobs,
+    PostgresVideoRecords,
+    StoredVideoRecord,
+    VideoJob,
+    is_postgres_configured,
+)
 
 from .web.pipeline import UNTIMED_TRANSCRIPT_ERROR
 
+logger = logging.getLogger(__name__)
+
 TRANSCRIPTION_FAILED = "transcription_failed"
 UPLOAD_FAILED = "upload_failed"
+
+# The acquisition mode a deduplicated job reports: it never chose one of the three real
+# routes, because it never downloaded anything.
+DEDUPLICATED_ACQUISITION_MODE = "deduplicated"
 
 # What a partially successful job says it kept, and what went wrong with the rest.
 SAVED_BY_TRANSCRIPT_PROBLEM = {
@@ -137,6 +162,10 @@ class _Job:
     transcript_source: str | None = None
     comments_path: str | None = None
     video_storage_key: str | None = None
+    # The `videos` row this job produced, once stage two of the pipeline has run. Mirrored
+    # to `video_jobs.video_id` so anything sharing the database can follow a job to its
+    # video before this process has any other reason to keep the job in memory.
+    video_id: str | None = None
     error_code: str | None = None
     can_capture: bool = False
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -158,6 +187,40 @@ class _Job:
             error_code=self.error_code,
             can_capture=self.can_capture,
         )
+
+
+def _response_from_persisted_job(job: VideoJob) -> VideoJobResponse:
+    """Rebuild a job's response from `video_jobs` alone, for a job this process no longer holds.
+
+    Only what that table mirrors survives an eviction or a restart -- status, phase,
+    progress, message, error code and video_id -- so the fields describing an in-progress
+    run's local artifacts (paths, capture eligibility) come back at their defaults. A
+    finished job already reports those the same way: `_finish` clears `video_path` the
+    moment the video is durably stored, and `video_storage_key`, looked up from the video
+    row, is the one artifact field a caller still needs once a job is done.
+    """
+    return VideoJobResponse(
+        job_id=job.id,
+        status=JobStatus(job.status),
+        phase=JobPhase(job.phase),
+        progress=job.progress,
+        message=job.message,
+        acquisition_mode=job.acquisition_mode or "",
+        error_code=job.error_code,
+        video_storage_key=_blob_name_for_video(job.video_id),
+    )
+
+
+def _blob_name_for_video(video_id: str | None) -> str | None:
+    """The blob name a job's recorded video lives under, or None.
+
+    Called only once a database is already known to be configured -- there is no `video_id`
+    to look up otherwise, since nothing here was ever recorded without one.
+    """
+    if video_id is None:
+        return None
+    record = PostgresVideoRecords().get_by_id(video_id)
+    return record.video.blob_name if record else None
 
 
 class JobManager:
@@ -186,12 +249,22 @@ class JobManager:
         to. It is optional here, not because an anonymous job is desired, but because
         requiring it is the API route's job (`current_user_for_job_creation`): this
         manager only carries whatever the caller already resolved.
+
+        Before any of that, the page is checked against what is already recorded
+        (`videos.normalized_source_url`): a hit means this exact video has already been
+        downloaded, transcribed, segmented and embedded by some earlier job, and the only
+        thing left to do is link it into this account's library and say so.
         """
         validate_remote_url(request.page_url)
         for candidate in request.media_candidates:
             validate_remote_url(candidate.url)
         if request.drm_detected:
             raise UnsupportedMediaError("DRM-protected media is not supported")
+
+        if is_postgres_configured():
+            existing = PostgresVideoRecords().find_by_normalized_source_url(request.page_url)
+            if existing is not None:
+                return self._create_deduplicated_job(request, existing, user_id=user_id)
 
         is_youtube = is_youtube_url(request.page_url)
         # A YouTube page's own media URLs are googlevideo links that expire and refuse
@@ -225,15 +298,59 @@ class JobManager:
         )
         with self._lock:
             self._jobs[job_id] = job
+            self._persist(job)
         if is_youtube:
             self._executor.submit(self._run, job_id, can_capture_on_failure=False)
         elif not direct_only:
             self._executor.submit(self._run, job_id, can_capture_on_failure=True)
         return job.public()
 
+    def _create_deduplicated_job(
+        self, request: CreateVideoJobRequest, existing: StoredVideoRecord, *, user_id: str | None
+    ) -> VideoJobResponse:
+        """Report a job that is already done, because its video already is.
+
+        No `_Job` is ever created for this: there is no download to cancel, no browser
+        secrets to hold, and nothing an in-memory runtime dictionary is for. The job row
+        goes straight to `video_jobs`, complete from the moment anything else can see it.
+        """
+        if user_id is not None:
+            PostgresUserVideos().link(user_id, existing.id)
+        message = "Video already in the library; nothing to download"
+        stored = PostgresVideoJobs().upsert(
+            VideoJob(
+                id=uuid.uuid4().hex,
+                page_url=request.page_url,
+                page_title=request.page_title,
+                status=JobStatus.COMPLETE.value,
+                phase=JobPhase.COMPLETE.value,
+                progress=1.0,
+                message=message,
+                user_id=user_id,
+                video_id=existing.id,
+                acquisition_mode=DEDUPLICATED_ACQUISITION_MODE,
+            )
+        )
+        return _response_from_persisted_job(stored.job)
+
     def get(self, job_id: str) -> VideoJobResponse:
+        """This job's current status, from memory while it runs and from the database after.
+
+        With a database configured, a job falls out of `self._jobs` once it reaches a
+        status nothing can still act on (`_finish`, `_fail` on a non-retryable outcome,
+        `_mark_cancelled`, an outright cancel), and a deduplicated job is never in it at all
+        -- so a caller asking about either has to be answered from `video_jobs` instead.
+        Without one, eviction never happens and this dictionary answers everything, exactly
+        as it always has.
+        """
         with self._lock:
-            return self._require(job_id).public()
+            job = self._jobs.get(job_id)
+        if job is not None:
+            return job.public()
+        stored = PostgresVideoJobs().get_by_id(job_id) if is_postgres_configured() else None
+        if stored is None:
+            raise JobNotFoundError("Video job was not found")
+        return _response_from_persisted_job(stored.job)
 
     def complete_browser_download(
         self, job_id: str, payload: BrowserDownloadCompleteRequest
@@ -248,6 +365,7 @@ class JobManager:
                 raise JobStateConflictError("Job is not waiting for a Chrome download")
             job.status = JobStatus.QUEUED
             job.message = "Chrome download complete; queued for transcript processing"
+            self._persist(job)
         self._executor.submit(
             self._run, job_id, can_capture_on_failure=False, local_path=path
         )
@@ -270,6 +388,7 @@ class JobManager:
             job.can_capture = False
             job.acquisition_mode = "captured_request"
             job.cancel_event.clear()
+            self._persist(job)
         self._executor.submit(self._run, job_id, can_capture_on_failure=True)
         return self.get(job_id)
 
@@ -290,6 +409,8 @@ class JobManager:
             response = job.public()
             if job.status == JobStatus.CANCELLED:
                 self._discard_secrets(job_id)
+                if self._persist(job):
+                    del self._jobs[job_id]
             return response
 
     def _require(self, job_id: str) -> _Job:
@@ -298,12 +419,50 @@ class JobManager:
         except KeyError as error:
             raise JobNotFoundError("Video job was not found") from error
 
+    def _persist(self, job: _Job) -> bool:
+        """Mirror this job's externally meaningful state into `video_jobs`, best-effort.
+
+        Status, phase, progress, message, error code and video_id are the whole of what
+        that table carries (`migrations/0018_video_jobs.sql`) -- everything else about a
+        job is local-machine detail nothing sharing the database needs. Skipped outright
+        without a configured database, and logged rather than raised on failure: this is a
+        mirror for other readers, and losing the write must not cost the job itself, which
+        by the time this runs has already gotten further than this write has.
+
+        Returns whether the row actually landed, which is what a caller deciding whether a
+        terminal job can safely leave `self._jobs` needs to know: without it, or if it
+        failed, this dictionary is the only place that job's outcome still exists.
+        """
+        if not is_postgres_configured():
+            return False
+        try:
+            PostgresVideoJobs().upsert(
+                VideoJob(
+                    id=job.job_id,
+                    page_url=job.request.page_url,
+                    page_title=job.request.page_title,
+                    status=job.status.value,
+                    phase=job.phase.value,
+                    progress=job.progress,
+                    message=job.message,
+                    user_id=job.user_id,
+                    video_id=job.video_id,
+                    acquisition_mode=job.acquisition_mode,
+                    error_code=job.error_code,
+                )
+            )
+            return True
+        except Exception:
+            logger.exception("Persisting job %s to the database failed", job.job_id)
+            return False
+
     def _progress(self, job_id: str, phase: JobPhase, value: float, message: str) -> None:
         with self._lock:
             job = self._require(job_id)
             job.phase = phase
             job.progress = min(max(value, 0.0), 1.0)
             job.message = message
+            self._persist(job)
 
     def _run(
         self, job_id: str, *, can_capture_on_failure: bool, local_path: Path | None = None
@@ -421,6 +580,7 @@ class JobManager:
             job.transcript_source = acquired.transcript_source
             job.comments_path = str(acquired.comments_path) if acquired.comments_path else None
             job.video_storage_key = processed.stored_video.name
+            job.video_id = processed.video_id
             job.phase = JobPhase.COMPLETE
             job.progress = 1.0
             transcript_problem = _transcript_problem(acquired.transcript_error)
@@ -438,6 +598,13 @@ class JobManager:
                     else "Video uploaded; transcript saved"
                 )
             self._discard_secrets(job_id)
+            # COMPLETE and PARTIAL_SUCCESS are both dead ends -- neither is eligible for
+            # `retry_with_capture` -- so nothing this process still holds about the job is
+            # needed again once the database has a durable copy of its outcome. Without one
+            # configured, or if the write failed, this dictionary stays the only record of
+            # it, so eviction only follows a persist that actually landed.
+            if self._persist(job):
+                del self._jobs[job_id]
 
     def _fail(
         self,
@@ -458,6 +625,12 @@ class JobManager:
                 job.phase = JobPhase.COMPLETE
                 job.progress = 1.0
             self._discard_secrets(job_id)
+            persisted = self._persist(job)
+            # FAILED, unlike PARTIAL_SUCCESS, is not evicted: `retry_with_capture` accepts a
+            # captured request for exactly this status, and needs the same `_Job` -- its
+            # caption text kept for the retry, among other things -- still in the dictionary.
+            if partial and persisted:
+                del self._jobs[job_id]
 
     def _mark_cancelled(self, job_id: str) -> None:
         with self._lock:
@@ -466,6 +639,8 @@ class JobManager:
             job.message = "Cancelled"
             job.can_capture = False
             self._discard_secrets(job_id)
+            if self._persist(job):
+                del self._jobs[job_id]
 
     def _discard_secrets(self, job_id: str) -> None:
         """Clear this job's browser-supplied secrets.
@@ -476,7 +651,9 @@ class JobManager:
         call landing between the status write and this cleanup would install fresh
         captured cookies/headers just in time for this call to wipe them instead of the
         stale ones it was meant to discard. `self._lock` is reentrant, so nesting here is
-        safe.
+        safe. `_persist` and the dictionary eviction that follows it in each of those
+        callers stay under the same acquisition for the same reason: a retry that found the
+        job still present must find it exactly as this method left it.
         """
         with self._lock:
             job = self._require(job_id)

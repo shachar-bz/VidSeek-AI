@@ -1,5 +1,6 @@
 """Tests for the local companion's session, URL, header, and path boundaries."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ import pytest
 
 from backend.core.security import (
     SessionRegistry,
+    probe_media_duration_seconds,
     validate_local_media_path,
     validate_remote_url,
 )
@@ -109,3 +111,53 @@ def test_a_path_chrome_no_longer_holds_is_a_validation_error(tmp_path: Path) -> 
     root.mkdir()
     with pytest.raises(ValueError, match="does not exist"):
         validate_local_media_path(str(root / "gone.mp4"), root)
+
+
+def _ffprobe_result(stdout: str) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(args=["ffprobe"], returncode=0, stdout=stdout, stderr="")
+
+
+def test_a_measurable_duration_is_read_from_ffprobes_format_section(tmp_path: Path) -> None:
+    media = tmp_path / "video.mp4"
+    media.write_bytes(b"video")
+    with patch(
+        "backend.core.security.subprocess.run",
+        return_value=_ffprobe_result('{"format": {"duration": "125.5"}}'),
+    ):
+        assert probe_media_duration_seconds(media) == 125.5
+
+
+def test_a_missing_ffprobe_reports_no_duration_rather_than_raising(tmp_path: Path) -> None:
+    media = tmp_path / "video.mp4"
+    media.write_bytes(b"video")
+    with patch("backend.core.security.subprocess.run", side_effect=FileNotFoundError()):
+        assert probe_media_duration_seconds(media) is None
+
+
+def test_a_failed_ffprobe_process_reports_no_duration_rather_than_raising(tmp_path: Path) -> None:
+    media = tmp_path / "video.mp4"
+    media.write_bytes(b"video")
+    with patch(
+        "backend.core.security.subprocess.run",
+        side_effect=subprocess.CalledProcessError(1, ["ffprobe"]),
+    ):
+        assert probe_media_duration_seconds(media) is None
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        "{}",
+        '{"format": {}}',
+        '{"format": {"duration": "not-a-number"}}',
+        '{"format": {"duration": "0"}}',
+        "not even json",
+    ],
+)
+def test_an_unusable_duration_value_is_none_rather_than_a_wrong_number(
+    tmp_path: Path, stdout: str
+) -> None:
+    media = tmp_path / "video.mp4"
+    media.write_bytes(b"video")
+    with patch("backend.core.security.subprocess.run", return_value=_ffprobe_result(stdout)):
+        assert probe_media_duration_seconds(media) is None

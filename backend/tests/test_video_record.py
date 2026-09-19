@@ -107,6 +107,7 @@ def _record(
     transcript: NormalizedTranscript | None = None,
     comments: list[CommentEntry] | None = None,
     user_id: str | None = None,
+    duration_seconds: float | None = None,
 ):
     with (
         patch.object(video_record, "is_postgres_configured", return_value=configured),
@@ -136,6 +137,7 @@ def _record(
             transcript=transcript,
             comments=comments,
             user_id=user_id,
+            duration_seconds=duration_seconds,
         )
 
 
@@ -179,13 +181,30 @@ def test_the_uploaded_blob_s_own_facts_are_taken_from_the_upload() -> None:
 
 
 def test_nothing_is_guessed_for_what_no_pipeline_measured() -> None:
-    # A duration read off a filename, or an id parsed out of a URL, would put a number in
-    # the table that nobody measured. Null says the same thing honestly.
+    # An id parsed out of a URL would put something in the table that nobody measured.
+    # Null says the same thing honestly. Duration is not guessed either, but is written
+    # when a caller actually measured one -- see the tests below.
     records = FakeVideoRecords()
     _record(records)
 
     assert records.upserted[0].duration_seconds is None
     assert records.upserted[0].source_video_id is None
+
+
+def test_a_measured_duration_is_recorded_on_the_video_row() -> None:
+    records = FakeVideoRecords()
+    _record(records, duration_seconds=754.2)
+
+    assert records.upserted[0].duration_seconds == 754.2
+
+
+def test_an_unmeasurable_duration_still_records_the_video() -> None:
+    # ffprobe not finding a duration is not a reason to lose an otherwise usable video.
+    records = FakeVideoRecords()
+    stored = _record(records, duration_seconds=None)
+
+    assert stored is not None
+    assert records.upserted[0].duration_seconds is None
 
 
 def test_the_transcript_is_stored_against_the_video_row_the_upsert_returned() -> None:

@@ -6,13 +6,14 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.core.errors import UnsupportedMediaError
+from backend.core.errors import JobNotFoundError, UnsupportedMediaError
 from backend.schemas.browser import (
     BrowserContext,
     BrowserCookie,
     MediaCandidate,
     MediaKind,
 )
+from backend.download_pipeline import ProcessedVideo
 from backend.schemas.video_jobs import (
     BrowserDownloadCompleteRequest,
     CaptureRetryRequest,
@@ -30,6 +31,7 @@ from backend.services.video_download.web.pipeline import (
     PipelineResult,
 )
 from backend.storage.blob import StoredVideo
+from backend.storage.postgres import StoredVideoJob, StoredVideoRecord, VideoJob, VideoRecord
 
 STORED = StoredVideo(
     container="videos",
@@ -399,3 +401,203 @@ def test_an_unreachable_database_leaves_the_uploaded_video_flagged_as_unrecorded
         "Video and transcript saved; the video is in Blob Storage but was not "
         "recorded in the database"
     )
+
+
+EXISTING_VIDEO = StoredVideoRecord(
+    id="11111111-1111-1111-1111-111111111111",
+    created_at="2026-09-14T10:00:00+00:00",
+    updated_at="2026-09-14T10:00:00+00:00",
+    video=VideoRecord(
+        source="youtube_pipeline",
+        source_url="https://example.com/watch",
+        title="Example",
+        blob_container="videos",
+        blob_name="videos/earlier-job/video.mp4",
+    ),
+)
+
+
+def _job_store() -> tuple[dict[str, StoredVideoJob], object]:
+    """A fake `PostgresVideoJobs` backed by a plain dict, for `upsert`/`get_by_id`."""
+    store: dict[str, StoredVideoJob] = {}
+
+    class FakeVideoJobs:
+        def upsert(self, job: VideoJob) -> StoredVideoJob:
+            stored = StoredVideoJob(created_at="t", updated_at="t", job=job)
+            store[job.id] = stored
+            return stored
+
+        def get_by_id(self, job_id: str) -> StoredVideoJob | None:
+            return store.get(job_id)
+
+    return store, FakeVideoJobs()
+
+
+def test_a_page_already_recorded_is_deduplicated_without_downloading(tmp_path: Path) -> None:
+    manager = JobManager(tmp_path)
+    _, fake_video_jobs = _job_store()
+    linked: list[tuple[str, str]] = []
+
+    class FakeVideoRecordsLookup:
+        def find_by_normalized_source_url(self, source_url: str) -> StoredVideoRecord | None:
+            return EXISTING_VIDEO
+
+        def get_by_id(self, video_id: str) -> StoredVideoRecord | None:
+            return EXISTING_VIDEO if video_id == EXISTING_VIDEO.id else None
+
+    class FakeUserVideos:
+        def link(self, user_id: str, video_id: str) -> None:
+            linked.append((user_id, video_id))
+
+    try:
+        with (
+            patch("backend.services.video_download.jobs.validate_remote_url"),
+            patch(
+                "backend.services.video_download.jobs.is_postgres_configured",
+                return_value=True,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoRecords",
+                return_value=FakeVideoRecordsLookup(),
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoJobs",
+                return_value=fake_video_jobs,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresUserVideos",
+                return_value=FakeUserVideos(),
+            ),
+            patch.object(manager, "_executor") as executor,
+        ):
+            job = manager.create(direct_request(), user_id="user-1")
+    finally:
+        manager.shutdown()
+
+    assert job.status == JobStatus.COMPLETE
+    assert job.video_storage_key == EXISTING_VIDEO.video.blob_name
+    assert linked == [("user-1", EXISTING_VIDEO.id)]
+    executor.submit.assert_not_called()
+    assert job.job_id not in manager._jobs
+
+
+def test_without_a_database_deduplication_is_skipped_and_the_job_downloads_as_usual(
+    tmp_path: Path,
+) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        with (
+            patch("backend.services.video_download.jobs.validate_remote_url"),
+            patch(
+                "backend.services.video_download.jobs.is_postgres_configured",
+                return_value=False,
+            ),
+            patch.object(manager, "_executor") as executor,
+        ):
+            job = manager.create(direct_request())
+    finally:
+        manager.shutdown()
+
+    assert job.status == JobStatus.AWAITING_BROWSER_DOWNLOAD
+    executor.submit.assert_not_called()  # direct_only never submits either way
+
+
+def test_a_completed_job_leaves_memory_once_the_database_holds_its_outcome(
+    tmp_path: Path,
+) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
+            created = manager.create(direct_request())
+        job_id = created.job_id
+
+        _, fake_video_jobs = _job_store()
+        produced_video = StoredVideoRecord(
+            id="22222222-2222-2222-2222-222222222222",
+            created_at="t",
+            updated_at="t",
+            video=VideoRecord(
+                source="browser_download",
+                source_url="https://example.com/watch",
+                title="Example",
+                blob_container=STORED.container,
+                blob_name=STORED.name,
+            ),
+        )
+        processed = ProcessedVideo(
+            acquired=PipelineResult(
+                video_path=tmp_path / "video.mp4",
+                transcript_text_path=None,
+                transcript_json_path=None,
+                transcript_source="page_transcript",
+                transcript_error=None,
+                normalized_transcript=None,
+            ),
+            stored_video=STORED,
+            video_id=produced_video.id,
+        )
+
+        with (
+            patch(
+                "backend.services.video_download.jobs.is_postgres_configured",
+                return_value=True,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoJobs",
+                return_value=fake_video_jobs,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoRecords",
+                return_value=type(
+                    "FakeVideoRecords", (), {"get_by_id": lambda self, video_id: produced_video}
+                )(),
+            ),
+        ):
+            manager._finish(job_id, processed)
+
+            assert job_id not in manager._jobs
+            fetched = manager.get(job_id)
+    finally:
+        manager.shutdown()
+
+    assert fetched.status == JobStatus.COMPLETE
+    assert fetched.video_storage_key == STORED.name
+
+
+def test_a_failed_job_stays_in_memory_even_with_a_database_configured(tmp_path: Path) -> None:
+    # FAILED is retryable through /capture; evicting it would make that retry impossible.
+    manager = JobManager(tmp_path)
+    try:
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
+            created = manager.create(direct_request())
+        job_id = created.job_id
+
+        _, fake_video_jobs = _job_store()
+        with (
+            patch(
+                "backend.services.video_download.jobs.is_postgres_configured",
+                return_value=True,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoJobs",
+                return_value=fake_video_jobs,
+            ),
+        ):
+            manager._fail(job_id, "download_failed", "boom", can_capture=True)
+
+        assert job_id in manager._jobs
+        assert manager._jobs[job_id].status == JobStatus.FAILED
+    finally:
+        manager.shutdown()
+
+
+def test_get_falls_back_to_the_database_only_when_one_is_configured(tmp_path: Path) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        with patch(
+            "backend.services.video_download.jobs.is_postgres_configured", return_value=False
+        ):
+            with pytest.raises(JobNotFoundError):
+                manager.get("no-such-job")
+    finally:
+        manager.shutdown()

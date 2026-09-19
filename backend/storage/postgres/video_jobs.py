@@ -133,6 +133,20 @@ class PostgresVideoJobs:
             ).fetchone()
         return StoredVideoJob.from_row(row) if row else None
 
+    def get_by_id(self, job_id: str) -> StoredVideoJob | None:
+        """This job's row, or None, without regard to who started it.
+
+        For the companion's own poll route, which authenticates the extension session but
+        not which account is asking -- the same capability-by-id model the in-memory
+        dictionary this table mirrors already used, `id` being a `uuid4().hex` nobody can
+        guess. `get` stays the account-scoped read the website's own library page needs.
+        """
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"select * from public.{TABLE_NAME} where id = %s", (job_id,)
+            ).fetchone()
+        return StoredVideoJob.from_row(row) if row else None
+
     def list_for_user(self, user_id: str, limit: int = DEFAULT_LIST_LIMIT) -> list[StoredVideoJob]:
         """This account's jobs, newest first. What the library's live processing rows read."""
         with connection(self._pool) as open_connection:
