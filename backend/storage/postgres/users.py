@@ -103,3 +103,32 @@ class PostgresUsers:
                 (user_id,),
             ).fetchone()
         return StoredUser.from_row(row) if row else None
+
+    def update_display_name(self, user_id: str, display_name: str) -> StoredUser | None:
+        """Change the account's display name, returning None if it disappeared."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"update public.{TABLE_NAME} set display_name = %s "
+                "where id = %s::uuid returning *",
+                (display_name, user_id),
+            ).fetchone()
+        return StoredUser.from_row(row) if row else None
+
+    def update_password_hash(self, user_id: str, password_hash: str) -> bool:
+        """Replace an account's bcrypt hash without ever handling its plaintext password."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"update public.{TABLE_NAME} set password_hash = %s "
+                "where id = %s::uuid returning id",
+                (password_hash, user_id),
+            ).fetchone()
+        return row is not None
+
+    def delete(self, user_id: str) -> bool:
+        """Delete an account; database foreign keys remove only its private descendants."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"delete from public.{TABLE_NAME} where id = %s::uuid returning id",
+                (user_id,),
+            ).fetchone()
+        return row is not None

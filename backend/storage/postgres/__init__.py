@@ -26,6 +26,7 @@ from .memory_embeddings import (
     MemoryMatch,
     PostgresMemoryEmbeddings,
 )
+from .library_views import LibraryViewRow, PostgresLibraryViews
 from .messages import PostgresMessages, StoredMessage
 from .pinned_answers import PinnedAnswerForVideo, PostgresPinnedAnswers, StoredPinnedAnswer
 from .sessions import PostgresSessions, StoredSession, hash_token
@@ -45,6 +46,7 @@ __all__ = [
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",
+    "LibraryViewRow",
     "NewChapter",
     "NewMemory",
     "NewUser",
@@ -56,6 +58,7 @@ __all__ = [
     "PostgresConversations",
     "PostgresMemories",
     "PostgresMemoryEmbeddings",
+    "PostgresLibraryViews",
     "PostgresMessages",
     "PostgresPinnedAnswers",
     "PostgresSessions",
