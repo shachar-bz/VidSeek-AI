@@ -76,6 +76,14 @@ async function collect(response: Response): Promise<StreamEvent[]> {
 }
 
 describe("readEventStream", () => {
+  it("treats a missing event field as the SSE default message event", async () => {
+    const response = streamingResponse([
+      `data: ${JSON.stringify({ type: "token", text: "default" })}\n\n`
+    ]);
+
+    expect(await collect(response)).toEqual([{ type: "token", text: "default" }]);
+  });
+
   it("yields each event in the order it was sent", async () => {
     const sent: StreamEvent[] = [
       { type: "message_start", user_message_id: "u1", message_id: "a1" },

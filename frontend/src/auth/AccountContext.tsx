@@ -34,6 +34,8 @@ export type AccountContextValue = AccountState & {
   signUp(details: SignUpRequest): Promise<AuthUser>;
   /** Revoke the server session when reachable, always clearing the local session. */
   signOut(): Promise<void>;
+  /** Replace profile details after an authenticated account update. */
+  synchronizeUser(user: AuthUser): void;
   /** Retry `/me` after a transient initialization failure. */
   retryInitialization(): void;
   /**
@@ -138,6 +140,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     }
   }, [clearSession]);
 
+  const synchronizeUser = useCallback((user: AuthUser) => {
+    setState({ status: "authenticated", user, initializationError: null });
+  }, []);
+
   const retryInitialization = useCallback(() => {
     setInitializationAttempt((attempt) => attempt + 1);
   }, []);
@@ -148,10 +154,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      synchronizeUser,
       retryInitialization,
       reportApiError
     }),
-    [reportApiError, retryInitialization, signIn, signOut, signUp, state]
+    [reportApiError, retryInitialization, signIn, signOut, signUp, state, synchronizeUser]
   );
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;

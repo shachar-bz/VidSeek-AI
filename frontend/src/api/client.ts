@@ -162,7 +162,10 @@ export function buildQuery(query: Record<string, unknown> | undefined): string {
  * line, each carrying an `event:` name and one or more `data:` lines. A partial event left
  * in the buffer when the stream ends is discarded rather than guessed at.
  */
-export async function* readEventStream(response: Response): AsyncGenerator<StreamEvent> {
+export async function* readEventStream<T = StreamEvent>(
+  response: Response,
+  eventName = STREAM_EVENT_NAME
+): AsyncGenerator<T> {
   const body = response.body;
   if (!body) return;
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
@@ -176,7 +179,7 @@ export async function* readEventStream(response: Response): AsyncGenerator<Strea
 
       let boundary = buffer.indexOf("\n\n");
       while (boundary !== -1) {
-        const parsed = parseEvent(buffer.slice(0, boundary));
+        const parsed = parseEvent<T>(buffer.slice(0, boundary), eventName);
         if (parsed) yield parsed;
         buffer = buffer.slice(boundary + 2);
         boundary = buffer.indexOf("\n\n");
@@ -188,16 +191,18 @@ export async function* readEventStream(response: Response): AsyncGenerator<Strea
 }
 
 /** One `event:`/`data:` block as its payload, or null if it is not one this stream sends. */
-function parseEvent(block: string): StreamEvent | null {
+function parseEvent<T>(block: string, expectedName: string): T | null {
   let name = "";
   const data: string[] = [];
   for (const line of block.split("\n")) {
     if (line.startsWith("event:")) name = line.slice("event:".length).trim();
     else if (line.startsWith("data:")) data.push(line.slice("data:".length).trimStart());
   }
-  if (name !== STREAM_EVENT_NAME || data.length === 0) return null;
+  // SSE calls an event with no explicit `event:` field a "message" event. The answer
+  // stream spells that name out while the library progress stream relies on the default.
+  if ((name || STREAM_EVENT_NAME) !== expectedName || data.length === 0) return null;
   try {
-    return JSON.parse(data.join("\n")) as StreamEvent;
+    return JSON.parse(data.join("\n")) as T;
   } catch {
     return null;
   }
