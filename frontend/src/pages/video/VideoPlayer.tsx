@@ -39,7 +39,7 @@ export function VideoPlayer({
   onTimeChange,
   onReady
 }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const intentRef = useRef<PlaybackIntent | null>(null);
   const [playback, setPlayback] = useState<PlaybackUrl | null>(null);
   const [loading, setLoading] = useState(available);
@@ -51,6 +51,11 @@ export function VideoPlayer({
     if (!video) return;
     intentRef.current = { position: video.currentTime, playing: !video.paused };
   }, []);
+
+  const connectVideo = useCallback((element: HTMLVideoElement | null) => {
+    videoRef.current = element;
+    onReady?.(element);
+  }, [onReady]);
 
   useEffect(() => {
     if (!available) {
@@ -93,11 +98,6 @@ export function VideoPlayer({
     };
   }, [available, reloadVersion, rememberIntent, videoId]);
 
-  useEffect(() => {
-    onReady?.(videoRef.current);
-    return () => onReady?.(null);
-  }, [onReady]);
-
   function restoreIntent() {
     const video = videoRef.current;
     const intent = intentRef.current;
@@ -130,7 +130,7 @@ export function VideoPlayer({
   return (
     <div className="video-player">
       <video
-        ref={videoRef}
+        ref={connectVideo}
         key={playback?.url}
         src={playback?.url}
         controls

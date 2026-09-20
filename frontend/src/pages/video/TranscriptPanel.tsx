@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import type { TranscriptLine, VideoTranscript } from "../../api/types";
 import { Button, EmptyState, Panel } from "../../components/ui";
-import { activeTranscriptIndex, formatTimestamp, transcriptLineText } from "./format";
+import { formatTimestamp, transcriptLineText } from "./format";
 
 async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
@@ -10,19 +10,18 @@ async function copyText(value: string): Promise<void> {
 
 export interface TranscriptPanelProps {
   transcript: VideoTranscript | null;
-  currentTime: number;
+  activeIndex: number;
   approximate: boolean;
   onSeek(seconds: number): void;
 }
 
 export function TranscriptPanel({
   transcript,
-  currentTime,
+  activeIndex,
   approximate,
   onSeek
 }: TranscriptPanelProps) {
   const lines = transcript?.lines ?? [];
-  const activeIndex = activeTranscriptIndex(lines, currentTime);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
   const [following, setFollowing] = useState(true);

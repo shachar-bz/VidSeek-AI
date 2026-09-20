@@ -26,8 +26,8 @@ export function getConversations(
 export function createConversation(
   videoId: string,
   input: CreateConversationRequest = {}
-): Promise<ConversationSummary> {
-  return request<ConversationSummary>(
+): Promise<ConversationDetail> {
+  return request<ConversationDetail>(
     `/v1/videos/${encodeURIComponent(videoId)}/conversations`,
     { method: "POST", body: input }
   );

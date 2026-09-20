@@ -51,7 +51,7 @@ describe("transcript", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     const onSeek = vi.fn();
-    render(<TranscriptPanel transcript={transcript} currentTime={5} approximate onSeek={onSeek} />);
+    render(<TranscriptPanel transcript={transcript} activeIndex={1} approximate onSeek={onSeek} />);
 
     expect(screen.getByText(/timestamps are approximate/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "≈0:04" }));
