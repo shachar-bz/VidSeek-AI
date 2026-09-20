@@ -16,11 +16,33 @@ export function getLibraryTags(signal?: AbortSignal): Promise<TagList> {
   return request<TagList>("/v1/library/tags", { signal });
 }
 
+export async function getLibraryThumbnail(
+  thumbnailUrl: string,
+  signal?: AbortSignal
+): Promise<Blob> {
+  const response = await send(thumbnailUrl, { signal });
+  return response.blob();
+}
+
 export async function* subscribeToLibraryEvents(
   signal?: AbortSignal
 ): AsyncGenerator<LibraryProgressEvent> {
-  const response = await send("/v1/library/events", { signal });
-  yield* readEventStream<LibraryProgressEvent>(response);
+  while (!signal?.aborted) {
+    const response = await send("/v1/library/events", { signal });
+    yield* readEventStream<LibraryProgressEvent>(response);
+    if (signal?.aborted) return;
+    await waitForReconnect(signal);
+  }
+}
+
+function waitForReconnect(signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(resolve, 1500);
+    signal?.addEventListener("abort", () => {
+      window.clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+  });
 }
 
 export function updateLibraryVideo(

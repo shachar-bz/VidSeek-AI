@@ -7,6 +7,7 @@ import { useAccount, AccountProvider } from "../src/auth";
 import { AccountPage } from "../src/pages/account";
 import { LibraryPage } from "../src/pages/library";
 import { SetupPage } from "../src/pages/setup";
+import { AppShell } from "../src/layout";
 
 const USER = { id: "user-1", email: "person@example.com", display_name: "Original" };
 
@@ -131,6 +132,48 @@ describe("library page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Remove Keep this" }));
     expect(screen.getByText(/re-adding the video later restores its shared video content and artifacts/i)).toBeTruthy();
     expect(screen.getByText(/conversation history is permanently lost/i)).toBeTruthy();
+  });
+});
+
+describe("library shell notifications", () => {
+  it("announces a video that finishes during the current open session", async () => {
+    writeToken("token");
+    const processing = {
+      video_id: null,
+      job_id: "job-live",
+      title: "Water cycle",
+      custom_title: null,
+      source_site: "youtube.com",
+      source: "youtube_pipeline",
+      source_url: "https://youtube.com/watch?v=one",
+      duration_seconds: null,
+      thumbnail_url: null,
+      tags: [],
+      added_at: null,
+      stage: "transcribing",
+      progress: 0.5,
+      status_message: "Transcribing",
+      error_code: null,
+      conversation_count: 0
+    };
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/auth/me") return Promise.resolve(jsonResponse(USER));
+      if (url === "/v1/library?limit=200") {
+        return Promise.resolve(jsonResponse({ videos: [processing], total: 1, limit: 200, offset: 0 }));
+      }
+      if (url === "/v1/library/events") {
+        return Promise.resolve(dataStream([{ job_id: "job-live", video_id: "video-live", stage: "ready", progress: 1, status_message: "Ready", error_code: null }]));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    render(<MemoryRouter><AccountProvider><AppShell><p>Library content</p></AppShell></AccountProvider></MemoryRouter>);
+
+    const bell = await screen.findByRole("button", { name: "Notifications, 1 unread" });
+    fireEvent.click(bell);
+    expect(screen.getByText("Water cycle")).toBeTruthy();
+    expect(screen.getByText(/ready to search/i)).toBeTruthy();
   });
 });
 
