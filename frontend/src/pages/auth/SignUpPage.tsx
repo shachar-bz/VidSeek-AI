@@ -5,6 +5,7 @@ import { useAccount } from "../../auth";
 import { Button, Field } from "../../components/ui";
 import { ROUTES } from "../../routes";
 import { AuthPageFrame } from "./AuthPageFrame";
+import { PasswordField } from "./PasswordField";
 import { authFailureMessage, validateCredentials, type CredentialsErrors } from "./validation";
 
 interface SignUpErrors extends CredentialsErrors {
@@ -49,18 +50,12 @@ export function SignUpPage() {
 
   return (
     <AuthPageFrame
-      title="Make every video findable"
-      introduction="Create your account, then connect the extension to build a private, searchable video library."
+      mode="sign-up"
       alternatePrompt="Already have an account?"
       alternateLabel="Sign in"
       alternatePath={ROUTES.signIn}
     >
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        <div className="auth-form__heading">
-          <h2>Create your account</h2>
-          <p>One account keeps your website and extension in sync.</p>
-        </div>
-
         {requestError ? (
           <div className="auth-form__error" role="alert">
             {requestError}
@@ -90,18 +85,11 @@ export function SignUpPage() {
           required
           disabled={pending}
         />
-        <Field
-          label="Password"
-          name="password"
-          type="password"
+        <PasswordField
           value={password}
           onChange={(event) => setPassword(event.currentTarget.value)}
           error={errors.password}
-          hint="Use 8–72 characters."
           autoComplete="new-password"
-          minLength={8}
-          maxLength={72}
-          required
           disabled={pending}
         />
         <Button type="submit" variant="primary" fullWidth pending={pending}>

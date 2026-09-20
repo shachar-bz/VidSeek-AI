@@ -5,6 +5,7 @@ import { useAccount } from "../../auth";
 import { Button, Field } from "../../components/ui";
 import { ROUTES } from "../../routes";
 import { AuthPageFrame } from "./AuthPageFrame";
+import { PasswordField } from "./PasswordField";
 import { authFailureMessage, validateCredentials, type CredentialsErrors } from "./validation";
 
 export function SignInPage() {
@@ -36,18 +37,12 @@ export function SignInPage() {
 
   return (
     <AuthPageFrame
-      title="Welcome back"
-      introduction="Sign in to return to your video library, transcripts, and conversations."
+      mode="sign-in"
       alternatePrompt="New to VidSeek?"
       alternateLabel="Create an account"
       alternatePath={ROUTES.signUp}
     >
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        <div className="auth-form__heading">
-          <h2>Sign in</h2>
-          <p>Use the account connected to your VidSeek extension.</p>
-        </div>
-
         {requestError ? (
           <div className="auth-form__error" role="alert">
             {requestError}
@@ -66,17 +61,11 @@ export function SignInPage() {
           required
           disabled={pending}
         />
-        <Field
-          label="Password"
-          name="password"
-          type="password"
+        <PasswordField
           value={password}
           onChange={(event) => setPassword(event.currentTarget.value)}
           error={errors.password}
           autoComplete="current-password"
-          minLength={8}
-          maxLength={72}
-          required
           disabled={pending}
         />
         <Button type="submit" variant="primary" fullWidth pending={pending}>
