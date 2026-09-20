@@ -110,8 +110,10 @@ export interface LibraryVideo {
   title: string;
   custom_title: string | null;
   source_site: string;
+  source: string;
   source_url: string;
   duration_seconds: number | null;
+  thumbnail_url: string | null;
   tags: string[];
   added_at: string | null;
   stage: ReadinessStage;

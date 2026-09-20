@@ -65,9 +65,11 @@ class LibraryVideo(BaseModel):
     # The site the video came from -- a hostname, not a full URL -- and the page it came
     # from, which is what an "open original" link points at.
     source_site: str
+    source: str = ""
     source_url: str
 
     duration_seconds: float | None = None
+    thumbnail_url: str | None = None
     tags: list[str] = Field(default_factory=list)
 
     # When this user added it. Null only while the library link does not exist yet, which

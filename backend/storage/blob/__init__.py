@@ -2,12 +2,18 @@
 
 from .client import build_client, shared_client
 from .settings import BlobSettings, is_blob_configured, load_blob_settings
-from .video_storage import BlobVideoStorage, StoredVideo, build_video_key
+from .video_storage import (
+    BlobVideoStorage,
+    StoredVideo,
+    build_thumbnail_key,
+    build_video_key,
+)
 
 __all__ = [
     "BlobSettings",
     "BlobVideoStorage",
     "StoredVideo",
+    "build_thumbnail_key",
     "build_client",
     "build_video_key",
     "is_blob_configured",

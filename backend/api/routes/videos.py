@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 
 from backend.api.dependencies import current_user
 from backend.api.routes.library import _require_uuid, _stage, library_views
@@ -22,6 +25,10 @@ from backend.schemas.videos import (
     VideoInsights,
     VideoOutlineResponse,
     VideoTranscript,
+)
+from backend.services.video_download.thumbnail import (
+    ThumbnailGenerationError,
+    generate_middle_frame,
 )
 from backend.storage.blob.video_storage import BlobVideoStorage
 from backend.storage.postgres import (
@@ -122,6 +129,44 @@ def playback_url(
         url=storage.sas_download_url(row.blob_name, PLAYBACK_URL_LIFETIME_SECONDS),
         expires_at=expires_at.isoformat(),
         expires_in_seconds=PLAYBACK_URL_LIFETIME_SECONDS,
+    )
+
+
+@router.get("/{video_id}/thumbnail", response_class=Response)
+def video_thumbnail(
+    video_id: str,
+    user: StoredUser = Depends(current_user),
+    views: PostgresLibraryViews = Depends(library_views),
+    storage: BlobVideoStorage = Depends(blob_storage),
+) -> Response:
+    """Return the private middle-frame JPEG, creating it for legacy rows on first use."""
+    row = _owned_video(user.id, video_id, views)
+    if not row.blob_name or not storage.video_exists(row.blob_name):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video file not found")
+
+    if not storage.thumbnail_exists(row.blob_name):
+        suffix = Path(row.blob_name).suffix or ".mp4"
+        try:
+            with TemporaryDirectory(prefix="vidseek-thumbnail-") as temporary_directory:
+                source_path = Path(temporary_directory) / f"source{suffix}"
+                thumbnail_path = Path(temporary_directory) / "thumbnail.jpg"
+                storage.download_video(row.blob_name, source_path)
+                generate_middle_frame(
+                    source_path,
+                    thumbnail_path,
+                    duration_seconds=row.duration_seconds,
+                )
+                storage.upload_thumbnail(thumbnail_path, video_blob_name=row.blob_name)
+        except ThumbnailGenerationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Video thumbnail is unavailable",
+            ) from error
+
+    return Response(
+        content=storage.read_thumbnail(row.blob_name),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=86400"},
     )
 
 

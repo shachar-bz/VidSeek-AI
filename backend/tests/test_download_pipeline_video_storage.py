@@ -50,11 +50,18 @@ def test_duration_is_probed_before_the_local_copy_is_deleted(tmp_path: Path) -> 
     video_path = tmp_path / "video.mp4"
     video_path.write_bytes(b"video")
 
-    def fake_upload(*, video_path: Path, job_id: str, progress_callback) -> StoredVideo:
+    def fake_upload(
+        *,
+        video_path: Path,
+        job_id: str,
+        duration_seconds: float | None,
+        progress_callback,
+    ) -> StoredVideo:
         # `upload_job_video` deletes the local file once it "uploads" it; the probe must
         # have already run by the time this is called, or there is nothing left to read.
         assert video_path.exists()
         video_path.unlink()
+        assert duration_seconds == 754.2
         return STORED
 
     with (

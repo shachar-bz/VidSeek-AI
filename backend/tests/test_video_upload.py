@@ -23,6 +23,7 @@ class FakeVideoStorage:
     def __init__(self, chunks: tuple[tuple[int, int], ...] = ((5, 10), (10, 10))):
         self.chunks = chunks
         self.uploaded: list[tuple[Path, str]] = []
+        self.thumbnails: list[tuple[Path, str]] = []
 
     def upload_video(self, local_path, *, video_id, progress_callback=None):
         self.uploaded.append((local_path, video_id))
@@ -31,16 +32,26 @@ class FakeVideoStorage:
                 progress_callback(uploaded, total)
         return STORED
 
+    def upload_thumbnail(self, local_path, *, video_blob_name):
+        self.thumbnails.append((local_path, video_blob_name))
+
 
 def _upload(tmp_path: Path, storage: FakeVideoStorage, *, video_path: Path | None = None):
     reported: list[tuple[JobPhase, float, str]] = []
     video_path = video_path or tmp_path / "clip.mp4"
     if not video_path.exists():
         video_path.write_bytes(b"video-bytes")
-    with patch.object(video_upload, "BlobVideoStorage", return_value=storage):
+    with (
+        patch.object(video_upload, "BlobVideoStorage", return_value=storage),
+        patch.object(video_upload, "generate_middle_frame") as generate_thumbnail,
+    ):
+        generate_thumbnail.side_effect = (
+            lambda _, output_path, **__: output_path.write_bytes(b"jpeg")
+        )
         stored = video_upload.upload_job_video(
             video_path=video_path,
             job_id="job-42",
+            duration_seconds=10,
             progress_callback=lambda phase, value, message: reported.append(
                 (phase, value, message)
             ),
@@ -54,6 +65,7 @@ def test_the_video_is_stored_under_the_job_that_produced_it(tmp_path: Path) -> N
 
     assert stored == STORED
     assert storage.uploaded[0][1] == "job-42"
+    assert storage.thumbnails[0][1] == STORED.name
 
 
 def test_the_local_copy_is_deleted_once_it_is_safely_in_the_container(tmp_path: Path) -> None:
@@ -77,7 +89,10 @@ def test_a_missing_container_configuration_fails_the_upload_rather_than_skipping
         pytest.raises(RuntimeError, match="AZURE_STORAGE_CONTAINER_NAME"),
     ):
         video_upload.upload_job_video(
-            video_path=video_path, job_id="job-42", progress_callback=lambda *_: None
+            video_path=video_path,
+            job_id="job-42",
+            duration_seconds=10,
+            progress_callback=lambda *_: None,
         )
     # A failed upload leaves the only copy of the video where it is.
     assert video_path.exists()

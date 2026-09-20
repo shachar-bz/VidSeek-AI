@@ -30,6 +30,8 @@ from .client import UPLOAD_CONCURRENCY, shared_client
 from .settings import BlobSettings, load_blob_settings
 
 NAME_PREFIX = "videos"
+THUMBNAIL_FILENAME = "thumbnail.jpg"
+THUMBNAIL_CONTENT_TYPE = "image/jpeg"
 
 # The video containers this project actually produces, spelled out rather than left to
 # `mimetypes`, which on Windows answers out of the registry and so gives a different type
@@ -77,6 +79,14 @@ def build_video_key(video_id: str, filename: str) -> str:
     return f"{NAME_PREFIX}/{_name_segment(video_id)}/{_name_segment(filename)}"
 
 
+def build_thumbnail_key(video_blob_name: str) -> str:
+    """The deterministic thumbnail name beside one stored video blob."""
+    prefix, separator, _ = video_blob_name.rpartition("/")
+    if not separator or not prefix:
+        raise ValueError(f"{video_blob_name!r} is not a namespaced video blob")
+    return f"{prefix}/{THUMBNAIL_FILENAME}"
+
+
 class BlobVideoStorage:
     """The video container, as the rest of the backend sees it."""
 
@@ -121,6 +131,24 @@ class BlobVideoStorage:
             size_bytes=size_bytes,
             content_type=content_type,
         )
+
+    def upload_thumbnail(self, local_path: Path, *, video_blob_name: str) -> str:
+        """Store a video's middle-frame JPEG beside its video blob."""
+        name = build_thumbnail_key(video_blob_name)
+        with local_path.open("rb") as thumbnail_file:
+            self._blob(name).upload_blob(
+                thumbnail_file,
+                overwrite=True,
+                content_settings=ContentSettings(content_type=THUMBNAIL_CONTENT_TYPE),
+            )
+        return name
+
+    def thumbnail_exists(self, video_blob_name: str) -> bool:
+        return bool(self._blob(build_thumbnail_key(video_blob_name)).exists())
+
+    def read_thumbnail(self, video_blob_name: str) -> bytes:
+        """Read the small private thumbnail for an authenticated API response."""
+        return self._blob(build_thumbnail_key(video_blob_name)).download_blob().readall()
 
     def download_video(self, name: str, destination: Path) -> Path:
         """Fetch a stored video back to disk, creating the destination's folder."""

@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 from azure.core.exceptions import ResourceNotFoundError
 
-from backend.storage.blob import BlobSettings, BlobVideoStorage, build_video_key, is_blob_configured
+from backend.storage.blob import (
+    BlobSettings,
+    BlobVideoStorage,
+    build_thumbnail_key,
+    build_video_key,
+    is_blob_configured,
+)
 from backend.storage.blob.settings import load_blob_settings
 
 ACCOUNT_KEY = "a2V5LWJ5dGVz=="
@@ -53,6 +59,12 @@ class FakeBlob:
             return False
         return True
 
+    def download_blob(self):
+        return self
+
+    def readall(self) -> bytes:
+        return b"thumbnail-bytes"
+
     def delete_blob(self) -> None:
         if self._client.missing:
             raise ResourceNotFoundError("The specified blob does not exist.")
@@ -85,6 +97,10 @@ def _video(tmp_path: Path, name: str = "My Talk.mp4") -> Path:
 
 def test_name_puts_every_file_of_one_video_under_its_own_prefix() -> None:
     assert build_video_key("job-42", "clip.mp4") == "videos/job-42/clip.mp4"
+
+
+def test_thumbnail_sits_beside_the_video_under_a_deterministic_name() -> None:
+    assert build_thumbnail_key("videos/job-42/clip.mp4") == "videos/job-42/thumbnail.jpg"
 
 
 def test_name_replaces_characters_that_would_not_survive_a_url() -> None:
@@ -120,6 +136,23 @@ def test_upload_replaces_whatever_sits_under_the_same_name(tmp_path: Path) -> No
     _storage(client).upload_video(_video(tmp_path), video_id="job-42")
 
     assert client.uploads[0]["overwrite"] is True
+
+
+def test_thumbnail_upload_and_read_use_jpeg_content(tmp_path: Path) -> None:
+    thumbnail_path = tmp_path / "middle.jpg"
+    thumbnail_path.write_bytes(b"jpeg-bytes")
+    client = FakeBlobServiceClient()
+    storage = _storage(client)
+
+    name = storage.upload_thumbnail(
+        thumbnail_path,
+        video_blob_name="videos/job-42/clip.mp4",
+    )
+
+    assert name == "videos/job-42/thumbnail.jpg"
+    assert client.uploads[0]["content_type"] == "image/jpeg"
+    assert client.uploads[0]["bytes"] == b"jpeg-bytes"
+    assert storage.read_thumbnail("videos/job-42/clip.mp4") == b"thumbnail-bytes"
 
 
 def test_upload_of_a_matroska_file_is_not_left_to_the_machine_s_mime_registry(
