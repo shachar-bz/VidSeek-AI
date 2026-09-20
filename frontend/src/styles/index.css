@@ -1193,3 +1193,235 @@ h3 {
     flex-direction: column;
   }
 }
+
+/* Video route */
+.video-page__heading {
+  align-items: flex-start;
+}
+
+.video-page__heading .eyebrow a {
+  color: var(--color-ash-text);
+}
+
+.video-page__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-12);
+  color: var(--color-ash-text);
+  font-size: var(--text-body-sm);
+}
+
+.video-player {
+  overflow: hidden;
+  border-radius: var(--radius-cards);
+  background: #08080c;
+}
+
+.video-player video {
+  width: 100%;
+  max-height: min(70vh, 45rem);
+  display: block;
+  margin: auto;
+  background: #08080c;
+}
+
+.video-player--unavailable {
+  min-height: 18rem;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.video-player--unavailable p {
+  max-width: 38rem;
+  color: var(--color-ash-text);
+}
+
+.video-player__notice {
+  margin: 0;
+  padding: var(--spacing-12) var(--spacing-20);
+  color: var(--color-ash-text);
+  background: var(--color-graphite-card);
+  font-size: var(--text-body-sm);
+}
+
+.video-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.75fr);
+  align-items: start;
+  gap: var(--spacing-24);
+}
+
+.video-content-grid__side {
+  display: grid;
+  gap: var(--spacing-24);
+}
+
+.video-section {
+  min-width: 0;
+}
+
+.video-section__heading {
+  margin-bottom: var(--spacing-24);
+}
+
+.video-section__heading--split {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+}
+
+.video-section__heading h2 {
+  margin-bottom: var(--spacing-4);
+  font-size: var(--text-heading-sm);
+}
+
+.video-section__heading p,
+.chapter-list p,
+.insights-content p {
+  margin-bottom: 0;
+  color: var(--color-ash-text);
+}
+
+.transcript-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--spacing-8);
+}
+
+.transcript-actions .ui-button {
+  min-height: 2.25rem;
+  padding: var(--spacing-4) var(--spacing-12);
+  font-size: var(--text-caption);
+}
+
+.transcript-lines {
+  max-height: 42rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  scrollbar-color: var(--color-slate-border) transparent;
+}
+
+.transcript-line {
+  display: grid;
+  grid-template-columns: auto 4.5rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--spacing-12);
+  padding: var(--spacing-12);
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid #30303e;
+}
+
+.transcript-line--active {
+  border-left-color: var(--color-cobalt);
+  background: var(--color-obsidian-button);
+}
+
+.transcript-line input {
+  margin-top: 0.35rem;
+}
+
+.transcript-line__time,
+.transcript-line__copy,
+.chapter-list__time {
+  padding: 0;
+  border: 0;
+  color: var(--color-ash-text);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--text-caption);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.transcript-line__copy {
+  opacity: 0;
+}
+
+.transcript-line:hover .transcript-line__copy,
+.transcript-line:focus-within .transcript-line__copy {
+  opacity: 1;
+}
+
+.chapter-list {
+  display: grid;
+  gap: var(--spacing-20);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chapter-list li {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: var(--spacing-16);
+}
+
+.chapter-list h3,
+.insights-content h3 {
+  margin-bottom: var(--spacing-8);
+  font-family: var(--font-arcadia);
+  font-size: var(--text-body);
+}
+
+.insights-content,
+.insights-content section {
+  display: grid;
+  gap: var(--spacing-12);
+}
+
+.insights-content {
+  gap: var(--spacing-32);
+}
+
+.insights-content ul {
+  display: grid;
+  gap: var(--spacing-8);
+  margin: 0;
+  padding-left: var(--spacing-20);
+}
+
+.suggested-questions > div {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.suggested-questions .ui-button {
+  height: auto;
+  justify-content: flex-start;
+  border-color: var(--color-slate-border);
+  text-align: left;
+  white-space: normal;
+}
+
+@media (max-width: 64rem) {
+  .video-content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 40rem) {
+  .video-section__heading--split {
+    flex-direction: column;
+  }
+
+  .transcript-actions {
+    justify-content: flex-start;
+  }
+
+  .transcript-line {
+    grid-template-columns: auto 4rem minmax(0, 1fr);
+  }
+
+  .transcript-line__copy {
+    grid-column: 3;
+    opacity: 1;
+  }
+}
