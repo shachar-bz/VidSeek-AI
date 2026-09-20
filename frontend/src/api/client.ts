@@ -14,6 +14,9 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 const TOKEN_STORAGE_KEY = "vidseek.auth.token";
 
+type UnauthorizedListener = () => void;
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+
 /** A request the API refused, with the status the caller has to branch on. */
 export class ApiError extends Error {
   readonly status: number;
@@ -56,6 +59,18 @@ export function writeToken(token: string | null): void {
   }
 }
 
+/**
+ * Subscribe to an expired/revoked session reported by any authenticated API request.
+ *
+ * AccountProvider owns the normal subscription. Keeping the notification here means later
+ * feature APIs automatically share the same sign-out path instead of teaching every page
+ * how to interpret a 401. Anonymous login/signup failures deliberately do not notify it.
+ */
+export function subscribeToUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => unauthorizedListeners.delete(listener);
+}
+
 export interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -95,7 +110,13 @@ export async function send(path: string, options: RequestOptions = {}): Promise<
     signal: options.signal
   });
 
-  if (!response.ok) throw new ApiError(response.status, await describeFailure(response));
+  if (!response.ok) {
+    const error = new ApiError(response.status, await describeFailure(response));
+    if (error.isUnauthorized && !options.anonymous) {
+      for (const listener of unauthorizedListeners) listener();
+    }
+    throw error;
+  }
   return response;
 }
 
