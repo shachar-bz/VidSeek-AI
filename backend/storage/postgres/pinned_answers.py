@@ -110,3 +110,47 @@ class PostgresPinnedAnswers:
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(LIST_FOR_VIDEO_SQL, (user_id, video_id)).fetchall()
         return [PinnedAnswerForVideo.from_row(row) for row in rows]
+
+    def pin_for_video(
+        self, user_id: str, video_id: str, message_id: str
+    ) -> PinnedAnswerForVideo | None:
+        """Pin one owned assistant message on this video, without revealing foreign rows."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"""
+                with eligible as (
+                    select m.id, m.conversation_id, m.content
+                    from public.messages m
+                    join public.conversations c on c.id = m.conversation_id
+                    where m.id = %s::uuid and m.role = 'assistant'
+                      and c.user_id = %s::uuid and c.video_id = %s::uuid
+                ), inserted as (
+                    insert into public.{TABLE_NAME} (message_id)
+                    select id from eligible
+                    on conflict (message_id) do nothing
+                    returning id, message_id, created_at
+                )
+                select p.id, p.message_id, e.conversation_id, e.content,
+                       p.created_at as pinned_at
+                from eligible e
+                join public.{TABLE_NAME} p on p.message_id = e.id
+                """,
+                (message_id, user_id, video_id),
+            ).fetchone()
+        return PinnedAnswerForVideo.from_row(row) if row else None
+
+    def unpin_for_video(self, user_id: str, video_id: str, message_id: str) -> bool:
+        """Remove a pin only when its message belongs to this user's video conversation."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"""
+                delete from public.{TABLE_NAME} p
+                using public.messages m, public.conversations c
+                where p.message_id = %s::uuid
+                  and m.id = p.message_id and c.id = m.conversation_id
+                  and c.user_id = %s::uuid and c.video_id = %s::uuid
+                returning p.id
+                """,
+                (message_id, user_id, video_id),
+            ).fetchone()
+        return row is not None
