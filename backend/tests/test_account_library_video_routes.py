@@ -93,6 +93,8 @@ def test_library_listing_derives_readiness_and_uses_one_aggregate_query() -> Non
 
     assert response.status_code == 200
     assert response.json()["videos"][0]["stage"] == "ready"
+    assert response.json()["videos"][0]["source"] == "youtube_pipeline"
+    assert response.json()["videos"][0]["thumbnail_url"] == f"/v1/videos/{VIDEO_ID}/thumbnail"
     assert len(pool.recorded) == 1
     assert "has_transcript" in pool.statements[0]
 
@@ -229,8 +231,9 @@ def test_foreign_video_is_hidden_as_not_found() -> None:
 
 
 class StubBlob:
-    def __init__(self, exists=True):
+    def __init__(self, exists=True, thumbnail_exists=True):
         self.exists = exists
+        self.has_thumbnail = thumbnail_exists
         self.calls = []
 
     def video_exists(self, name):
@@ -239,6 +242,12 @@ class StubBlob:
     def sas_download_url(self, name, expires):
         self.calls.append((name, expires))
         return f"https://blob.example/{name}?sig=fresh"
+
+    def thumbnail_exists(self, name):
+        return self.has_thumbnail
+
+    def read_thumbnail(self, name):
+        return b"jpeg-bytes"
 
 
 def test_playback_mints_a_fresh_url_and_missing_blob_does_not_affect_detail() -> None:
@@ -258,6 +267,18 @@ def test_playback_mints_a_fresh_url_and_missing_blob_does_not_affect_detail() ->
     app.state.blob_video_storage = StubBlob(exists=False)
     assert client.get(f"/v1/videos/{VIDEO_ID}/playback").status_code == 404
     assert client.get(f"/v1/videos/{VIDEO_ID}").status_code == 200
+
+
+def test_thumbnail_is_private_jpeg_content() -> None:
+    app = _app(videos)
+    app.state.library_views_store = StubViews(_row())
+    app.state.blob_video_storage = StubBlob()
+
+    response = TestClient(app).get(f"/v1/videos/{VIDEO_ID}/thumbnail")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == b"jpeg-bytes"
 
 
 def test_transcript_preserves_lines_and_timing_fidelity() -> None:

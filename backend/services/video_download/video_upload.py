@@ -16,6 +16,7 @@ import logging
 from pathlib import Path
 
 from backend.schemas.video_jobs import JobPhase
+from backend.services.video_download.thumbnail import generate_middle_frame
 from backend.storage.blob import BlobVideoStorage, StoredVideo
 
 # The slice of a job's progress bar the upload owns. Everything before it reports up to
@@ -33,15 +34,22 @@ def upload_job_video(
     *,
     video_path: Path,
     job_id: str,
+    duration_seconds: float | None,
     progress_callback,
 ) -> StoredVideo:
-    """Upload one job's video to Blob Storage, then delete the local copy, raising on any failure.
+    """Upload one video and its middle-frame thumbnail, then delete the local files.
 
     The job id is the video's prefix in the container. It is what the companion has to hand
     that is unique per video; the `videos` row written afterwards is what ties this blob
     name to the page the video came from.
     """
     storage = BlobVideoStorage()
+    thumbnail_path = video_path.with_name(f"{video_path.stem}.thumbnail.jpg")
+    generate_middle_frame(
+        video_path,
+        thumbnail_path,
+        duration_seconds=duration_seconds,
+    )
     progress_callback(JobPhase.UPLOAD, PROGRESS_START, UPLOAD_MESSAGE)
     stored = storage.upload_video(
         video_path,
@@ -52,5 +60,7 @@ def upload_job_video(
             UPLOAD_MESSAGE,
         ),
     )
+    storage.upload_thumbnail(thumbnail_path, video_blob_name=stored.name)
     video_path.unlink(missing_ok=True)
+    thumbnail_path.unlink(missing_ok=True)
     return stored

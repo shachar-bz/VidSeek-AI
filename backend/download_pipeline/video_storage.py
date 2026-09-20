@@ -70,6 +70,7 @@ def store_video(
         stored_video = upload_job_video(
             video_path=acquired.video_path,
             job_id=job_id,
+            duration_seconds=duration_seconds,
             progress_callback=progress_callback,
         )
     except Exception as error:
