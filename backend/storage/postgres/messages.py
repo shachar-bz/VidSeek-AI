@@ -88,6 +88,29 @@ class PostgresMessages:
             ).fetchone()
         return StoredMessage.from_row(row) if row else None
 
+    def update_assistant(
+        self,
+        message_id: str,
+        content: str,
+        tool_trace: dict | list | None = None,
+    ) -> StoredMessage | None:
+        """Finalize an assistant placeholder, or return None if it no longer exists.
+
+        The role predicate prevents this stream-finalization path from ever rewriting a
+        user's turn, even if a caller supplies the wrong id.
+        """
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"update public.{TABLE_NAME} set content = %s, tool_trace = %s "
+                "where id = %s::uuid and role = 'assistant' returning *",
+                (
+                    content,
+                    Jsonb(tool_trace) if tool_trace is not None else None,
+                    message_id,
+                ),
+            ).fetchone()
+        return StoredMessage.from_row(row) if row else None
+
     def list_for_conversation(self, conversation_id: str) -> list[StoredMessage]:
         """One conversation's full message history, in the order it was said."""
         with connection(self._pool) as open_connection:

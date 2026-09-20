@@ -60,6 +60,25 @@ def test_a_message_that_does_not_exist_is_absence_rather_than_an_error() -> None
     assert messages.get(MESSAGE_ID) is None
 
 
+def test_an_assistant_placeholder_is_finalized_with_content_and_trace() -> None:
+    trace = [{"call_id": "call-1", "tool": "get_video_outline"}]
+    row = {**ROW, "role": "assistant", "content": "Finished", "tool_trace": trace}
+    messages, pool = _messages([row])
+
+    stored = messages.update_assistant(MESSAGE_ID, "Finished", trace)
+
+    assert stored is not None
+    assert stored.content == "Finished"
+    assert stored.tool_trace == trace
+    assert "role = 'assistant'" in pool.statements[0]
+
+
+def test_finalizing_a_missing_assistant_is_absence() -> None:
+    messages, _ = _messages([])
+
+    assert messages.update_assistant(MESSAGE_ID, "partial") is None
+
+
 def test_a_conversations_messages_come_back_in_the_order_they_were_said() -> None:
     messages, pool = _messages([ROW, ROW])
     found = messages.list_for_conversation(CONVERSATION_ID)
