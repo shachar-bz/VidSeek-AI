@@ -10,6 +10,7 @@ class ConversationDeps:
     """Per-run state the application supplies when a conversation/agent run starts."""
 
     video_id: str
+    timestamps_reliable: bool = True
 
     # The connection pool every tool's store is built on, rather than a store per tool: a
     # store holds nothing but its pool, so injecting one per table would be injecting the

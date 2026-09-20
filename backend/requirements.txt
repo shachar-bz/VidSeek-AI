@@ -139,8 +139,7 @@ sentence-transformers>=3.0
 # Remove this block together with backend/video_agent/tools/ if the module is dropped.
 # Pydantic AI provides the tool-calling contract the conversational agent's tools are
 # written against (a typed function plus its docstring becomes a tool's schema and
-# description). No agent lives in this repo yet; this is only the dependency the tools
-# themselves are built with.
+# description), and drives the conversational agent's validated event stream.
 #
 # The floor was `>=0.0.14`, which was the current release when the tools were written and
 # is now three years and two major versions behind what is actually installed. That is not
