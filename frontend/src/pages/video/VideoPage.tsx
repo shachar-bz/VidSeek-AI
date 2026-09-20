@@ -41,6 +41,7 @@ export function VideoPage() {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setVideo(null);
     setError(null);
     setArtifactError(null);
     setTranscript(null);

@@ -66,24 +66,22 @@ export function VideoPlayer({
 
     const controller = new AbortController();
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    intentRef.current = null;
+    setPlayback(null);
 
     async function refresh(isInitial: boolean) {
-      if (!isInitial) rememberIntent();
       try {
         const next = await getPlaybackUrl(videoId, controller.signal);
         if (controller.signal.aborted) return;
+        if (!isInitial) rememberIntent();
         setPlayback(next);
         setError(null);
         setLoading(false);
         refreshTimer = setTimeout(() => void refresh(false), playbackRefreshDelay(next));
       } catch (caught) {
         if (!controller.signal.aborted) {
-          setError(
-            featureFailureMessage(
-              caught,
-              "The video file is unavailable right now. The transcript and other video content still work."
-            )
-          );
+          const reason = featureFailureMessage(caught, "The video file is unavailable right now.");
+          setError(`${reason} Only the video file is unavailable; transcript, outline, insights, conversations, and pins remain usable.`);
           setLoading(false);
         }
       }

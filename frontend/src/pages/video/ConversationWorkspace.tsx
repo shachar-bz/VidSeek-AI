@@ -70,15 +70,17 @@ export function chatUnavailableMessage(stage: VideoDetail["stage"]): string | nu
 function MessageCard({
   message,
   pinPending,
+  pinDisabled,
   onTogglePin
 }: {
   message: ConversationMessage;
   pinPending: boolean;
+  pinDisabled: boolean;
   onTogglePin(message: ConversationMessage): void;
 }) {
   return (
     <article className={`chat-message chat-message--${message.role}`}>
-      <header><span>{message.role === "user" ? "You" : "VidSeek"}</span>{message.role === "assistant" ? <Button variant="ghost" pending={pinPending} onClick={() => onTogglePin(message)}>{message.pinned ? "Unpin" : "Pin answer"}</Button> : null}</header>
+      <header><span>{message.role === "user" ? "You" : "VidSeek"}</span>{message.role === "assistant" ? <Button variant="ghost" pending={pinPending} disabled={pinDisabled} onClick={() => onTogglePin(message)}>{message.pinned ? "Unpin" : "Pin answer"}</Button> : null}</header>
       <div className="chat-message__content">{message.content || (message.role === "assistant" ? "Waiting for an answer…" : "")}</div>
       {message.role === "assistant" ? <ToolTrace calls={message.tool_trace} /> : null}
     </article>
@@ -113,6 +115,7 @@ export function ConversationWorkspace({
   const [deletePending, setDeletePending] = useState(false);
   const generationRef = useRef(0);
   const streamControllerRef = useRef<AbortController | null>(null);
+  const draftConversationRef = useRef<string | null>(null);
   const handledSuggestionRef = useRef(0);
   const canChat = allowsChat(video.stage);
 
@@ -145,8 +148,12 @@ export function ConversationWorkspace({
     setStreaming(false);
     updateLive(null);
     setStreamError(null);
+    setDetail(null);
+    if (draftConversationRef.current !== selectedId) {
+      draftConversationRef.current = selectedId;
+      setDraft("");
+    }
     if (!selectedId) {
-      setDetail(null);
       setRenameDraft("");
       return;
     }
@@ -171,6 +178,7 @@ export function ConversationWorkspace({
     try {
       const created = await createConversation(video.video_id, prefill ? { first_message: prefill } : {});
       setConversations((current) => newestFirst([summaryFromDetail(created), ...current.filter((item) => item.conversation_id !== created.conversation_id)]));
+      draftConversationRef.current = created.conversation_id;
       setDraft(prefill);
       navigate(videoPath(video.video_id, created.conversation_id));
     } catch (caught) {
@@ -220,15 +228,25 @@ export function ConversationWorkspace({
           terminal = true;
           commitLiveToHistory(next, next.assistantMessage);
           updateLive(null);
-          await loadConversationList();
-          const refreshed = await getConversation(selectedId);
-          if (generationRef.current === generation) {
-            setDetail(refreshed);
-            setRenameDraft(refreshed.title ?? "");
+          try {
+            await loadConversationList();
+            const refreshed = await getConversation(selectedId);
+            if (generationRef.current === generation) {
+              setDetail(refreshed);
+              setRenameDraft(refreshed.title ?? "");
+            }
+          } catch (caught) {
+            if (generationRef.current === generation) {
+              setWorkspaceError(featureFailureMessage(caught, "The answer was saved, but conversation details could not be refreshed."));
+            }
           }
         } else if (next.terminal === "error") {
           terminal = true;
-          setStreamError(next.error);
+          const message = streamEvent.type === "error"
+            ? `Agent not available yet. ${next.error ?? "The answer could not be completed."}`
+            : next.error;
+          setStreamError(message);
+          updateLive({ ...next, error: message });
         }
       }
       if (generationRef.current === generation && !terminal && liveRef.current) {
@@ -341,9 +359,9 @@ export function ConversationWorkspace({
         <Panel className="chat-panel">
           {!selectedId ? <EmptyState title="Choose or start a conversation" description="Each conversation has its own context for this video." /> : !detail ? <p className="muted-text">Loading conversation…</p> : <>
             <form className="conversation-title-form" onSubmit={saveRename}><input aria-label="Conversation title" maxLength={200} value={renameDraft} placeholder="New conversation" onChange={(event) => setRenameDraft(event.target.value)} /><Button variant="ghost" pending={renaming} type="submit" disabled={!renameDraft.trim()}>Rename</Button>{selectedSummary ? <Button className="danger-button" variant="ghost" onClick={() => setDeleting(selectedSummary)}>Delete</Button> : null}</form>
-            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <p className="muted-text">Ask the first question to begin.</p> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} onTogglePin={(item) => void togglePin(item)} />)}</div>
+            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <p className="muted-text">Ask the first question to begin.</p> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
-            <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea id="video-chat-input" maxLength={8000} rows={3} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask a question about this video…" : "Chat is unavailable while processing"} onChange={(event) => setDraft(event.target.value)} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" disabled={!canChat || !draft.trim()}>Send</Button>}</div></form>
+            <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea id="video-chat-input" maxLength={8000} rows={3} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask a question about this video…" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" disabled={!canChat || !draft.trim()}>Send</Button>}</div></form>
           </>}
         </Panel>
         <Panel className="pins-panel" aria-label="Pinned answers"><div className="video-section__heading"><h2>Pinned answers</h2></div>{pins.length === 0 ? <p className="muted-text">Pin an assistant answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p>{pin.content}</p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source conversation</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}</Panel>

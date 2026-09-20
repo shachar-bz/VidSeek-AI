@@ -1644,12 +1644,9 @@ h3 {
 }
 
 .pins-panel li p {
-  display: -webkit-box;
-  overflow: hidden;
   margin: 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .pins-panel li a {
