@@ -108,7 +108,8 @@ def authorize(
     registry: SessionRegistry = request.app.state.session_registry
     token = authorization.removeprefix("Bearer ") if authorization else ""
     # Reads may arrive without an Origin header; anything that starts, retries or
-    # cancels work may not. The loopback middleware still gates every request.
+    # cancels work may not. Local deployments also retain the loopback gate; hosted
+    # deployments rely on their network boundary while keeping this extension check.
     require_origin = request.method not in {"GET", "HEAD"}
     if not registry.verify(token, origin, require_origin=require_origin):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")

@@ -38,11 +38,20 @@ when captions or a published transcript are unavailable.
    uvicorn backend.app:app --host 127.0.0.1 --port 8765
    ```
 
-The service intentionally refuses non-loopback deployment assumptions, YouTube, private
-network targets, live streams, and DRM-protected media. Firecrawl receives the page URL
+By default the service refuses non-loopback clients, private network targets, live streams,
+and DRM-protected media. Firecrawl receives the page URL
 with its query string and fragment removed, so this session's signed parameters stay local;
 Chrome cookies and captured request headers are kept on the machine and discarded after the
 job.
+
+## Hosted API
+
+The same ASGI entry point also serves the website API. A hosted deployment sets
+`VIDSEEK_REQUIRE_LOOPBACK=false` and lists every exact website origin in the comma-separated
+`VIDSEEK_WEBSITE_ORIGINS` value. `VIDSEEK_EXTENSION_IDS` remains configured when that API must
+also accept extension traffic. Wildcard website origins are rejected because authenticated
+requests carry bearer credentials. Keep `VIDSEEK_REQUIRE_LOOPBACK=true` (the default) for the
+local companion.
 
 The private-network check resolves a hostname and rejects it unless every address is
 globally routable. It does not cover redirects already followed by yt-dlp, DNS rebinding,

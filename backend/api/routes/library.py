@@ -33,11 +33,11 @@ router = APIRouter(prefix="/v1/library")
 
 
 def library_views(request: Request) -> PostgresLibraryViews:
-    return getattr(request.app.state, "library_views_store", PostgresLibraryViews())
+    return request.app.state.library_views_store
 
 
 def user_videos(request: Request) -> PostgresUserVideos:
-    return getattr(request.app.state, "user_videos_store", PostgresUserVideos())
+    return request.app.state.user_videos_store
 
 
 def library_query(

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import current_user
+from backend.api.routes.library import _stage, library_views
 from backend.core.errors import VideoNotLinkedError
 from backend.schemas.conversations import (
     STREAM_EVENT_NAME,
@@ -33,10 +34,10 @@ from backend.schemas.conversations import (
 )
 from backend.storage.postgres import (
     PostgresConversations,
+    PostgresLibraryViews,
     PostgresMessages,
     PostgresPinnedAnswers,
     PostgresUserVideos,
-    PostgresVideoInsights,
     PostgresVideoRecords,
     StoredConversation,
     StoredMessage,
@@ -44,7 +45,6 @@ from backend.storage.postgres import (
 )
 from backend.video_agent import (
     ConversationAgentRunner,
-    PydanticConversationAgentRunner,
     TextFragment,
     ToolFinished,
     ToolStarted,
@@ -56,50 +56,38 @@ router = APIRouter()
 
 
 def conversations_store(request: Request) -> PostgresConversations:
-    return getattr(request.app.state, "conversations_store", None) or PostgresConversations()
+    return request.app.state.conversations_store
 
 
 def messages_store(request: Request) -> PostgresMessages:
-    return getattr(request.app.state, "messages_store", None) or PostgresMessages()
+    return request.app.state.messages_store
 
 
 def pinned_answers_store(request: Request) -> PostgresPinnedAnswers:
-    return getattr(request.app.state, "pinned_answers_store", None) or PostgresPinnedAnswers()
+    return request.app.state.pinned_answers_store
 
 
 def user_videos_store(request: Request) -> PostgresUserVideos:
-    return getattr(request.app.state, "user_videos_store", None) or PostgresUserVideos()
-
-
-def video_insights_store(request: Request) -> PostgresVideoInsights:
-    return getattr(request.app.state, "video_insights_store", None) or PostgresVideoInsights()
+    return request.app.state.user_videos_store
 
 
 def video_records_store(request: Request) -> PostgresVideoRecords:
-    return getattr(request.app.state, "video_records_store", None) or PostgresVideoRecords()
+    return request.app.state.video_records_store
 
 
 def agent_runner(request: Request) -> ConversationAgentRunner:
-    runner = getattr(request.app.state, "conversation_agent_runner", None)
-    if runner is None:
-        runner = PydanticConversationAgentRunner()
-        request.app.state.conversation_agent_runner = runner
-    return runner
+    return request.app.state.conversation_agent_runner
 
 
 def generation_registry(request: Request) -> GenerationRegistry:
-    registry = getattr(request.app.state, "generation_registry", None)
-    if registry is None:
-        registry = GenerationRegistry()
-        request.app.state.generation_registry = registry
-    return registry
+    return request.app.state.generation_registry
 
 
 Conversations = Annotated[PostgresConversations, Depends(conversations_store)]
 Messages = Annotated[PostgresMessages, Depends(messages_store)]
 Pins = Annotated[PostgresPinnedAnswers, Depends(pinned_answers_store)]
 UserVideos = Annotated[PostgresUserVideos, Depends(user_videos_store)]
-Insights = Annotated[PostgresVideoInsights, Depends(video_insights_store)]
+LibraryViews = Annotated[PostgresLibraryViews, Depends(library_views)]
 VideoRecords = Annotated[PostgresVideoRecords, Depends(video_records_store)]
 Runner = Annotated[ConversationAgentRunner, Depends(agent_runner)]
 Generations = Annotated[GenerationRegistry, Depends(generation_registry)]
@@ -134,10 +122,9 @@ def create_conversation(
     conversations: Conversations,
     messages: Messages,
     pins: Pins,
-    user_videos: UserVideos,
-    insights: Insights,
+    views: LibraryViews,
 ) -> ConversationDetail:
-    _require_chat_capable(user.id, video_id, user_videos, insights)
+    _require_chat_capable(user.id, video_id, views)
     try:
         conversation = conversations.create(user.id, video_id)
     except VideoNotLinkedError as error:
@@ -196,14 +183,13 @@ async def send_message(
     conversations: Conversations,
     messages: Messages,
     pins: Pins,
-    user_videos: UserVideos,
-    insights: Insights,
+    views: LibraryViews,
     video_records: VideoRecords,
     runner: Runner,
     generations: Generations,
 ) -> StreamingResponse:
     conversation = _owned_conversation(conversation_id, user.id, conversations)
-    _require_chat_capable(user.id, conversation.video_id, user_videos, insights)
+    _require_chat_capable(user.id, conversation.video_id, views)
     generation = await generations.start(conversation_id)
     if generation is None:
         raise HTTPException(status_code=409, detail="An answer is already being generated")
@@ -402,13 +388,12 @@ def _require_link(user_id: str, video_id: str, user_videos: PostgresUserVideos) 
 def _require_chat_capable(
     user_id: str,
     video_id: str,
-    user_videos: PostgresUserVideos,
-    insights: PostgresVideoInsights,
+    views: PostgresLibraryViews,
 ) -> None:
-    _require_link(user_id, video_id, user_videos)
-    # Both ready and partial videos have completed the pipeline and therefore have the
-    # generated-insights row. Timing fidelity distinguishes those stages but does not gate chat.
-    if insights.get(video_id) is None:
+    row = views.get_video(user_id, video_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if not _stage(row).allows_chat:
         raise HTTPException(status_code=409, detail="Video is not ready for chat")
 
 
