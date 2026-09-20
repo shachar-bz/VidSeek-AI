@@ -69,4 +69,26 @@ def website_origins() -> set[str]:
     client says about itself.
     """
     raw_origins = get("VIDSEEK_WEBSITE_ORIGINS") or ""
-    return {item.strip() for item in raw_origins.split(",") if item.strip()}
+    origins = {item.strip().rstrip("/") for item in raw_origins.split(",") if item.strip()}
+    if "*" in origins:
+        raise RuntimeError(
+            "VIDSEEK_WEBSITE_ORIGINS must list explicit origins; '*' is not allowed"
+        )
+    return origins
+
+
+def require_loopback() -> bool:
+    """Whether the HTTP API accepts only clients on the loopback interface.
+
+    The local companion keeps its historical protection by default. A hosted deployment
+    explicitly opts out because its reverse proxy is not itself a loopback client.
+    """
+    raw_value = (get("VIDSEEK_REQUIRE_LOOPBACK", "true") or "true").strip().lower()
+    if raw_value in {"true", "1", "yes", "on"}:
+        return True
+    if raw_value in {"false", "0", "no", "off"}:
+        return False
+    raise RuntimeError(
+        "VIDSEEK_REQUIRE_LOOPBACK must be true or false "
+        f"(received {raw_value!r})"
+    )

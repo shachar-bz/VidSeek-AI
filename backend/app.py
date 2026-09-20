@@ -1,4 +1,4 @@
-"""ASGI entry point for the VidSeek local companion service."""
+"""ASGI entry point for local-companion and hosted VidSeek API deployments."""
 
 from backend.api import create_app
 

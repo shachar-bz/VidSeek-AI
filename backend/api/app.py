@@ -1,4 +1,4 @@
-"""Builds the companion FastAPI app: state, middleware, error shaping, and routes."""
+"""Builds the VidSeek FastAPI app: state, middleware, error shaping, and routes."""
 
 from __future__ import annotations
 
@@ -13,9 +13,23 @@ from backend.core import config
 from backend.core.auth import UserAuthRegistry
 from backend.core.security import SessionRegistry
 from backend.services.video_download.jobs import JobManager
-from backend.storage.postgres import PostgresSessions, PostgresUsers
+from backend.storage.blob.video_storage import BlobVideoStorage
+from backend.storage.postgres import (
+    PostgresChapters,
+    PostgresConversations,
+    PostgresLibraryViews,
+    PostgresMessages,
+    PostgresPinnedAnswers,
+    PostgresSessions,
+    PostgresTranscriptSegments,
+    PostgresUsers,
+    PostgresUserVideos,
+    PostgresVideoRecords,
+)
+from backend.video_agent import ConversationAgentRunner, PydanticConversationAgentRunner
+from backend.video_agent.generation import GenerationRegistry
 
-from .routes import auth, health, sessions, video_jobs
+from .routes import account, auth, conversations, health, library, sessions, video_jobs, videos
 
 LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "testclient"}
 
@@ -27,46 +41,110 @@ def create_app(
     user_auth_registry: UserAuthRegistry | None = None,
     users_store: PostgresUsers | None = None,
     sessions_store: PostgresSessions | None = None,
+    library_views_store: PostgresLibraryViews | None = None,
+    user_videos_store: PostgresUserVideos | None = None,
+    transcript_segments_store: PostgresTranscriptSegments | None = None,
+    chapters_store: PostgresChapters | None = None,
+    pinned_answers_store: PostgresPinnedAnswers | None = None,
+    conversations_store: PostgresConversations | None = None,
+    messages_store: PostgresMessages | None = None,
+    video_records_store: PostgresVideoRecords | None = None,
+    blob_video_storage: BlobVideoStorage | None = None,
+    conversation_agent_runner: ConversationAgentRunner | None = None,
+    generation_registry: GenerationRegistry | None = None,
 ) -> FastAPI:
-    """Build the companion app with injectable state for tests."""
-    registry = session_registry or SessionRegistry.from_environment()
-    manager = job_manager or JobManager(config.download_root())
+    """Build the local or hosted API with injectable process-owned dependencies."""
+    registry = (
+        session_registry if session_registry is not None else SessionRegistry.from_environment()
+    )
+    manager = job_manager if job_manager is not None else JobManager(config.download_root())
     # Nothing is queried yet: these Postgres stores only reach the pool when a route
     # actually calls them, so building them needs no database, the same as every other
     # Postgres store.
-    store = users_store or PostgresUsers()
-    durable_sessions = sessions_store or PostgresSessions()
-    auth_registry = user_auth_registry or UserAuthRegistry(durable_sessions)
+    store = users_store if users_store is not None else PostgresUsers()
+    durable_sessions = sessions_store if sessions_store is not None else PostgresSessions()
+    auth_registry = (
+        user_auth_registry
+        if user_auth_registry is not None
+        else UserAuthRegistry(durable_sessions)
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         yield
         manager.shutdown()
 
-    app = FastAPI(title="VidSeek local companion", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="VidSeek API", version="1.0.0", lifespan=lifespan)
     app.state.session_registry = registry
     app.state.job_manager = manager
     app.state.user_auth_registry = auth_registry
     app.state.users_store = store
     app.state.sessions_store = durable_sessions
+    app.state.library_views_store = (
+        library_views_store if library_views_store is not None else PostgresLibraryViews()
+    )
+    app.state.user_videos_store = (
+        user_videos_store if user_videos_store is not None else PostgresUserVideos()
+    )
+    app.state.transcript_segments_store = (
+        transcript_segments_store
+        if transcript_segments_store is not None
+        else PostgresTranscriptSegments()
+    )
+    app.state.chapters_store = (
+        chapters_store if chapters_store is not None else PostgresChapters()
+    )
+    app.state.pinned_answers_store = (
+        pinned_answers_store
+        if pinned_answers_store is not None
+        else PostgresPinnedAnswers()
+    )
+    app.state.conversations_store = (
+        conversations_store
+        if conversations_store is not None
+        else PostgresConversations()
+    )
+    app.state.messages_store = (
+        messages_store if messages_store is not None else PostgresMessages()
+    )
+    app.state.video_records_store = (
+        video_records_store if video_records_store is not None else PostgresVideoRecords()
+    )
+    # Blob settings are required only by playback. Keeping an absent default lazy preserves
+    # startup for a local companion with no storage configuration.
+    app.state.blob_video_storage = blob_video_storage
+    app.state.conversation_agent_runner = (
+        conversation_agent_runner
+        if conversation_agent_runner is not None
+        else PydanticConversationAgentRunner()
+    )
+    app.state.generation_registry = (
+        generation_registry if generation_registry is not None else GenerationRegistry()
+    )
 
     # Starlette runs the last-registered middleware outermost, so CORS must be added
     # before the loopback gate to keep running inside it, as it did before this split.
     # Reversing the two silently changes preflight behavior for non-loopback clients.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[f"chrome-extension://{item}" for item in config.extension_ids()],
+        allow_origins=sorted(
+            config.website_origins()
+            | {f"chrome-extension://{item}" for item in config.extension_ids()}
+        ),
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-VidSeek-User-Token"],
     )
 
-    @app.middleware("http")
-    async def require_loopback(request: Request, call_next):
-        client_host = request.client.host if request.client else ""
-        if client_host not in LOOPBACK_CLIENTS:
-            return JSONResponse(status_code=403, content={"detail": "Loopback access only"})
-        return await call_next(request)
+    if config.require_loopback():
+        @app.middleware("http")
+        async def require_loopback(request: Request, call_next):
+            client_host = request.client.host if request.client else ""
+            if client_host not in LOOPBACK_CLIENTS:
+                return JSONResponse(
+                    status_code=403, content={"detail": "Loopback access only"}
+                )
+            return await call_next(request)
 
     @app.exception_handler(RequestValidationError)
     async def redact_validation_errors(_: Request, error: RequestValidationError):
@@ -80,4 +158,8 @@ def create_app(
     app.include_router(sessions.router)
     app.include_router(auth.router)
     app.include_router(video_jobs.router)
+    app.include_router(account.router)
+    app.include_router(library.router)
+    app.include_router(videos.router)
+    app.include_router(conversations.router)
     return app

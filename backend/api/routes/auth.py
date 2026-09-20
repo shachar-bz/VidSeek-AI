@@ -1,7 +1,7 @@
 """Signup, login, account lookup, logout and session management for a VidSeek user account.
 
-Every route here still runs behind the loopback middleware and the CORS allowlist in
-`api.app`, and signup/login additionally check `Origin` themselves, the same way
+Every route here runs behind the CORS allowlist in `api.app` and, in local-companion mode,
+the loopback middleware. Signup/login additionally check `Origin` themselves, the same way
 `/v1/session` does: unlike the video job routes there is no bearer token yet to gate these
 on, so the calling origin is the only thing standing between them and any other local process
 or web page that can reach this port. That same origin is also what decides `surface` --

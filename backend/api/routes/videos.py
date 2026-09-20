@@ -36,20 +36,23 @@ router = APIRouter(prefix="/v1/videos")
 
 
 def transcripts(request: Request) -> PostgresTranscriptSegments:
-    return getattr(request.app.state, "transcript_segments_store", PostgresTranscriptSegments())
+    return request.app.state.transcript_segments_store
 
 
 def chapters(request: Request) -> PostgresChapters:
-    return getattr(request.app.state, "chapters_store", PostgresChapters())
+    return request.app.state.chapters_store
 
 
 def pins(request: Request) -> PostgresPinnedAnswers:
-    return getattr(request.app.state, "pinned_answers_store", PostgresPinnedAnswers())
+    return request.app.state.pinned_answers_store
 
 
 def blob_storage(request: Request) -> BlobVideoStorage:
-    stored = getattr(request.app.state, "blob_video_storage", None)
-    return stored if stored is not None else BlobVideoStorage()
+    stored = request.app.state.blob_video_storage
+    if stored is None:
+        stored = BlobVideoStorage()
+        request.app.state.blob_video_storage = stored
+    return stored
 
 
 def _owned_video(user_id: str, video_id: str, store: PostgresLibraryViews):

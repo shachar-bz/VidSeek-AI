@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -108,12 +109,28 @@ class MemoryUserVideos:
         return object() if self.linked and user_id == USER_ID and video_id == VIDEO_ID else None
 
 
-class MemoryInsights:
-    def __init__(self, ready: bool = True) -> None:
+class MemoryLibraryViews:
+    def __init__(
+        self, *, ready: bool = True, linked: bool = True, timing_fidelity: str | None = "word"
+    ) -> None:
         self.ready = ready
+        self.linked = linked
+        self.timing_fidelity = timing_fidelity
 
-    def get(self, video_id):
-        return object() if self.ready and video_id == VIDEO_ID else None
+    def get_video(self, user_id, video_id):
+        if not self.linked or user_id != USER_ID or video_id != VIDEO_ID:
+            return None
+        return SimpleNamespace(
+            has_video_row=True,
+            has_transcript=True,
+            has_timed_transcript=self.timing_fidelity is not None,
+            has_chapters=self.ready,
+            has_embeddings=self.ready,
+            has_insights=self.ready,
+            job_status="complete",
+            job_phase="complete",
+            error_code=None,
+        )
 
 
 class MemoryPins:
@@ -153,7 +170,9 @@ def _app(*, ready=True, linked=True, runner=None, timing_fidelity="word"):
     app.state.messages_store = MemoryMessages()
     app.state.pinned_answers_store = MemoryPins()
     app.state.user_videos_store = MemoryUserVideos(linked)
-    app.state.video_insights_store = MemoryInsights(ready)
+    app.state.library_views_store = MemoryLibraryViews(
+        ready=ready, linked=linked, timing_fidelity=timing_fidelity
+    )
     app.state.video_records_store = MemoryVideoRecords(timing_fidelity)
     app.state.conversation_agent_runner = runner or FakeRunner([TextFragment("answer")])
     app.state.generation_registry = GenerationRegistry()
