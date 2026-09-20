@@ -40,6 +40,7 @@ class JobPhase(str, Enum):
     # at "uploading" for minutes.
     SEGMENTATION = "segmentation"
     EMBEDDING = "embedding"
+    INSIGHTS = "insights"
     COMPLETE = "complete"
 
 

@@ -13,7 +13,7 @@ from backend.schemas.browser import (
     MediaCandidate,
     MediaKind,
 )
-from backend.download_pipeline import ProcessedVideo
+from backend.download_pipeline import INSIGHT_GENERATION_FAILED, ProcessedVideo
 from backend.schemas.video_jobs import (
     BrowserDownloadCompleteRequest,
     CaptureRetryRequest,
@@ -562,6 +562,42 @@ def test_a_completed_job_leaves_memory_once_the_database_holds_its_outcome(
 
     assert fetched.status == JobStatus.COMPLETE
     assert fetched.video_storage_key == STORED.name
+
+
+def test_an_insight_failure_finishes_as_a_durable_partial_success(tmp_path: Path) -> None:
+    manager = JobManager(tmp_path)
+    try:
+        with patch("backend.services.video_download.jobs.validate_remote_url"):
+            created = manager.create(direct_request())
+        processed = ProcessedVideo(
+            acquired=PipelineResult(
+                video_path=tmp_path / "video.mp4",
+                transcript_text_path=None,
+                transcript_json_path=None,
+                transcript_source="page_transcript",
+                transcript_error=None,
+                normalized_transcript=TRANSCRIPT,
+            ),
+            stored_video=STORED,
+            video_id="22222222-2222-2222-2222-222222222222",
+            memory_count=2,
+            chapter_count=1,
+            memory_embedding_count=2,
+            chapter_embedding_count=1,
+            problems=(INSIGHT_GENERATION_FAILED,),
+        )
+
+        manager._finish(created.job_id, processed)
+        finished = manager.get(created.job_id)
+    finally:
+        manager.shutdown()
+
+    assert finished.status == JobStatus.PARTIAL_SUCCESS
+    assert finished.error_code == INSIGHT_GENERATION_FAILED
+    assert finished.video_storage_key == STORED.name
+    assert finished.message == (
+        "Video and transcript saved; its generated insights are not available yet"
+    )
 
 
 def test_a_failed_job_stays_in_memory_even_with_a_database_configured(tmp_path: Path) -> None:
