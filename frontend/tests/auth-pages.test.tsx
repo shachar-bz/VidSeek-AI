@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "../src/App";
@@ -9,6 +9,10 @@ import { PasswordField } from "../src/pages/auth/PasswordField";
 
 beforeEach(() => {
   window.localStorage.clear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("auth showcase", () => {
@@ -28,6 +32,36 @@ describe("auth showcase", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show example 5 of 5" }));
     expect(screen.getByText("Which materials reduce the building's footprint?")).toBeTruthy();
+
+    fireEvent.touchStart(screen.getByRole("region", { name: "VidSeek video search examples" }), {
+      touches: [{ clientX: 280 }]
+    });
+    fireEvent.touchEnd(screen.getByRole("region", { name: "VidSeek video search examples" }), {
+      changedTouches: [{ clientX: 80 }]
+    });
+    expect(screen.getByText("What does the video say about evaporation?")).toBeTruthy();
+  });
+
+  it("auto-advances on desktop, pauses on hover, and resets after manual navigation", () => {
+    vi.useFakeTimers();
+    render(<AuthShowcaseCarousel />);
+    const showcase = screen.getByRole("region", { name: "VidSeek video search examples" });
+
+    fireEvent.mouseEnter(showcase);
+    act(() => vi.advanceTimersByTime(7_000));
+    expect(screen.getByText("What does the video say about evaporation?")).toBeTruthy();
+
+    fireEvent.mouseLeave(showcase);
+    act(() => vi.advanceTimersByTime(6_500));
+    expect(screen.getByText("When does the chef add the fresh basil?")).toBeTruthy();
+
+    act(() => vi.advanceTimersByTime(6_000));
+    fireEvent.click(screen.getByRole("button", { name: "Next example" }));
+    act(() => vi.advanceTimersByTime(500));
+    expect(screen.getByText("Why does the solution begin to glow?")).toBeTruthy();
+
+    act(() => vi.advanceTimersByTime(6_000));
+    expect(screen.getByText("How does orbit keep the astronaut in free fall?")).toBeTruthy();
   });
 });
 

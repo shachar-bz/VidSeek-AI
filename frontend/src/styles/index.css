@@ -523,6 +523,7 @@ h3 {
 
 .auth-showcase {
   margin-top: 1.35rem;
+  touch-action: pan-y;
 }
 
 .auth-carousel {
@@ -541,10 +542,43 @@ h3 {
 }
 
 .auth-carousel__stage {
+  --auth-carousel-resting-opacity: 1;
   z-index: 1;
   aspect-ratio: 16 / 9;
   border-radius: 0.7rem;
   box-shadow: 0 1.4rem 3.75rem rgb(30 35 55 / 14%);
+}
+
+.auth-carousel__motion--next {
+  animation: auth-carousel-enter-next 420ms cubic-bezier(0.22, 0.75, 0.28, 1) both;
+}
+
+.auth-carousel__motion--previous {
+  animation: auth-carousel-enter-previous 420ms cubic-bezier(0.22, 0.75, 0.28, 1) both;
+}
+
+@keyframes auth-carousel-enter-next {
+  from {
+    opacity: 0.45;
+    transform: translateX(1.15rem) scale(0.99);
+  }
+
+  to {
+    opacity: var(--auth-carousel-resting-opacity, 1);
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes auth-carousel-enter-previous {
+  from {
+    opacity: 0.45;
+    transform: translateX(-1.15rem) scale(0.99);
+  }
+
+  to {
+    opacity: var(--auth-carousel-resting-opacity, 1);
+    transform: translateX(0) scale(1);
+  }
 }
 
 .auth-carousel__image,
@@ -556,6 +590,7 @@ h3 {
 }
 
 .auth-carousel__peek {
+  --auth-carousel-resting-opacity: 0.9;
   height: 84%;
   opacity: 0.9;
 }
@@ -688,6 +723,7 @@ h3 {
 }
 
 .auth-showcase__question {
+  --auth-carousel-resting-opacity: 1;
   min-height: 3.4rem;
   display: flex;
   align-items: center;
@@ -699,6 +735,11 @@ h3 {
   color: #34394e;
   background: #ffffff;
   box-shadow: 0 0.4rem 1.4rem rgb(31 35 53 / 5%);
+}
+
+.auth-showcase__question.auth-carousel__motion--next,
+.auth-showcase__question.auth-carousel__motion--previous {
+  animation-duration: 320ms;
 }
 
 .auth-showcase__question svg {
@@ -1087,6 +1128,18 @@ h3 {
 
   .ui-dialog__actions .ui-button {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-carousel__motion--next,
+  .auth-carousel__motion--previous {
+    animation: none;
+  }
+
+  .auth-carousel__arrow,
+  .auth-showcase__dot {
+    transition: none;
   }
 }
 

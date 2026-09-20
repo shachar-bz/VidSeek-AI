@@ -1,4 +1,10 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type TouchEvent
+} from "react";
 
 import architectureImage from "../../assets/auth/architecture.jpg";
 import cookingImage from "../../assets/auth/cooking.jpg";
@@ -44,6 +50,9 @@ const SHOWCASE_ITEMS = [
   }
 ] as const;
 
+const AUTO_ADVANCE_MS = 6_500;
+const SWIPE_THRESHOLD_PX = 48;
+
 function wrappedIndex(index: number): number {
   return (index + SHOWCASE_ITEMS.length) % SHOWCASE_ITEMS.length;
 }
@@ -52,28 +61,116 @@ function showcaseItem(index: number) {
   return SHOWCASE_ITEMS[wrappedIndex(index)]!;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia(query);
+    const updateMatch = () => setMatches(mediaQuery.matches);
+    updateMatch();
+    mediaQuery.addEventListener("change", updateMatch);
+    return () => mediaQuery.removeEventListener("change", updateMatch);
+  }, [query]);
+
+  return matches;
+}
+
 export function AuthShowcaseCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [transitionDirection, setTransitionDirection] = useState<"next" | "previous">("next");
+  const [manualNavigationRevision, setManualNavigationRevision] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const [hasFocusWithin, setHasFocusWithin] = useState(false);
+  const [isDocumentHidden, setIsDocumentHidden] = useState(() => document.hidden);
+  const touchStartX = useRef<number | null>(null);
+  const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const isMobile = useMediaQuery("(max-width: 36rem)");
   const activeItem = showcaseItem(activeIndex);
   const previousItem = showcaseItem(activeIndex - 1);
   const nextItem = showcaseItem(activeIndex + 1);
+  const transitionClass = `auth-carousel__motion--${transitionDirection}`;
+  const autoplayPaused =
+    prefersReducedMotion || isMobile || isHovered || hasFocusWithin || isDocumentHidden;
+
+  useEffect(() => {
+    const updateVisibility = () => setIsDocumentHidden(document.hidden);
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
+
+  useEffect(() => {
+    if (autoplayPaused) return;
+    const timer = window.setTimeout(() => {
+      setTransitionDirection("next");
+      setActiveIndex((index) => wrappedIndex(index + 1));
+    }, AUTO_ADVANCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, autoplayPaused, manualNavigationRevision]);
+
+  function navigateTo(index: number, direction: "next" | "previous") {
+    setTransitionDirection(direction);
+    setActiveIndex(wrappedIndex(index));
+    setManualNavigationRevision((revision) => revision + 1);
+  }
 
   function showPrevious() {
-    setActiveIndex((index) => wrappedIndex(index - 1));
+    navigateTo(activeIndex - 1, "previous");
   }
 
   function showNext() {
-    setActiveIndex((index) => wrappedIndex(index + 1));
+    navigateTo(activeIndex + 1, "next");
+  }
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget as Node)) {
+      setHasFocusWithin(false);
+    }
+  }
+
+  function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
+    touchStartX.current = event.touches[0]?.clientX ?? null;
+  }
+
+  function handleTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    const endX = event.changedTouches[0]?.clientX;
+    const startX = touchStartX.current;
+    touchStartX.current = null;
+    if (startX === null || endX === undefined) return;
+
+    const distance = startX - endX;
+    if (Math.abs(distance) < SWIPE_THRESHOLD_PX) return;
+    if (distance > 0) showNext();
+    else showPrevious();
   }
 
   return (
-    <div className="auth-showcase" aria-label="VidSeek video search examples">
+    <div
+      className="auth-showcase"
+      role="region"
+      aria-label="VidSeek video search examples"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocusCapture={() => setHasFocusWithin(true)}
+      onBlurCapture={handleBlur}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => {
+        touchStartX.current = null;
+      }}
+    >
       <div className="auth-carousel">
-        <div className="auth-carousel__peek auth-carousel__peek--previous" aria-hidden="true">
+        <div
+          key={`previous-${activeIndex}`}
+          className={`auth-carousel__peek auth-carousel__peek--previous ${transitionClass}`}
+          aria-hidden="true"
+        >
           <img src={previousItem.image} alt="" />
         </div>
 
-        <div className="auth-carousel__stage">
+        <div key={`stage-${activeIndex}`} className={`auth-carousel__stage ${transitionClass}`}>
           <img
             className="auth-carousel__image"
             src={activeItem.image}
@@ -105,7 +202,11 @@ export function AuthShowcaseCarousel() {
           </div>
         </div>
 
-        <div className="auth-carousel__peek auth-carousel__peek--next" aria-hidden="true">
+        <div
+          key={`next-${activeIndex}`}
+          className={`auth-carousel__peek auth-carousel__peek--next ${transitionClass}`}
+          aria-hidden="true"
+        >
           <img src={nextItem.image} alt="" />
         </div>
 
@@ -131,7 +232,11 @@ export function AuthShowcaseCarousel() {
         </button>
       </div>
 
-      <div className="auth-showcase__question" aria-live="polite">
+      <div
+        key={`question-${activeIndex}`}
+        className={`auth-showcase__question ${transitionClass}`}
+        aria-live="polite"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="7" />
           <path d="m16 16 4 4" />
@@ -151,7 +256,9 @@ export function AuthShowcaseCarousel() {
             }
             aria-label={`Show example ${index + 1} of ${SHOWCASE_ITEMS.length}`}
             aria-current={index === activeIndex ? "true" : undefined}
-            onClick={() => setActiveIndex(index)}
+            onClick={() =>
+              navigateTo(index, index < activeIndex ? "previous" : "next")
+            }
           />
         ))}
       </div>
