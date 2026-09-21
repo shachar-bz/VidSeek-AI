@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 
 import brandIcon from "../assets/vidseek-icon.png";
 import { getLibrary, subscribeToLibraryEvents } from "../api/library";
@@ -143,7 +143,6 @@ function NotificationBell() {
 /** Responsive frame shared by every signed-in route. */
 export function AppShell({ children }: { children?: ReactNode }) {
   const account = useAccount();
-  const location = useLocation();
   const [signingOut, setSigningOut] = useState(false);
 
   if (account.status === "loading") {
@@ -203,7 +202,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           </nav>
 
           <div className="app-shell__account">
-            {location.pathname === ROUTES.account ? null : <NotificationBell />}
+            <NotificationBell />
             <details className="account-menu">
               <summary aria-label={`Open account menu for ${accountLabel}`}>
                 {accountInitials(accountLabel)}
