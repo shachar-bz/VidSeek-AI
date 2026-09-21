@@ -113,6 +113,7 @@ def download_youtube_video(
     comment_limit: int = DEFAULT_COMMENT_LIMIT,
     progress_hook=None,
     cancel_event: threading.Event | None = None,
+    supplied_transcript: YouTubeTranscript | None = None,
 ) -> YouTubeDownloadResult:
     """Download `url`'s video, transcript and top comments into `output_dir`.
 
@@ -142,7 +143,7 @@ def download_youtube_video(
     video = download_video(url, output_dir, progress_hooks=hooks or None)
     _raise_if_cancelled(cancel_event)
 
-    transcript = _build_transcript(video.video_path, url, output_dir, caption_languages)
+    transcript = supplied_transcript if supplied_transcript and supplied_transcript.is_timed else _build_transcript(video.video_path, url, output_dir, caption_languages)
     _raise_if_cancelled(cancel_event)
 
     transcript_path = output_dir / f"{video.video_id}.transcript.txt"

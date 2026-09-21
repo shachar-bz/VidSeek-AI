@@ -24,6 +24,8 @@ from backend.services.transcripts import (
     normalize_words,
 )
 
+from .structured import parse_json_captions
+
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
 FIRECRAWL_API_KEY_NAME = "FIRECRAWL_API_KEY"
 MIN_VISIBLE_TRANSCRIPT_CHARACTERS = 80
@@ -56,7 +58,7 @@ class TranscriptArtifact:
         return self.normalized is not None
 
 
-def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact | None:
+def transcript_from_caption(candidate: CaptionCandidate, media_duration_seconds: float | None = None, *, allow_llm: bool = True) -> TranscriptArtifact | None:
     """Turn a supplied caption body or visible transcript into one artifact."""
     if not candidate.text:
         return None
@@ -67,9 +69,9 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
         return TranscriptArtifact(source="page_transcript", text=text, language=candidate.language)
 
     try:
-        segments = (
+        segments = parse_json_captions(candidate.text, media_duration_seconds, allow_llm=allow_llm) if candidate.format.lower() == "json" else (
             parse_ttml(candidate.text)
-            if candidate.format.lower() in {"ttml", "xml"}
+            if candidate.format.lower() in {"ttml", "xml", "dfxp"}
             else parse_webvtt_or_srt(candidate.text)
         )
     except (ElementTree.ParseError, ValueError):
@@ -77,7 +79,7 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
     if not segments:
         return None
     normalized = normalize_caption_cues(
-        segments, source="captions", language=candidate.language
+        segments, source="captions", language=candidate.language, media_duration_seconds=media_duration_seconds
     )
     # A track whose cues carry no times at all — TTML written with no `begin` attributes —
     # parses into text that cannot be placed in the video. It is no better than a page
@@ -95,24 +97,36 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
         language=candidate.language,
         segments=segments,
         normalized=normalized,
+        details={"inferred_end_times": any(c.end_seconds is None for c in segments)},
     )
 
 
-def choose_supplied_transcript(candidates: list[CaptionCandidate]) -> TranscriptArtifact | None:
+def choose_supplied_transcript(candidates: list[CaptionCandidate], preferred_language: str | None = None, media_duration_seconds: float | None = None) -> TranscriptArtifact | None:
     """Apply active/manual/automatic/visible ordering to browser candidates."""
     ordered = sorted(
         candidates,
         key=lambda candidate: (
             candidate.is_visible_transcript,
             not candidate.is_active,
+            bool(preferred_language) and (candidate.language or "").split("-")[0] != preferred_language.split("-")[0],
             not candidate.is_manual,
         ),
     )
+    untimed = None
+    unresolved = []
     for candidate in ordered:
-        result = transcript_from_caption(candidate)
-        if result:
+        result = transcript_from_caption(candidate, media_duration_seconds, allow_llm=False)
+        if result and result.is_timed:
             return result
-    return None
+        untimed = untimed or result
+        if result is None and candidate.format.lower() == "json":
+            unresolved.append(candidate)
+    # At most one schema-inference call per selection, after all known formats were tried.
+    if unresolved:
+        result = transcript_from_caption(unresolved[0], media_duration_seconds)
+        if result and result.is_timed:
+            return result
+    return untimed
 
 
 def transcript_from_subtitle_files(paths: list[Path]) -> TranscriptArtifact | None:
@@ -282,4 +296,3 @@ def persist_transcript(
     if normalized:
         transcript_store.save(video_path.stem, normalized)
     return text_path, json_path
-

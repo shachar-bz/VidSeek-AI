@@ -1,10 +1,35 @@
-import { cancelJob, getHealth, getJob, reportBrowserDownload, retryWithCapture } from "./api";
-import { classifyMediaUrl, detectManifestDrm, installEmeMonitor, isLicenseTraffic, readEmeMonitor } from "./discovery";
-import type { BrowserCookie, ExtensionMessage, MediaCandidate, StopCaptureResult, TrackedJob } from "./types";
+// Capture authenticated playback across frames and track companion downloads.
+import {
+  cancelJob,
+  getHealth,
+  getJob,
+  reportBrowserDownload,
+  retryWithCapture,
+} from "./api";
+import {
+  classifyMediaUrl,
+  detectManifestDrm,
+  installEmeMonitor,
+  isLicenseTraffic,
+  readEmeMonitor,
+} from "./discovery";
+import type {
+  BrowserCookie,
+  CaptionCandidate,
+  ExtensionMessage,
+  MediaCandidate,
+  StopCaptureResult,
+  TrackedJob,
+} from "./types";
+
+// Flat child sessions are available since Chrome 125; older @types/chrome omits them.
+type DebuggerSession = chrome.debugger.Debuggee & { sessionId?: string };
 
 // Makes the action button open the side panel directly, matching a normal popup's click
 // behavior instead of requiring the user to right-click and pick "Open side panel".
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(() => undefined);
 
 const TRACKER_KEY = "activeVideoJob";
 const CAPTURE_KEY = "activeCapture";
@@ -25,12 +50,15 @@ function parentFolder(path: string): string {
  * real save folder against the companion's configured root turns that into something the
  * user can act on instead of a bare "!" badge.
  */
-async function describeDownloadRootMismatch(chromeDownloadPath: string): Promise<string | undefined> {
+async function describeDownloadRootMismatch(
+  chromeDownloadPath: string,
+): Promise<string | undefined> {
   const health = await getHealth().catch(() => undefined);
   if (!health?.download_root) return undefined;
   const chromeFolder = parentFolder(chromeDownloadPath);
   const companionRoot = parentFolder(`${health.download_root}/x`);
-  if (chromeFolder.toLowerCase() === companionRoot.toLowerCase()) return undefined;
+  if (chromeFolder.toLowerCase() === companionRoot.toLowerCase())
+    return undefined;
   return (
     `Chrome saved the download to "${chromeFolder}", but VidSeek expects "${companionRoot}". ` +
     "Change Chrome's download location (chrome://settings/downloads) or set VIDSEEK_DOWNLOAD_ROOT " +
@@ -48,6 +76,10 @@ interface CapturedRequest {
   headers: Record<string, string>;
   resourceType?: string;
   mimeType?: string;
+  sessionId?: string;
+  requestId?: string;
+  body?: string;
+  frameId?: string;
 }
 
 interface CaptureState {
@@ -75,15 +107,15 @@ let captureCache: CaptureState | null = null;
 
 async function readCapture(): Promise<CaptureState | null> {
   if (captureCache) return captureCache;
-  const stored = (await chrome.storage.session.get(CAPTURE_KEY))[CAPTURE_KEY] as
-    | StoredCapture
-    | undefined;
+  const stored = (await chrome.storage.session.get(CAPTURE_KEY))[
+    CAPTURE_KEY
+  ] as StoredCapture | undefined;
   if (!stored) return null;
   captureCache = {
     tabId: stored.tabId,
     jobId: stored.jobId,
     requests: new Map(stored.requests),
-    pendingHeaders: new Map(stored.pendingHeaders)
+    pendingHeaders: new Map(stored.pendingHeaders),
   };
   return captureCache;
 }
@@ -94,7 +126,7 @@ async function writeCapture(state: CaptureState): Promise<void> {
     tabId: state.tabId,
     jobId: state.jobId,
     requests: [...state.requests],
-    pendingHeaders: [...state.pendingHeaders]
+    pendingHeaders: [...state.pendingHeaders],
   };
   await chrome.storage.session.set({ [CAPTURE_KEY]: stored });
 }
@@ -117,9 +149,13 @@ async function writeTracker(tracker: TrackedJob): Promise<void> {
 
 async function cleanupTracker(tracker: TrackedJob): Promise<void> {
   if (tracker.grantedOrigins.length) {
-    await chrome.permissions.remove({ origins: tracker.grantedOrigins }).catch(() => false);
+    await chrome.permissions
+      .remove({ origins: tracker.grantedOrigins })
+      .catch(() => false);
   }
-  await chrome.permissions.remove({ permissions: ["cookies"] }).catch(() => false);
+  await chrome.permissions
+    .remove({ permissions: ["cookies"] })
+    .catch(() => false);
   await chrome.storage.session.remove([TRACKER_KEY, LAST_ERROR_KEY]);
   await chrome.alarms.clear(POLL_ALARM);
   await chrome.action.setBadgeText({ text: "" });
@@ -147,7 +183,8 @@ async function pollTrackedJob(): Promise<void> {
       return;
     }
     await chrome.action.setBadgeText({
-      text: job.status === "failed" ? "!" : String(Math.round(job.progress * 100))
+      text:
+        job.status === "failed" ? "!" : String(Math.round(job.progress * 100)),
     });
   } catch {
     // The popup will show connectivity/auth errors; keep the tracker for retry.
@@ -189,7 +226,9 @@ chrome.downloads.onChanged.addListener((delta) => {
 });
 
 function safeFilename(title: string, url: string): string {
-  const cleaned = title.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").replace(/[ .-]+$/g, "");
+  const cleaned = title
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/[ .-]+$/g, "");
   let extension = ".mp4";
   try {
     const match = new URL(url).pathname.match(/\.(mp4|m4v|mov|webm|mkv|avi)$/i);
@@ -203,7 +242,7 @@ function safeFilename(title: string, url: string): string {
 async function startBrowserDownload(
   tracker: TrackedJob,
   url: string,
-  title: string
+  title: string,
 ): Promise<number> {
   // Stored first: a small or cached file can reach state "complete" before
   // downloads.download() resolves, and onChanged ignores an unknown download id.
@@ -212,7 +251,7 @@ async function startBrowserDownload(
     url,
     filename: safeFilename(title, url),
     conflictAction: "uniquify",
-    saveAs: false
+    saveAs: false,
   });
   tracker.downloadId = downloadId;
   await writeTracker(tracker);
@@ -226,13 +265,18 @@ const SAFE_CAPTURE_HEADERS = new Set([
   "cookie",
   "origin",
   "referer",
-  "user-agent"
+  "user-agent",
 ]);
 
-function filterCapturedHeaders(headers: Record<string, unknown>): Record<string, string> {
+function filterCapturedHeaders(
+  headers: Record<string, unknown>,
+): Record<string, string> {
   const filtered: Record<string, string> = {};
   for (const [name, value] of Object.entries(headers)) {
-    if (SAFE_CAPTURE_HEADERS.has(name.toLowerCase()) && typeof value === "string") {
+    if (
+      SAFE_CAPTURE_HEADERS.has(name.toLowerCase()) &&
+      typeof value === "string"
+    ) {
       filtered[name] = value;
     }
   }
@@ -240,33 +284,50 @@ function filterCapturedHeaders(headers: Record<string, unknown>): Record<string,
 }
 
 async function recordDebuggerEvent(
-  source: chrome.debugger.Debuggee,
+  source: DebuggerSession,
   method: string,
-  params?: object
+  params?: object,
 ): Promise<void> {
   const current = await readCapture();
   if (!current || source.tabId !== current.tabId) return;
   const data = (params ?? {}) as Record<string, any>;
-  const requestId = String(data.requestId || "");
-  if (!requestId) return;
+  if (method === "Target.attachedToTarget") {
+    const child = { ...source, sessionId: String(data.sessionId) };
+    await enableCaptureTarget(child);
+    return;
+  }
+  if (!data.requestId) return;
+  const requestId = (source.sessionId || "root") + ":" + String(data.requestId);
   if (method === "Network.requestWillBeSent") {
-    const request = data.request as { url?: string; headers?: Record<string, unknown> } | undefined;
+    const request = data.request as
+      { url?: string; headers?: Record<string, unknown> } | undefined;
     if (!request?.url) return;
+    if (current.requests.size >= 1000 && !current.requests.has(requestId))
+      return;
     current.requests.set(requestId, {
       url: request.url,
+      sessionId: source.sessionId,
+      requestId: String(data.requestId),
+      frameId: String(data.frameId || ""),
       headers: {
         ...filterCapturedHeaders(request.headers || {}),
-        ...(current.pendingHeaders.get(requestId) || {})
+        ...(current.pendingHeaders.get(requestId) || {}),
       },
-      resourceType: String(data.type || "")
+      resourceType: String(data.type || ""),
     });
     current.pendingHeaders.delete(requestId);
   } else if (method === "Network.requestWillBeSentExtraInfo") {
     const existing = current.requests.get(requestId);
     if (existing) {
-      existing.headers = { ...existing.headers, ...filterCapturedHeaders(data.headers || {}) };
+      existing.headers = {
+        ...existing.headers,
+        ...filterCapturedHeaders(data.headers || {}),
+      };
     } else {
-      current.pendingHeaders.set(requestId, filterCapturedHeaders(data.headers || {}));
+      current.pendingHeaders.set(
+        requestId,
+        filterCapturedHeaders(data.headers || {}),
+      );
     }
   } else if (method === "Network.responseReceived") {
     const existing = current.requests.get(requestId);
@@ -276,15 +337,61 @@ async function recordDebuggerEvent(
     } else {
       return;
     }
+  } else if (method === "Network.loadingFinished") {
+    const request = current.requests.get(requestId);
+    if (!request || Number(data.encodedDataLength) > 2_000_000) return;
+    const kind = classifyMediaUrl(request.url, request.mimeType);
+    const caption =
+      /\.(vtt|srt|ttml|dfxp)(?:[?#]|$)|subtitle|transcript|caption/i.test(
+        request.url,
+      ) || /vtt|ttml|application\/json/i.test(request.mimeType || "");
+    if (kind !== "hls" && kind !== "dash" && !caption) return;
+    const used = [...current.requests.values()].reduce(
+      (sum, r) => sum + (r.body?.length || 0),
+      0,
+    );
+    if (used >= 4_000_000) return;
+    try {
+      const result = (await chrome.debugger.sendCommand(
+        source,
+        "Network.getResponseBody",
+        { requestId: String(data.requestId) },
+      )) as { body: string; base64Encoded: boolean };
+      const body = result.base64Encoded
+        ? new TextDecoder().decode(
+            Uint8Array.from(atob(result.body), (c) => c.charCodeAt(0)),
+          )
+        : result.body;
+      if (body.length <= 2_000_000 && used + body.length <= 4_000_000)
+        request.body = body;
+    } catch {
+      /* Evicted or streaming response: the DOM scan remains available. */
+    }
   } else {
     return;
   }
-  await writeCapture(current);
+  if (captureCache === current) await writeCapture(current);
 }
 
+let captureEvents: Promise<void> = Promise.resolve();
 chrome.debugger.onEvent.addListener((source, method, params) => {
-  void recordDebuggerEvent(source, method, params);
+  captureEvents = captureEvents
+    .then(() => recordDebuggerEvent(source, method, params))
+    .catch(() => undefined);
 });
+
+async function enableCaptureTarget(target: DebuggerSession): Promise<void> {
+  await chrome.debugger.sendCommand(target, "Network.enable", {
+    maxTotalBufferSize: 8_000_000,
+    maxResourceBufferSize: 2_000_000,
+  });
+  await chrome.debugger.sendCommand(target, "Target.setAutoAttach", {
+    autoAttach: true,
+    waitForDebuggerOnStart: false,
+    flatten: true,
+    filter: [{ type: "iframe", exclude: false }, { exclude: true }],
+  });
+}
 
 chrome.debugger.onDetach.addListener((source) => {
   // The user can dismiss Chrome's debugging infobar, and a closed tab detaches too.
@@ -298,21 +405,28 @@ async function startCapture(tabId: number, jobId?: string): Promise<void> {
   if (await readCapture()) throw new Error("A capture is already active");
   await chrome.debugger.attach({ tabId }, "1.3");
   try {
-    await chrome.debugger.sendCommand({ tabId }, "Network.enable", {
-      maxTotalBufferSize: 1_000_000,
-      maxResourceBufferSize: 100_000
+    await writeCapture({
+      tabId,
+      jobId,
+      requests: new Map(),
+      pendingHeaders: new Map(),
     });
+    await enableCaptureTarget({ tabId });
     // Best-effort: a page with a strict CSP can refuse the injection, and the network
     // capture alone still catches manifest- and license-based DRM signals without it.
     await chrome.scripting
-      .executeScript({ target: { tabId, allFrames: true }, world: "MAIN", func: installEmeMonitor })
+      .executeScript({
+        target: { tabId, allFrames: true },
+        world: "MAIN",
+        func: installEmeMonitor,
+      })
       .catch(() => undefined);
-    await writeCapture({ tabId, jobId, requests: new Map(), pendingHeaders: new Map() });
     await chrome.action.setBadgeBackgroundColor({ color: "#c62828" });
     // Deliberately not scoped to the tab: a per-tab badge outranks the global progress
     // badge and would survive a worker restart with nothing left to clear it.
     await chrome.action.setBadgeText({ text: "REC" });
   } catch (error) {
+    await clearCapture();
     await chrome.debugger.detach({ tabId }).catch(() => undefined);
     throw error;
   }
@@ -327,11 +441,12 @@ function buildCandidatesFromRequests(requests: Map<string, CapturedRequest>): {
   const seen = new Set<string>();
   for (const request of requests.values()) {
     const kind = classifyMediaUrl(request.url, request.mimeType || "");
-    const likelyMediaType = ["Media", "Manifest"].includes(request.resourceType || "");
-    if ((!kind && !likelyMediaType) || seen.has(request.url)) continue;
+    if (!kind || seen.has(request.url)) continue;
     seen.add(request.url);
     const headers = { ...request.headers };
-    const cookieHeaderName = Object.keys(headers).find((name) => name.toLowerCase() === "cookie");
+    const cookieHeaderName = Object.keys(headers).find(
+      (name) => name.toLowerCase() === "cookie",
+    );
     if (cookieHeaderName) {
       try {
         const hostname = new URL(request.url).hostname;
@@ -346,7 +461,7 @@ function buildCandidatesFromRequests(requests: Map<string, CapturedRequest>): {
             domain: hostname,
             path: "/",
             secure: request.url.startsWith("https:"),
-            http_only: false
+            http_only: false,
           });
         }
       } catch {
@@ -355,11 +470,11 @@ function buildCandidatesFromRequests(requests: Map<string, CapturedRequest>): {
       delete headers[cookieHeaderName];
     }
     candidates.push({
-      kind: kind || "direct",
+      kind,
       url: request.url,
       mime_type: request.mimeType || "",
       source: "debugger",
-      headers
+      headers,
     });
   }
   candidates.sort((left, right) => {
@@ -374,35 +489,61 @@ function buildCandidatesFromRequests(requests: Map<string, CapturedRequest>): {
  * while still attached, hence this runs before `chrome.debugger.detach`), a request to a
  * known license endpoint, and whatever `installEmeMonitor` observed in the page itself.
  */
-async function detectDrmInCapture(current: CaptureState): Promise<{ drm_detected: boolean; reason?: string }> {
+async function detectDrmInCapture(
+  current: CaptureState,
+): Promise<{ drm_detected: boolean; reason?: string }> {
   for (const request of current.requests.values()) {
     if (isLicenseTraffic(request.url)) {
-      return { drm_detected: true, reason: `A DRM license request was observed: ${request.url}` };
+      return {
+        drm_detected: true,
+        reason: `A DRM license request was observed: ${request.url}`,
+      };
     }
   }
   for (const [requestId, request] of current.requests) {
     const kind = classifyMediaUrl(request.url, request.mimeType || "");
     if (kind !== "hls" && kind !== "dash") continue;
     try {
-      const response = (await chrome.debugger.sendCommand({ tabId: current.tabId }, "Network.getResponseBody", {
-        requestId
-      })) as { body: string; base64Encoded: boolean };
-      const text = response.base64Encoded ? atob(response.body) : response.body;
+      const response = request.body
+        ? undefined
+        : ((await chrome.debugger.sendCommand(
+            {
+              tabId: current.tabId,
+              sessionId: request.sessionId,
+            } as DebuggerSession,
+            "Network.getResponseBody",
+            {
+              requestId: request.requestId || requestId,
+            },
+          )) as { body: string; base64Encoded: boolean });
+      const text =
+        request.body ||
+        (response!.base64Encoded ? atob(response!.body) : response!.body);
       const check = detectManifestDrm(text, kind);
-      if (check.drm_detected) return { drm_detected: true, reason: check.reason };
+      if (check.drm_detected)
+        return { drm_detected: true, reason: check.reason };
     } catch {
       // The debugger evicts buffered bodies under memory pressure; not fatal to the check.
     }
   }
   const emeResults = await chrome.scripting
-    .executeScript({ target: { tabId: current.tabId, allFrames: true }, world: "MAIN", func: readEmeMonitor })
+    .executeScript({
+      target: { tabId: current.tabId, allFrames: true },
+      world: "MAIN",
+      func: readEmeMonitor,
+    })
     .catch(() => []);
   // `requested` alone is not decisive: several player libraries probe EME support up front
   // even for content with no DRM at all. Only an attached key or an `encrypted` event means
   // the pipeline actually switched to protected media.
-  const eme = emeResults.map((frame) => frame.result).find((state) => state?.encryptedEventFired || state?.setMediaKeysCalled);
+  const eme = emeResults
+    .map((frame) => frame.result)
+    .find((state) => state?.encryptedEventFired || state?.setMediaKeysCalled);
   if (eme) {
-    return { drm_detected: true, reason: `The player activated DRM${eme.keySystem ? ` (${eme.keySystem})` : ""}` };
+    return {
+      drm_detected: true,
+      reason: `The player activated DRM${eme.keySystem ? ` (${eme.keySystem})` : ""}`,
+    };
   }
   return { drm_detected: false };
 }
@@ -411,7 +552,23 @@ async function stopCapture(): Promise<StopCaptureResult> {
   const current = await readCapture();
   if (!current) throw new Error("No capture is active");
 
+  await captureEvents;
   const drm = await detectDrmInCapture(current);
+  const captions: CaptionCandidate[] = [...current.requests.values()]
+    .filter((r) => r.body && !classifyMediaUrl(r.url, r.mimeType))
+    .slice(0, 20)
+    .map((r) => ({
+      url: r.url,
+      text: r.body,
+      format: /^\s*[\[{]/.test(r.body!)
+        ? "json"
+        : /<(?:tt|\?xml)/i.test(r.body!)
+          ? "ttml"
+          : "vtt",
+      is_active: false,
+      is_manual: true,
+      is_visible_transcript: false,
+    }));
   await clearCapture();
   await chrome.debugger.detach({ tabId: current.tabId }).catch(() => undefined);
 
@@ -429,67 +586,97 @@ async function stopCapture(): Promise<StopCaptureResult> {
   }
 
   const { candidates, cookies } = buildCandidatesFromRequests(current.requests);
-  if (!candidates.length) throw new Error("No media request was captured; reload and play the video before stopping");
+  if (!candidates.length && current.jobId)
+    throw new Error(
+      "No media request was captured; reload and play the video before stopping",
+    );
   if (current.jobId) {
     const tracker = await readTracker();
-    if (!tracker || tracker.jobId !== current.jobId) throw new Error("Captured job is no longer active");
-    await retryWithCapture(tracker.token, tracker.jobId, candidates.slice(0, 25), {
-      cookies,
-      headers: {},
-      user_agent: navigator.userAgent
-    });
+    if (!tracker || tracker.jobId !== current.jobId)
+      throw new Error("Captured job is no longer active");
+    await retryWithCapture(
+      tracker.token,
+      tracker.jobId,
+      candidates.slice(0, 25),
+      {
+        cookies,
+        headers: {},
+        user_agent: navigator.userAgent,
+      },
+      captions,
+    );
   }
-  return { drm_detected: false, candidates: candidates.slice(0, 25) };
+  return {
+    drm_detected: false,
+    candidates: candidates.slice(0, 25),
+    caption_candidates: captions,
+    tab_id: current.tabId,
+  };
 }
 
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-  void (async () => {
-    switch (message.type) {
-      case "TRACK_JOB":
-        await writeTracker(message.tracker);
-        return { ok: true };
-      case "START_BROWSER_DOWNLOAD": {
-        const id = await startBrowserDownload(message.tracker, message.url, message.filename);
-        return { ok: true, downloadId: id };
-      }
-      case "GET_TRACKED_JOB": {
-        const current = await readCapture();
-        const lastError = (await chrome.storage.session.get(LAST_ERROR_KEY))[LAST_ERROR_KEY] as
-          | string
-          | undefined;
-        return {
-          ok: true,
-          tracker: await readTracker(),
-          // A capture with no jobId is a pre-download DRM verification, not a job retry.
-          capturing: Boolean(current?.jobId),
-          verifying: Boolean(current) && !current?.jobId,
-          lastError
-        };
-      }
-      case "CANCEL_TRACKED_JOB": {
-        const tracker = await readTracker();
-        if (tracker) {
-          if (tracker.downloadId) await chrome.downloads.cancel(tracker.downloadId).catch(() => undefined);
-          await cancelJob(tracker.token, tracker.jobId).catch(() => undefined);
-          await cleanupTracker(tracker);
+chrome.runtime.onMessage.addListener(
+  (message: ExtensionMessage, _sender, sendResponse) => {
+    void (async () => {
+      switch (message.type) {
+        case "TRACK_JOB":
+          await writeTracker(message.tracker);
+          return { ok: true };
+        case "START_BROWSER_DOWNLOAD": {
+          const id = await startBrowserDownload(
+            message.tracker,
+            message.url,
+            message.filename,
+          );
+          return { ok: true, downloadId: id };
         }
-        const current = await readCapture();
-        if (current) {
-          await chrome.debugger.detach({ tabId: current.tabId }).catch(() => undefined);
-          await clearCapture();
+        case "GET_TRACKED_JOB": {
+          const current = await readCapture();
+          const lastError = (await chrome.storage.session.get(LAST_ERROR_KEY))[
+            LAST_ERROR_KEY
+          ] as string | undefined;
+          return {
+            ok: true,
+            tracker: await readTracker(),
+            // A capture with no jobId is a pre-download DRM verification, not a job retry.
+            capturing: Boolean(current?.jobId),
+            verifying: Boolean(current) && !current?.jobId,
+            lastError,
+          };
         }
-        return { ok: true };
+        case "CANCEL_TRACKED_JOB": {
+          const tracker = await readTracker();
+          if (tracker) {
+            if (tracker.downloadId)
+              await chrome.downloads
+                .cancel(tracker.downloadId)
+                .catch(() => undefined);
+            await cancelJob(tracker.token, tracker.jobId).catch(
+              () => undefined,
+            );
+            await cleanupTracker(tracker);
+          }
+          const current = await readCapture();
+          if (current) {
+            await chrome.debugger
+              .detach({ tabId: current.tabId })
+              .catch(() => undefined);
+            await clearCapture();
+          }
+          return { ok: true };
+        }
+        case "START_CAPTURE":
+          await startCapture(message.tabId, message.jobId);
+          return { ok: true };
+        case "STOP_CAPTURE":
+          return { ok: true, ...(await stopCapture()) };
       }
-      case "START_CAPTURE":
-        await startCapture(message.tabId, message.jobId);
-        return { ok: true };
-      case "STOP_CAPTURE":
-        return { ok: true, ...(await stopCapture()) };
-    }
-  })()
-    .then(sendResponse)
-    .catch((error: unknown) => sendResponse({ ok: false, error: String(error) }));
-  return true;
-});
+    })()
+      .then(sendResponse)
+      .catch((error: unknown) =>
+        sendResponse({ ok: false, error: String(error) }),
+      );
+    return true;
+  },
+);
 
 void pollTrackedJob();

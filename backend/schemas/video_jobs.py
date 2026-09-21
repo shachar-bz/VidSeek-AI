@@ -8,6 +8,8 @@ to know what a page put in a token.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Annotated
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field
 
@@ -51,9 +53,23 @@ class CreateVideoJobRequest(BaseModel):
     page_title: str = Field(default="video", max_length=512)
     preferred_language: str | None = Field(default=None, max_length=64)
     drm_detected: bool = False
+    frame_url: str | None = Field(default=None, max_length=16_384)
+    selected_media_id: str | None = Field(default=None, max_length=512)
+    media_duration_seconds: float | None = Field(default=None, gt=0, le=86400, allow_inf_nan=False)
+    structured_candidates: list[Annotated[str, Field(max_length=200_000)]] = Field(default_factory=list, max_length=8)
     media_candidates: list[MediaCandidate] = Field(default_factory=list, max_length=100)
     caption_candidates: list[CaptionCandidate] = Field(default_factory=list, max_length=50)
     browser_context: BrowserContext = Field(default_factory=BrowserContext)
+
+    @property
+    def source_identity_url(self) -> str:
+        """Separate videos on one page without changing the actual playback/referrer URL."""
+        if not self.selected_media_id:
+            return self.page_url
+        parsed = urlsplit(self.page_url)
+        query = [(k, v) for k, v in parse_qsl(parsed.query) if k != "vidseek_video"]
+        query.append(("vidseek_video", self.selected_media_id))
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ""))
 
 
 class BrowserDownloadCompleteRequest(BaseModel):
@@ -66,6 +82,7 @@ class CaptureRetryRequest(BaseModel):
     """Fresh media request details obtained by an opt-in debugger capture."""
 
     media_candidates: list[MediaCandidate] = Field(min_length=1, max_length=100)
+    caption_candidates: list[CaptionCandidate] = Field(default_factory=list, max_length=50)
     browser_context: BrowserContext = Field(default_factory=BrowserContext)
 
 

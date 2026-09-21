@@ -76,7 +76,7 @@ def record_job_video(
     stored = PostgresVideoRecords().upsert(
         VideoRecord(
             source=acquisition_mode,
-            source_url=request.page_url,
+            source_url=request.source_identity_url,
             title=request.page_title,
             blob_container=stored_video.container,
             blob_name=stored_video.name,

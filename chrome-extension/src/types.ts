@@ -1,3 +1,4 @@
+// Shared browser discovery and companion API contracts.
 export type MediaKind = "direct" | "hls" | "dash";
 
 export interface MediaCandidate {
@@ -19,6 +20,11 @@ export interface CaptionCandidate {
 }
 
 export interface DiscoveryResult {
+  frame_url?: string;
+  selected_media_id?: string;
+  media_duration_seconds?: number;
+  structured_candidates?: string[];
+  videos?: DiscoveryResult[];
   page_url: string;
   page_title: string;
   preferred_language?: string;
@@ -93,5 +99,7 @@ export interface StopCaptureResult {
   drm_detected: boolean;
   reason?: string;
   candidates: MediaCandidate[];
+  caption_candidates?: CaptionCandidate[];
+  tab_id?: number;
 }
 
