@@ -17,6 +17,7 @@ from backend.services.video_download.jobs import JobManager
 EXTENSION_ID = "allowed-extension"
 EXTENSION_ORIGIN = f"chrome-extension://{EXTENSION_ID}"
 WEBSITE_ORIGIN = "https://app.vidseek.example"
+LOCAL_WEBSITE_ORIGIN = "http://127.0.0.1:5173"
 
 
 def _app(tmp_path: Path):
@@ -128,6 +129,22 @@ def test_cors_does_not_admit_an_unconfigured_origin(
     assert "access-control-allow-origin" not in response.headers
 
 
+def test_cors_admits_the_local_frontend_by_default(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.options(
+            "/v1/auth/signup",
+            headers={
+                "Origin": LOCAL_WEBSITE_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == LOCAL_WEBSITE_ORIGIN
+
+
 def test_loopback_is_required_by_default(tmp_path: Path) -> None:
     app = _app(tmp_path)
     with TestClient(app, client=("203.0.113.10", 50000)) as client:
@@ -143,6 +160,13 @@ def test_hosted_deployment_can_disable_loopback(
     with TestClient(app, client=("203.0.113.10", 50000)) as client:
         response = client.get("/health")
     assert response.status_code == 200
+
+
+def test_hosted_deployment_has_no_default_website_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VIDSEEK_REQUIRE_LOOPBACK", "false")
+    assert config.website_origins() == set()
 
 
 def test_startup_and_health_need_no_database_or_blob_configuration(tmp_path: Path) -> None:

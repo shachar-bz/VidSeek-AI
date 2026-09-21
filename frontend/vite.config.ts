@@ -12,6 +12,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       "/v1": { target: API_TARGET, changeOrigin: true }
     }

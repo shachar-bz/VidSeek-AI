@@ -16,6 +16,7 @@ from backend.tests.fake_postgres import FakePool
 
 EXTENSION_ORIGIN = "chrome-extension://allowed"
 WEBSITE_ORIGIN = "https://app.vidseek.example"
+LOCAL_WEBSITE_ORIGIN = "http://localhost:5173"
 
 ROW = {
     "id": "11111111-2222-3333-4444-555555555555",
@@ -140,6 +141,18 @@ def test_signup_from_a_configured_website_origin_is_allowed(monkeypatch: pytest.
             json={"email": "a@example.com", "password": "correct horse"},
         )
     assert response.status_code == 200
+
+
+def test_signup_from_the_local_frontend_is_allowed_by_default() -> None:
+    app, _, sessions_pool = _app(rows=[ROW])
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/auth/signup",
+            headers={"Origin": LOCAL_WEBSITE_ORIGIN},
+            json={"email": "a@example.com", "password": "correct horse"},
+        )
+    assert response.status_code == 200
+    assert sessions_pool.recorded[0].parameters[2] == "website"
 
 
 def test_signing_up_from_the_website_records_the_website_surface(

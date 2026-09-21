@@ -19,6 +19,7 @@ from dotenv import dotenv_values
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BACKEND_DIR / ".env"
+LOCAL_WEBSITE_ORIGINS = frozenset({"http://127.0.0.1:5173", "http://localhost:5173"})
 
 
 @lru_cache(maxsize=1)
@@ -66,9 +67,13 @@ def website_origins() -> set[str]:
 
     A user account signing in from the website is verified against this set rather than a
     Chrome extension id, so the two surfaces can be told apart without trusting anything the
-    client says about itself.
+    client says about itself. Local-companion mode admits the fixed Vite development origins
+    by default; hosted mode remains closed until its origins are explicitly configured.
     """
-    raw_origins = get("VIDSEEK_WEBSITE_ORIGINS") or ""
+    configured_origins = get("VIDSEEK_WEBSITE_ORIGINS")
+    if configured_origins is None and require_loopback():
+        return set(LOCAL_WEBSITE_ORIGINS)
+    raw_origins = configured_origins or ""
     origins = {item.strip().rstrip("/") for item in raw_origins.split(",") if item.strip()}
     if "*" in origins:
         raise RuntimeError(
