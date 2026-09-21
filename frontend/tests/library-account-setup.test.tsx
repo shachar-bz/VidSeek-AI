@@ -189,7 +189,6 @@ describe("account page", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/v1/auth/me") return Promise.resolve(jsonResponse(USER));
-      if (url === "/v1/auth/sessions") return Promise.resolve(jsonResponse({ sessions: [] }));
       if (url === "/v1/account" && init?.method === "PATCH") return Promise.resolve(jsonResponse(updated));
       throw new Error(`Unexpected request: ${url}`);
     });
@@ -198,50 +197,27 @@ describe("account page", () => {
     render(<MemoryRouter><AccountProvider><AccountState /><AccountPage /></AccountProvider></MemoryRouter>);
     const name = await screen.findByLabelText(/Display name/);
     fireEvent.change(name, { target: { value: "Updated name" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
 
     await waitFor(() => expect(screen.getByText("Display name updated.")).toBeTruthy());
     expect(screen.getByText("Updated name", { selector: "output" })).toBeTruthy();
   });
 
-  it("revoking the current session clears this tab", async () => {
-    writeToken("token");
-    const session = {
-      session_id: "session-1",
-      surface: "website",
-      created_at: "2026-09-19T09:00:00Z",
-      last_used_at: "2026-09-20T09:00:00Z",
-      expires_at: "2026-10-20T09:00:00Z",
-      current: true
-    };
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/v1/auth/me") return Promise.resolve(jsonResponse(USER));
-      if (url === "/v1/auth/sessions") return Promise.resolve(jsonResponse({ sessions: [session] }));
-      if (url === "/v1/auth/sessions/session-1" || url === "/v1/auth/logout") return Promise.resolve(new Response(null, { status: 204 }));
-      throw new Error(`Unexpected request: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<MemoryRouter><AccountProvider><AccountState /><AccountPage /></AccountProvider></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "Revoke and sign out" }));
-    await waitFor(() => expect(screen.getByText("unauthenticated", { selector: "output" })).toBeTruthy());
-    expect(window.localStorage.getItem("vidseek.auth.token")).toBeNull();
-  });
-
-  it("states exactly what account deletion removes and preserves", async () => {
+  it("matches the focused name and password settings design", async () => {
     writeToken("token");
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/auth/me") return Promise.resolve(jsonResponse(USER));
-      if (url === "/v1/auth/sessions") return Promise.resolve(jsonResponse({ sessions: [] }));
       throw new Error(`Unexpected request: ${url}`);
     }));
     render(<MemoryRouter><AccountProvider><AccountPage /></AccountProvider></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete account" }));
-    expect(screen.getByText(/removes your user, private library links, conversations, and pins/i)).toBeTruthy();
-    expect(screen.getByText(/shared video data and artifacts remain available to other users/i)).toBeTruthy();
+    expect(await screen.findByText("Manage your name and password.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save name" })).toBeTruthy();
+    expect(screen.getByPlaceholderText("At least 8 characters")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Repeat new password")).toBeTruthy();
+    expect(screen.queryByText("Sessions")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete account" })).toBeNull();
   });
 });
 

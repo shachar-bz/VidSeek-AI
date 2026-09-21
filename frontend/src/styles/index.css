@@ -3013,6 +3013,165 @@ h3 {
   background: white;
 }
 
+/* Account settings */
+.account-page {
+  width: min(100%, 51rem);
+  display: grid;
+  gap: 1.4rem;
+  margin: 0 auto;
+}
+
+.account-page__heading {
+  margin-bottom: 0.35rem;
+}
+
+.account-page__heading h1 {
+  margin: 0;
+  color: #080f29;
+  font-family: var(--font-arcadia);
+  font-size: clamp(2.25rem, 4vw, 2.75rem);
+  font-weight: 750;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.account-page__heading p {
+  margin: 0.55rem 0 0;
+  color: #74809f;
+  font-size: 1.05rem;
+}
+
+.app-shell .account-card {
+  display: grid;
+  gap: 1.4rem;
+  padding: 1.85rem 2rem;
+  border: 1px solid #dfe3ec;
+  border-radius: 0.55rem;
+  color: #101831;
+  background: rgb(255 255 255 / 72%);
+}
+
+.account-card__heading h2 {
+  margin: 0;
+  font-family: var(--font-arcadia);
+  font-size: 1.55rem;
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.account-card__heading p {
+  margin: 0.5rem 0 0;
+  color: #697593;
+  font-size: 0.96rem;
+}
+
+.account-form {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.account-form--password {
+  gap: 0.95rem;
+}
+
+.account-page .ui-field {
+  gap: 0.35rem;
+}
+
+.app-shell .account-page .ui-field__label {
+  color: #111831;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.account-page .ui-field__label span[aria-hidden="true"] {
+  display: none;
+}
+
+.app-shell .account-page .ui-field__input {
+  min-height: 3.1rem;
+  padding: 0.7rem 1rem;
+  border-color: #d9deea;
+  border-radius: 0.55rem;
+  color: #111831;
+  background: rgb(255 255 255 / 86%);
+  font-size: 0.98rem;
+}
+
+.app-shell .account-page .ui-field__input::placeholder {
+  color: #929bb4;
+}
+
+.app-shell .account-page .ui-field__input:focus {
+  border-color: #78839d;
+  outline: none;
+  box-shadow: 0 0 0 0.2rem rgb(73 84 119 / 10%);
+}
+
+.account-form__submit {
+  min-width: 9.5rem;
+  justify-self: end;
+}
+
+.app-shell .account-form__submit.ui-button {
+  min-height: 2.8rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 0.55rem;
+  color: white;
+  background: #050506;
+}
+
+.app-shell .account-form__submit.ui-button:hover:not(:disabled) {
+  background: #202026;
+}
+
+.account-password-field {
+  position: relative;
+}
+
+.account-password-field .ui-field__input {
+  padding-right: 3.2rem;
+}
+
+.account-password-field__toggle {
+  position: absolute;
+  top: 1.75rem;
+  right: 0.65rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: #56617c;
+  background: transparent;
+  cursor: pointer;
+}
+
+.account-password-field__toggle svg {
+  width: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.account-page .form-error,
+.account-page .form-success {
+  color: #273251;
+  background: #f5f6fa;
+}
+
+@media (max-width: 40rem) {
+  .app-shell .account-card {
+    padding: 1.4rem;
+  }
+
+  .account-form__submit {
+    width: 100%;
+  }
+}
+
 @media (max-width: 78rem) {
   .library-toolbar {
     grid-template-columns: minmax(16rem, 2fr) repeat(4, minmax(7rem, 1fr));
