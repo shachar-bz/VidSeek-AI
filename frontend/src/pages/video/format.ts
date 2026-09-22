@@ -61,7 +61,3 @@ export function activeTranscriptIndex(lines: TranscriptLine[], seconds: number):
   const line = lines[candidate];
   return line && seconds <= line.end_seconds ? candidate : -1;
 }
-
-export function transcriptLineText(line: TranscriptLine, approximate = false): string {
-  return `[${approximate ? "≈" : ""}${formatTimestamp(line.start_seconds)}] ${line.text}`;
-}

@@ -27,12 +27,14 @@ import {
   type VideoDetail
 } from "../../api/types";
 import { getPinnedAnswers, pinAnswer, unpinAnswer } from "../../api/video";
+import agentAvatar from "../../assets/vidseek-video-chat-agent-icon.png";
 import { Button, Dialog, EmptyState, Panel } from "../../components/ui";
 import { videoPath } from "../../routes";
 import { featureFailureMessage } from "../shared";
 import { splitMessageCitations } from "./format";
 import { beginGeneration, applyStreamEvent, endIncompleteStream, type LiveGeneration } from "./streamState";
-import { ToolTrace } from "./ToolTrace";
+
+const CHAT_NAME = /^Chat (\d+)$/;
 
 function summaryFromDetail(detail: ConversationDetail): ConversationSummary {
   return {
@@ -57,6 +59,24 @@ function formatLastUsed(value: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function formatMessageTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(date);
+}
+
+/**
+ * Chats are numbered rather than named by hand: the next one continues the highest
+ * `Chat N` this video already has, so a renamed chat never steals a number back.
+ */
+export function nextChatName(conversations: ConversationSummary[]): string {
+  const highest = conversations.reduce((current, conversation) => {
+    const match = CHAT_NAME.exec(conversation.title ?? "");
+    return match ? Math.max(current, Number(match[1])) : current;
+  }, 0);
+  return `Chat ${highest + 1}`;
+}
+
 export function starterQuestionsForVideo(video: Pick<VideoDetail, "title" | "insights">): string[] {
   const generated = video.insights?.suggested_questions ?? [];
   const fallbacks = [
@@ -71,6 +91,11 @@ export function chatUnavailableMessage(stage: VideoDetail["stage"]): string | nu
   if (allowsChat(stage)) return null;
   if (stage === "failed") return "Chat is unavailable because processing failed.";
   return `${stage.charAt(0).toUpperCase() + stage.slice(1)} is in progress. Questions become available when processing completes.`;
+}
+
+function PencilIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z" /><path d="m13.5 6.5 3.5 3.5" /></svg>; }
+function ChevronIcon({ pointing }: { pointing: "left" | "right" }) {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d={pointing === "right" ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7"} /></svg>;
 }
 
 export function AnswerText({
@@ -115,11 +140,29 @@ function MessageCard({
   onTogglePin(message: ConversationMessage): void;
 }) {
   const assistant = message.role === "assistant";
+  const sentAt = formatMessageTime(message.created_at);
   return (
     <article className={`chat-message chat-message--${message.role}`}>
-      <header><span>{assistant ? "VidSeek" : "You"}</span>{assistant ? <Button variant="ghost" pending={pinPending} disabled={pinDisabled} onClick={() => onTogglePin(message)}>{message.pinned ? "Unpin" : "Pin answer"}</Button> : null}</header>
-      <div className="chat-message__content">{!message.content ? (assistant ? "Waiting for an answer…" : "") : assistant ? <AnswerText content={message.content} approximate={approximate} onSeek={onSeek} /> : message.content}</div>
-      {assistant ? <ToolTrace calls={message.tool_trace} /> : null}
+      {assistant ? <img className="chat-message__avatar" src={agentAvatar} alt="VidSeek" /> : null}
+      <div className="chat-message__body">
+        <div className="chat-message__bubble">
+          <div className="chat-message__content">{!message.content ? (assistant ? "Waiting for an answer…" : "") : assistant ? <AnswerText content={message.content} approximate={approximate} onSeek={onSeek} /> : message.content}</div>
+        </div>
+        <footer className="chat-message__meta">
+          {sentAt ? <time dateTime={message.created_at}>{sentAt}</time> : null}
+          {assistant ? (
+            <button
+              className={message.pinned ? "chat-message__pin chat-message__pin--pinned" : "chat-message__pin"}
+              type="button"
+              disabled={pinDisabled || pinPending}
+              aria-label={message.pinned ? "Unpin this answer" : "Pin this answer"}
+              onClick={() => onTogglePin(message)}
+            >
+              {message.pinned ? "Pinned" : "Pin"}
+            </button>
+          ) : null}
+        </footer>
+      </div>
     </article>
   );
 }
@@ -148,6 +191,8 @@ export function ConversationWorkspace({
   const [creating, setCreating] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [pinPending, setPinPending] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
@@ -192,17 +237,13 @@ export function ConversationWorkspace({
       draftConversationRef.current = selectedId;
       setDraft("");
     }
-    if (!selectedId) {
-      setRenameDraft("");
-      return;
-    }
+    if (!selectedId) return;
     const controller = new AbortController();
     setWorkspaceError(null);
     getConversation(selectedId, controller.signal)
       .then((response) => {
         if (response.video_id !== video.video_id) throw new Error("This chat belongs to another video.");
         setDetail(response);
-        setRenameDraft(response.title ?? "");
       })
       .catch((caught: unknown) => {
         if (!controller.signal.aborted) setWorkspaceError(featureFailureMessage(caught, "This chat could not be loaded."));
@@ -216,7 +257,13 @@ export function ConversationWorkspace({
     setWorkspaceError(null);
     try {
       const created = await createConversation(video.video_id, prefill ? { first_message: prefill } : {});
-      setConversations((current) => newestFirst([summaryFromDetail(created), ...current.filter((item) => item.conversation_id !== created.conversation_id)]));
+      let summary = summaryFromDetail(created);
+      try {
+        summary = await renameConversation(created.conversation_id, { title: nextChatName(conversations) });
+      } catch {
+        // The chat exists either way; without its number the backend titles it from the first question.
+      }
+      setConversations((current) => newestFirst([summary, ...current.filter((item) => item.conversation_id !== summary.conversation_id)]));
       draftConversationRef.current = created.conversation_id;
       setDraft(prefill);
       navigate(videoPath(video.video_id, created.conversation_id));
@@ -225,7 +272,7 @@ export function ConversationWorkspace({
     } finally {
       setCreating(false);
     }
-  }, [canChat, navigate, video.video_id]);
+  }, [canChat, conversations, navigate, video.video_id]);
 
   function commitLiveToHistory(current: LiveGeneration, terminalMessage?: ConversationMessage) {
     setDetail((existing) => existing ? {
@@ -264,10 +311,7 @@ export function ConversationWorkspace({
           try {
             await loadConversationList();
             const refreshed = await getConversation(selectedId);
-            if (generationRef.current === generation) {
-              setDetail(refreshed);
-              setRenameDraft(refreshed.title ?? "");
-            }
+            if (generationRef.current === generation) setDetail(refreshed);
           } catch (caught) {
             if (generationRef.current === generation) {
               setWorkspaceError(featureFailureMessage(caught, "The answer was saved, but chat details could not be refreshed."));
@@ -342,14 +386,21 @@ export function ConversationWorkspace({
     }
   }
 
+  function startRename(conversation: ConversationSummary) {
+    setRenamingId(conversation.conversation_id);
+    setRenameDraft(conversation.title ?? "");
+  }
+
   async function saveRename(event: FormEvent) {
     event.preventDefault();
-    if (!selectedId || !renameDraft.trim()) return;
+    const conversationId = renamingId;
+    if (!conversationId || !renameDraft.trim()) return;
     setRenaming(true);
     try {
-      const renamed = await renameConversation(selectedId, { title: renameDraft.trim() });
+      const renamed = await renameConversation(conversationId, { title: renameDraft.trim() });
       setConversations((current) => newestFirst(current.map((item) => item.conversation_id === renamed.conversation_id ? renamed : item)));
-      setDetail((current) => current ? { ...current, title: renamed.title, updated_at: renamed.updated_at } : current);
+      setDetail((current) => current?.conversation_id === renamed.conversation_id ? { ...current, title: renamed.title, updated_at: renamed.updated_at } : current);
+      setRenamingId(null);
     } catch (caught) {
       setWorkspaceError(featureFailureMessage(caught, "The chat could not be renamed."));
     } finally {
@@ -373,7 +424,6 @@ export function ConversationWorkspace({
     }
   }
 
-  const selectedSummary = conversations.find((item) => item.conversation_id === selectedId) ?? null;
   const renderedMessages = useMemo(() => [
     ...(detail?.messages ?? []),
     ...(live ? [live.userMessage, live.assistantMessage] : [])
@@ -391,21 +441,73 @@ export function ConversationWorkspace({
     <section className="conversation-feature" aria-labelledby="conversation-heading">
       {unavailable ? <div className="inline-notice" role="status">{unavailable}</div> : null}
       {workspaceError ? <div className="inline-notice" role="alert">{workspaceError}</div> : null}
-      <div className="conversation-grid">
+      <div className={drawerOpen ? "conversation-grid" : "conversation-grid conversation-grid--collapsed"}>
         <Panel className="chat-panel">
           <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
           {!selectedId ? <EmptyState title="Start a new chat" description="Ask VidSeek anything about this video." action={<Button variant="primary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}>{creating ? "Creating…" : "New chat"}</Button>} /> : !detail ? <p className="muted-text">Loading chat…</p> : <>
-            <form className="conversation-title-form" onSubmit={saveRename}><input aria-label="Chat title" maxLength={200} value={renameDraft} placeholder="New chat" onChange={(event) => setRenameDraft(event.target.value)} /><Button variant="ghost" pending={renaming} type="submit" disabled={!renameDraft.trim()}>Rename</Button>{selectedSummary ? <Button className="danger-button" variant="ghost" onClick={() => setDeleting(selectedSummary)}>Delete</Button> : null}</form>
             <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
             <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" disabled={!canChat || !draft.trim()}>Send</Button>}</div></form>
           </>}
         </Panel>
-        <Panel className="chat-sidebar">
-          <Button className="new-chat-button" variant="secondary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}><span aria-hidden="true">＋</span>{creating ? "Creating…" : "New chat"}</Button>
-          <section className="pins-panel" aria-labelledby="pinned-answers-heading"><div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>{pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p className="chat-message__content"><AnswerText content={pin.content} approximate={approximate} onSeek={onSeek} /></p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source chat</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}</section>
-          <section className="conversation-list-panel" aria-labelledby="recents-heading"><div className="chat-sidebar__heading"><h2 id="recents-heading">Recents</h2></div>{loading ? <p className="muted-text">Loading chats…</p> : conversations.length === 0 ? <p className="muted-text">No chats yet.</p> : <ol className="conversation-list">{conversations.map((conversation) => <li key={conversation.conversation_id} className={conversation.conversation_id === selectedId ? "conversation-list__item conversation-list__item--active" : "conversation-list__item"}><button type="button" onClick={() => navigate(videoPath(video.video_id, conversation.conversation_id))}><strong>{conversation.title ?? "New chat"}</strong><span>{formatLastUsed(conversation.updated_at)}</span></button><Button variant="ghost" aria-label={`Delete ${conversation.title ?? "chat"}`} onClick={() => setDeleting(conversation)}>×</Button></li>)}</ol>}</section>
-        </Panel>
+        <div className="conversation-drawer">
+          <button
+            className="conversation-drawer__handle"
+            type="button"
+            aria-expanded={drawerOpen}
+            aria-controls="conversation-drawer-panel"
+            onClick={() => setDrawerOpen((open) => !open)}
+          >
+            <ChevronIcon pointing={drawerOpen ? "right" : "left"} />
+            <span className="visually-hidden">{drawerOpen ? "Hide chats" : "Show chats"}</span>
+          </button>
+          <div className="conversation-drawer__panel" id="conversation-drawer-panel" aria-hidden={!drawerOpen}>
+            <Panel className="chat-sidebar">
+              <Button className="new-chat-button" variant="secondary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}><span aria-hidden="true">＋</span>{creating ? "Creating…" : "New chat"}</Button>
+              <section className="conversation-list-panel" aria-labelledby="recents-heading">
+                <div className="chat-sidebar__heading"><h2 id="recents-heading">Chats</h2></div>
+                {loading ? <p className="muted-text">Loading chats…</p> : conversations.length === 0 ? <p className="muted-text">No chats yet.</p> : (
+                  <ol className="conversation-list">
+                    {conversations.map((conversation) => {
+                      const title = conversation.title ?? "New chat";
+                      const active = conversation.conversation_id === selectedId;
+                      return (
+                        <li key={conversation.conversation_id} className={active ? "conversation-list__item conversation-list__item--active" : "conversation-list__item"}>
+                          {renamingId === conversation.conversation_id ? (
+                            <form className="conversation-rename-form" onSubmit={saveRename}>
+                              <input
+                                aria-label={`Rename ${title}`}
+                                autoFocus
+                                maxLength={200}
+                                value={renameDraft}
+                                onChange={(event) => setRenameDraft(event.target.value)}
+                                onKeyDown={(event) => { if (event.key === "Escape") setRenamingId(null); }}
+                              />
+                              <Button variant="ghost" type="submit" pending={renaming} disabled={!renameDraft.trim()}>Save</Button>
+                            </form>
+                          ) : (
+                            <>
+                              <button type="button" onClick={() => navigate(videoPath(video.video_id, conversation.conversation_id))}>
+                                <strong>{title}</strong>
+                                <span>{formatLastUsed(conversation.updated_at)}</span>
+                              </button>
+                              <button className="conversation-list__rename" type="button" aria-label={`Rename ${title}`} onClick={() => startRename(conversation)}><PencilIcon /></button>
+                              <Button variant="ghost" aria-label={`Delete ${title}`} onClick={() => setDeleting(conversation)}>×</Button>
+                            </>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </section>
+              <section className="pins-panel" aria-labelledby="pinned-answers-heading">
+                <div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>
+                {pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p className="chat-message__content"><AnswerText content={pin.content} approximate={approximate} onSeek={onSeek} /></p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source chat</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}
+              </section>
+            </Panel>
+          </div>
+        </div>
       </div>
       <Dialog open={deleting !== null} title="Delete this chat?" onClose={() => setDeleting(null)} actions={<><Button variant="ghost" onClick={() => setDeleting(null)}>Cancel</Button><Button className="danger-button" pending={deletePending} onClick={() => void confirmDelete()}>{deletePending ? "Deleting…" : "Delete permanently"}</Button></>}><p>This permanently removes the chat, all of its messages, and every answer pinned from it. This cannot be undone.</p></Dialog>
     </section>

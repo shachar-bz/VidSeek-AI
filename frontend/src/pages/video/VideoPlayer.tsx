@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getPlaybackUrl } from "../../api/video";
 import {
   PLAYBACK_URL_REFRESH_MARGIN_SECONDS,
-  type PlaybackUrl
+  type PlaybackUrl,
+  type TranscriptLine
 } from "../../api/types";
 import { Button, LoadingState, Panel } from "../../components/ui";
 import { featureFailureMessage } from "../shared";
+import { buildCaptionsVtt } from "./captions";
 
 const MINIMUM_REFRESH_DELAY_MS = 1_000;
+const NO_CAPTIONS: TranscriptLine[] = [];
 
 export function playbackRefreshDelay(playback: PlaybackUrl, now = Date.now()): number {
   const expiresAt = Date.parse(playback.expires_at);
@@ -24,10 +27,16 @@ interface PlaybackIntent {
   playing: boolean;
 }
 
+function captionTrack(video: HTMLVideoElement): TextTrack | null {
+  return video.textTracks?.[0] ?? null;
+}
+
 export interface VideoPlayerProps {
   videoId: string;
   available: boolean;
   title: string;
+  captionLines?: TranscriptLine[];
+  captionLanguage?: string | null;
   onTimeChange(seconds: number): void;
   onReady?(element: HTMLVideoElement | null): void;
 }
@@ -36,15 +45,66 @@ export function VideoPlayer({
   videoId,
   available,
   title,
+  captionLines = NO_CAPTIONS,
+  captionLanguage,
   onTimeChange,
   onReady
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const intentRef = useRef<PlaybackIntent | null>(null);
+  const captionsOnRef = useRef(false);
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [playback, setPlayback] = useState<PlaybackUrl | null>(null);
   const [loading, setLoading] = useState(available);
   const [error, setError] = useState<string | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
+
+  // The browser's own caption track: it keeps the cues in sync, draws them inside the
+  // video frame in fullscreen as well, and puts the CC toggle in the player controls.
+  const captionsUrl = useMemo(() => {
+    if (captionLines.length === 0) return null;
+    if (typeof URL.createObjectURL !== "function") return null;
+    return URL.createObjectURL(new Blob([buildCaptionsVtt(captionLines)], { type: "text/vtt" }));
+  }, [captionLines]);
+
+  useEffect(() => () => { if (captionsUrl) URL.revokeObjectURL(captionsUrl); }, [captionsUrl]);
+
+  // The video element is never the fullscreen element: the frame around it is, so the CC
+  // control stays on screen there. Chrome only offers its own captions entry through an
+  // overflow menu, which is why the player carries a button of its own.
+  useEffect(() => {
+    function readFullscreen() {
+      const frame = frameRef.current;
+      // `controlsList` removes the browser's own fullscreen button where it is honoured.
+      // Where it is not, the video itself goes fullscreen and the overlay disappears with
+      // it, so the frame takes that fullscreen over.
+      if (frame && document.fullscreenElement === videoRef.current) {
+        void document.exitFullscreen().then(() => frame.requestFullscreen()).catch(() => undefined);
+        return;
+      }
+      setFullscreen(document.fullscreenElement === frame);
+    }
+    document.addEventListener("fullscreenchange", readFullscreen);
+    return () => document.removeEventListener("fullscreenchange", readFullscreen);
+  }, []);
+
+  function applyCaptionMode() {
+    const track = videoRef.current ? captionTrack(videoRef.current) : null;
+    if (track) track.mode = captionsOnRef.current ? "showing" : "disabled";
+  }
+
+  function toggleCaptions() {
+    captionsOnRef.current = !captionsOnRef.current;
+    setCaptionsOn(captionsOnRef.current);
+    applyCaptionMode();
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void frameRef.current?.requestFullscreen?.().catch(() => undefined);
+  }
 
   const rememberIntent = useCallback(() => {
     const video = videoRef.current;
@@ -96,6 +156,11 @@ export function VideoPlayer({
     };
   }, [available, reloadVersion, rememberIntent, videoId]);
 
+  function onLoadedMetadata() {
+    applyCaptionMode();
+    restoreIntent();
+  }
+
   function restoreIntent() {
     const video = videoRef.current;
     const intent = intentRef.current;
@@ -127,16 +192,55 @@ export function VideoPlayer({
 
   return (
     <div className="video-player">
-      <video
-        ref={connectVideo}
-        key={playback?.url}
-        src={playback?.url}
-        controls
-        preload="metadata"
-        aria-label={title}
-        onLoadedMetadata={restoreIntent}
-        onTimeUpdate={(event) => onTimeChange(event.currentTarget.currentTime)}
-      />
+      <div className="video-player__frame" ref={frameRef}>
+        <video
+          ref={connectVideo}
+          key={playback?.url}
+          src={playback?.url}
+          controls
+          controlsList="nofullscreen"
+          preload="metadata"
+          aria-label={title}
+          onLoadedMetadata={onLoadedMetadata}
+          onTimeUpdate={(event) => onTimeChange(event.currentTarget.currentTime)}
+        >
+          {captionsUrl ? (
+            <track
+              kind="captions"
+              label="Transcript"
+              src={captionsUrl}
+              srcLang={captionLanguage ?? "en"}
+            />
+          ) : null}
+        </video>
+        <div className="video-player__controls">
+          {captionsUrl ? (
+            <button
+              className={captionsOn ? "video-player__control video-player__control--on" : "video-player__control"}
+              type="button"
+              aria-pressed={captionsOn}
+              title={captionsOn ? "Turn subtitles off" : "Turn subtitles on"}
+              onClick={toggleCaptions}
+            >
+              <span aria-hidden="true">CC</span>
+              <span className="visually-hidden">{captionsOn ? "Turn subtitles off" : "Turn subtitles on"}</span>
+            </button>
+          ) : null}
+          <button
+            className="video-player__control"
+            type="button"
+            title={fullscreen ? "Exit fullscreen" : "Full screen"}
+            onClick={toggleFullscreen}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+              {fullscreen
+                ? <path d="M9 4v5H4m11-5v5h5M9 20v-5H4m11 5v-5h5" />
+                : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5m11-5v5h-5" />}
+            </svg>
+            <span className="visually-hidden">{fullscreen ? "Exit fullscreen" : "Full screen"}</span>
+          </button>
+        </div>
+      </div>
       {error ? <p className="video-player__notice" role="status">Playback refresh failed. The current link may continue working.</p> : null}
     </div>
   );

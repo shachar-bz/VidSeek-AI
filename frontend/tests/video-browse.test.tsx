@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { VideoTranscript } from "../src/api/types";
@@ -47,19 +47,24 @@ describe("transcript", () => {
     expect(activeTranscriptIndex(transcript.lines, 8.5)).toBe(-1);
   });
 
-  it("qualifies partial timestamps while preserving seeking and exact range copy", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+  it("qualifies partial timestamps, seeks from a line, and marks the spoken one", () => {
     const onSeek = vi.fn();
     render(<TranscriptPanel transcript={transcript} activeIndex={1} approximate onSeek={onSeek} />);
 
     expect(screen.getByText(/timestamps are approximate/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "≈0:04" }));
+    fireEvent.click(screen.getByRole("button", { name: "≈0:04 Middle" }));
     expect(onSeek).toHaveBeenCalledWith(4);
 
-    fireEvent.click(screen.getByLabelText("Select transcript line 1"));
-    fireEvent.click(screen.getByLabelText("Select transcript line 2"));
-    fireEvent.click(screen.getByRole("button", { name: "Copy selected (2)" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("[≈0:00] Opening\n[≈0:04] Middle"));
+    const active = screen.getByText("Middle").closest("li");
+    expect(active?.className).toContain("transcript-line--active");
+    expect(screen.getByText("Opening").closest("li")?.className).not.toContain("transcript-line--active");
   });
+
+  it("offers no per-line selection or copy controls", () => {
+    render(<TranscriptPanel transcript={transcript} activeIndex={-1} approximate={false} onSeek={vi.fn()} />);
+
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+  });
+
 });
