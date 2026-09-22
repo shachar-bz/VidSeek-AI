@@ -1,18 +1,13 @@
-"""Transcript selection, parsing, Firecrawl extraction, and artifact persistence."""
+"""Transcript selection, parsing, and artifact persistence."""
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
-import requests
-
-from backend.core import config
 from backend.core.captions import CaptionSegment, parse_ttml, parse_webvtt_or_srt
 from backend.storage import transcript_store
 from backend.schemas.browser import CaptionCandidate
@@ -24,8 +19,8 @@ from backend.services.transcripts import (
     normalize_words,
 )
 
-FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
-FIRECRAWL_API_KEY_NAME = "FIRECRAWL_API_KEY"
+from .structured import parse_json_captions
+
 MIN_VISIBLE_TRANSCRIPT_CHARACTERS = 80
 FORCED_ALIGNMENT_SOURCE = "forced_alignment"
 
@@ -56,7 +51,7 @@ class TranscriptArtifact:
         return self.normalized is not None
 
 
-def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact | None:
+def transcript_from_caption(candidate: CaptionCandidate, media_duration_seconds: float | None = None, *, allow_llm: bool = True) -> TranscriptArtifact | None:
     """Turn a supplied caption body or visible transcript into one artifact."""
     if not candidate.text:
         return None
@@ -67,9 +62,9 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
         return TranscriptArtifact(source="page_transcript", text=text, language=candidate.language)
 
     try:
-        segments = (
+        segments = parse_json_captions(candidate.text, media_duration_seconds, allow_llm=allow_llm) if candidate.format.lower() == "json" else (
             parse_ttml(candidate.text)
-            if candidate.format.lower() in {"ttml", "xml"}
+            if candidate.format.lower() in {"ttml", "xml", "dfxp"}
             else parse_webvtt_or_srt(candidate.text)
         )
     except (ElementTree.ParseError, ValueError):
@@ -77,12 +72,13 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
     if not segments:
         return None
     normalized = normalize_caption_cues(
-        segments, source="captions", language=candidate.language
+        segments, source="captions", language=candidate.language, media_duration_seconds=media_duration_seconds
     )
     # A track whose cues carry no times at all — TTML written with no `begin` attributes —
-    # parses into text that cannot be placed in the video. It is no better than a page
-    # transcript, so it is offered as one: still worth keeping as a last resort, but not
-    # something the pipeline may hand on as a timed transcript.
+    # or one whose end times cannot be trusted past the last cue, parses into text that
+    # cannot be placed in the video. It is no better than a page transcript, so it is
+    # offered as one: still worth keeping as a last resort — the pipeline aligns it against
+    # the audio instead — but not something it may hand on already timed.
     if normalized is None:
         return TranscriptArtifact(
             source="page_transcript",
@@ -95,24 +91,36 @@ def transcript_from_caption(candidate: CaptionCandidate) -> TranscriptArtifact |
         language=candidate.language,
         segments=segments,
         normalized=normalized,
+        details={"inferred_end_times": any(c.end_seconds is None for c in segments)},
     )
 
 
-def choose_supplied_transcript(candidates: list[CaptionCandidate]) -> TranscriptArtifact | None:
+def choose_supplied_transcript(candidates: list[CaptionCandidate], preferred_language: str | None = None, media_duration_seconds: float | None = None) -> TranscriptArtifact | None:
     """Apply active/manual/automatic/visible ordering to browser candidates."""
     ordered = sorted(
         candidates,
         key=lambda candidate: (
             candidate.is_visible_transcript,
             not candidate.is_active,
+            bool(preferred_language) and (candidate.language or "").split("-")[0] != preferred_language.split("-")[0],
             not candidate.is_manual,
         ),
     )
+    untimed = None
+    unresolved = []
     for candidate in ordered:
-        result = transcript_from_caption(candidate)
-        if result:
+        result = transcript_from_caption(candidate, media_duration_seconds, allow_llm=False)
+        if result and result.is_timed:
             return result
-    return None
+        untimed = untimed or result
+        if result is None and candidate.format.lower() == "json":
+            unresolved.append(candidate)
+    # At most one schema-inference call per selection, after all known formats were tried.
+    if unresolved:
+        result = transcript_from_caption(unresolved[0], media_duration_seconds)
+        if result and result.is_timed:
+            return result
+    return untimed
 
 
 def transcript_from_subtitle_files(paths: list[Path]) -> TranscriptArtifact | None:
@@ -127,69 +135,6 @@ def transcript_from_subtitle_files(paths: list[Path]) -> TranscriptArtifact | No
         if result:
             return result
     return None
-
-
-def _firecrawl_api_key() -> str | None:
-    return config.get(FIRECRAWL_API_KEY_NAME)
-
-
-def _comparable_text(value: str) -> str:
-    value = re.sub(r"[*_`#>\[\]()]", " ", value)
-    return " ".join(value.split()).casefold()
-
-
-def _without_credentials_in_query(page_url: str) -> str:
-    """Drop the query and fragment, which carry this session's signed parameters."""
-    parsed = urlsplit(page_url)
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
-
-
-def scrape_public_page_transcript(page_url: str, timeout_seconds: float = 65.0) -> str | None:
-    """Extract a verbatim public transcript without sending browser credentials."""
-    api_key = _firecrawl_api_key()
-    if not api_key:
-        return None
-    public_url = _without_credentials_in_query(page_url)
-    schema = {
-        "type": "object",
-        "properties": {
-            "transcript_found": {"type": "boolean"},
-            "transcript_text": {"type": "string"},
-        },
-        "required": ["transcript_found", "transcript_text"],
-    }
-    response = requests.post(
-        FIRECRAWL_ENDPOINT,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "url": public_url,
-            "formats": [
-                "markdown",
-                {
-                    "type": "json",
-                    "schema": schema,
-                    "prompt": (
-                        "Return only the complete verbatim spoken transcript or captions "
-                        "published on this page. Do not summarize or invent missing text."
-                    ),
-                },
-            ],
-            "onlyMainContent": True,
-            "storeInCache": False,
-            "timeout": 60_000,
-        },
-        timeout=timeout_seconds,
-    )
-    response.raise_for_status()
-    data = response.json().get("data") or {}
-    extracted = data.get("json") or {}
-    transcript_text = " ".join(str(extracted.get("transcript_text") or "").split())
-    markdown = str(data.get("markdown") or "")
-    if not extracted.get("transcript_found") or not transcript_text:
-        return None
-    if _comparable_text(transcript_text) not in _comparable_text(markdown):
-        return None
-    return transcript_text
 
 
 def transcribe_with_elevenlabs(video_path: Path) -> TranscriptArtifact:
@@ -282,4 +227,3 @@ def persist_transcript(
     if normalized:
         transcript_store.save(video_path.stem, normalized)
     return text_path, json_path
-

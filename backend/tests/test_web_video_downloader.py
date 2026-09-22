@@ -99,7 +99,7 @@ def test_download_moves_the_media_and_its_subtitles_into_the_root(tmp_path: Path
     assert result.title == "Clip"
     assert result.video_path == root / "clip.mp4"
     assert result.video_path.read_bytes() == b"video"
-    assert [path.name for path in result.subtitle_paths] == ["clip.vtt"]
+    assert [path.name for path in result.subtitle_paths] == ["clip.en.vtt"]
 
 
 def test_a_name_collision_in_the_root_does_not_overwrite(tmp_path: Path) -> None:

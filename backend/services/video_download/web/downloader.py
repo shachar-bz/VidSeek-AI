@@ -216,19 +216,22 @@ def download_video(
     cancel_event: threading.Event,
     progress_callback=None,
 ) -> DownloadedVideo:
-    """Try the page extractor, then discovered HLS/DASH/direct candidates."""
+    """Download the selected sources; use a page extractor only without a selection."""
     reject_youtube(page_url)
     download_root.mkdir(parents=True, exist_ok=True)
-    attempts: list[tuple[str, dict[str, str] | None]] = [(page_url, None)]
+    attempts: list[tuple[str, dict[str, str] | None]] = []
     ordered = sorted(
         candidates,
         key=lambda candidate: {
-            MediaKind.HLS: 0,
-            MediaKind.DASH: 1,
-            MediaKind.DIRECT: 2,
+            MediaKind.HLS: 1,
+            MediaKind.DASH: 2,
+            MediaKind.DIRECT: 0,
         }[candidate.kind],
     )
     attempts.extend((candidate.url, candidate.headers) for candidate in ordered)
+    # A selected source must not fall back to a different video on the containing page.
+    if not attempts:
+        attempts.append((page_url, None))
 
     errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="vidseek-download-") as temp_name:
@@ -256,7 +259,9 @@ def download_video(
                 shutil.move(str(downloaded_path), destination)
                 moved_subtitles = []
                 for subtitle in subtitles:
-                    subtitle_destination = destination.with_suffix(subtitle.suffix)
+                    subtitle_destination = destination.with_name(
+                        destination.stem + subtitle.name.removeprefix(downloaded_path.stem)
+                    )
                     if subtitle_destination.exists():
                         subtitle_destination = download_root / (
                             f"{destination.stem}-{subtitle.stem[-12:]}{subtitle.suffix}"
@@ -268,6 +273,8 @@ def download_video(
                     video_path=destination,
                     subtitle_paths=moved_subtitles,
                 )
+            except DownloadCancelled:
+                raise
             except (UnsupportedMediaError, MissingDependencyError):
                 raise
             except (DownloadError, OSError, RuntimeError, ValueError) as error:

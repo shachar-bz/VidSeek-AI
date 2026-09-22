@@ -23,23 +23,6 @@ from backend.services.transcripts import normalize_words
 from backend.services.video_download.web.transcript import TranscriptArtifact
 
 
-@pytest.fixture(autouse=True)
-def no_firecrawl_lookup():
-    """Keep the Firecrawl page-transcript lookup out of these tests.
-
-    Every case here drives the precedence chain past the supplied captions, so without
-    this the real Firecrawl endpoint is called with the project's live API key. That
-    costs quota on every run and makes the outcome depend on what the service happens to
-    return for the placeholder URL, which is what the transcript source is patched to
-    decide.
-    """
-    with patch(
-        "backend.services.video_download.web.pipeline.scrape_public_page_transcript",
-        return_value=None,
-    ):
-        yield
-
-
 def _request() -> CreateVideoJobRequest:
     return CreateVideoJobRequest(page_url="https://example.com/watch")
 
@@ -118,51 +101,6 @@ def _timed_artifact() -> TranscriptArtifact:
         text="hello there",
         normalized=normalize_words(words, source="elevenlabs"),
     )
-
-
-def test_a_page_transcript_no_longer_outranks_timed_transcription(tmp_path: Path) -> None:
-    """Untimed text cannot meet the contract, so it is not raced against transcription."""
-    with patch(
-        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
-        return_value=_timed_artifact(),
-    ), patch(
-        "backend.services.video_download.web.pipeline.scrape_public_page_transcript",
-        return_value="a published transcript with no timing whatsoever",
-    ) as scrape:
-        result = process_downloaded_video(
-            video=_video(tmp_path),
-            request=_request(),
-            cancel_event=threading.Event(),
-            progress_callback=lambda *_: None,
-        )
-
-    scrape.assert_not_called()
-    assert result.transcript_source == "elevenlabs"
-    assert result.transcript_error is None
-    assert result.transcript_text_path.read_text(encoding="utf-8") == "[00:00-00:02] hello there"
-
-
-def test_text_with_no_timing_is_saved_but_not_reported_as_a_finished_transcript(
-    tmp_path: Path,
-) -> None:
-    page_text = "a published transcript with no timing whatsoever"
-    with patch(
-        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
-        side_effect=RuntimeError("hosted API is down"),
-    ), patch(
-        "backend.services.video_download.web.pipeline.scrape_public_page_transcript",
-        return_value=page_text,
-    ):
-        result = process_downloaded_video(
-            video=_video(tmp_path),
-            request=_request(),
-            cancel_event=threading.Event(),
-            progress_callback=lambda *_: None,
-        )
-
-    assert result.transcript_source == "page_transcript"
-    assert result.transcript_error == "untimed_transcript"
-    assert result.transcript_text_path.read_text(encoding="utf-8") == page_text
 
 
 def _request_with_visible_transcript(text: str) -> CreateVideoJobRequest:
@@ -254,3 +192,26 @@ def test_a_failed_forced_alignment_still_falls_back_to_transcription(tmp_path: P
         )
 
     assert result.transcript_source == "elevenlabs"
+
+
+def test_supplied_text_is_saved_when_neither_alignment_nor_transcription_can_time_it(
+    tmp_path: Path,
+) -> None:
+    """Untimed text handed in is still worth writing, even with nothing left to time it."""
+    with patch(
+        "backend.services.video_download.web.transcript.align_text_to_media",
+        side_effect=RuntimeError("hosted API is down"),
+    ), patch(
+        "backend.services.video_download.web.pipeline.transcribe_with_elevenlabs",
+        side_effect=RuntimeError("hosted API is down"),
+    ):
+        result = process_downloaded_video(
+            video=_video(tmp_path),
+            request=_request_with_visible_transcript(ENGLISH_PAGE_TRANSCRIPT),
+            cancel_event=threading.Event(),
+            progress_callback=lambda *_: None,
+        )
+
+    assert result.transcript_source == "page_transcript"
+    assert result.transcript_error == "untimed_transcript"
+    assert result.transcript_text_path.read_text(encoding="utf-8") == ENGLISH_PAGE_TRANSCRIPT

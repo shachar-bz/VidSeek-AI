@@ -30,6 +30,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from yt_dlp.utils import DownloadCancelled
 
@@ -264,7 +265,7 @@ class JobManager:
             raise UnsupportedMediaError("DRM-protected media is not supported")
 
         if is_postgres_configured():
-            existing = PostgresVideoRecords().find_by_normalized_source_url(request.page_url)
+            existing = PostgresVideoRecords().find_by_normalized_source_url(request.source_identity_url)
             if existing is not None:
                 return self._create_deduplicated_job(request, existing, user_id=user_id)
 
@@ -273,6 +274,7 @@ class JobManager:
         # a second reader, so the YouTube pipeline always fetches for itself.
         direct_only = (
             not is_youtube
+            and not request.structured_candidates
             and bool(request.media_candidates)
             and all(candidate.kind == MediaKind.DIRECT for candidate in request.media_candidates)
         )
@@ -380,7 +382,21 @@ class JobManager:
             job = self._require(job_id)
             if job.status not in {JobStatus.FAILED, JobStatus.AWAITING_BROWSER_DOWNLOAD}:
                 raise JobStateConflictError("Job is not eligible for captured-request retry")
-            job.request.media_candidates = payload.media_candidates
+            selected = job.request.media_candidates
+            candidates = payload.media_candidates
+            if job.request.selected_media_id:
+                # A retry may observe sibling videos and ads. Only refresh URLs for the
+                # same resource path; if playback changed, require a fresh inspection.
+                paths = {(urlsplit(c.url).netloc, urlsplit(c.url).path) for c in selected}
+                candidates = [c for c in candidates if (urlsplit(c.url).netloc, urlsplit(c.url).path) in paths]
+                if not candidates:
+                    raise JobStateConflictError("Capture did not match the selected video; inspect it again")
+            elif len(candidates) > 1:
+                raise JobStateConflictError("Capture found multiple sources; inspect and choose a video")
+            job.request.media_candidates = candidates
+            # Captions from a page-wide capture are ambiguous with multiple videos.
+            if len(payload.media_candidates) == 1 and payload.caption_candidates:
+                job.request.caption_candidates = payload.caption_candidates
             job.request.browser_context = payload.browser_context
             job.status = JobStatus.QUEUED
             job.phase = JobPhase.DOWNLOAD
@@ -664,5 +680,6 @@ class JobManager:
             for candidate in job.request.media_candidates:
                 candidate.headers.clear()
             if not job.can_capture:
+                job.request.structured_candidates.clear()
                 for caption in job.request.caption_candidates:
                     caption.text = None

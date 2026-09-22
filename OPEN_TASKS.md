@@ -84,22 +84,7 @@ companion's memory, and a restart loses every job in flight.
 
 ---
 
-## 4. Firecrawl's containment check may reject valid transcripts
-
-**Status:** unverified. **Problem:** `scrape_public_page_transcript` accepts the extracted
-transcript only if it appears verbatim inside the returned markdown. With
-`onlyMainContent: true` the markdown usually carries speaker labels, timestamps and
-structure that the extraction drops, so the check may reject almost everything and the
-function may be dead in practice.
-
-**To close:** run it against two or three real transcript pages with a `FIRECRAWL_API_KEY`
-set and see whether it ever returns non-`None`. If it does not, compare normalized token
-overlap instead of requiring a substring. The check exists to stop a hallucinated
-transcript being persisted as fact, so it should be loosened, not removed.
-
----
-
-## 5. `discoverPage` has no automated test
+## 4. `discoverPage` has no automated test
 
 **Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers
 `classifyMediaUrl`, `originPatterns` and `chooseDirectCandidate`, but not `discoverPage`
@@ -117,7 +102,7 @@ scope — so a test also guards against the two copies drifting apart.
 
 ---
 
-## 6. A missing FFmpeg can yield a silent video
+## 5. A missing FFmpeg can yield a silent video
 
 **Status:** partly handled. **Problem:** `_download_options` sets
 `merge_output_format: "mp4/mkv"` with `no_warnings: True`. If ffmpeg is absent, yt-dlp
@@ -135,7 +120,7 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 7. Chapters, memories and embeddings — closed
+## 6. Chapters, memories and embeddings — closed
 
 **Status:** closed. Kept here because this entry was the longest-standing gap in the
 project and its absence would read as an oversight.

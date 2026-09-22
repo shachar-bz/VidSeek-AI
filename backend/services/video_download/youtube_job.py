@@ -22,9 +22,9 @@ from pathlib import Path
 from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
 
 from .web.pipeline import UNTIMED_TRANSCRIPT_ERROR, PipelineResult
-from .web.transcript import CaptionSegment, TranscriptArtifact, persist_transcript
+from .web.transcript import CaptionSegment, TranscriptArtifact, choose_supplied_transcript, persist_transcript
 from .youtube.pipeline import YouTubeDownloadResult, download_youtube_video
-from .youtube.transcript import CAPTIONS_SOURCE
+from .youtube.transcript import CAPTIONS_SOURCE, YouTubeTranscript
 
 # Where the download ends and the transcript begins, as a fraction of the job. The web
 # route reports the same split, so the extension's progress bar behaves identically.
@@ -95,23 +95,33 @@ def run_youtube_job(
                 "Downloading from YouTube",
             )
 
+    supplied = choose_supplied_transcript(
+        request.caption_candidates, request.preferred_language, request.media_duration_seconds
+    )
+    options = {}
+    if supplied and supplied.is_timed:
+        options["supplied_transcript"] = YouTubeTranscript(
+            source=CAPTIONS_SOURCE, text=supplied.text, segments=supplied.segments,
+            normalized=supplied.normalized,
+        )
     result = download_youtube_video(
         request.page_url,
         output_dir=download_root,
         caption_languages=_caption_languages(request),
+        **options,
         progress_hook=report,
         cancel_event=cancel_event,
     )
 
     progress_callback(JobPhase.TRANSCRIPT_LOOKUP, 0.8, "Saving transcript")
     video_path = Path(result.video_path)
-    artifact = _artifact(result)
+    artifact = supplied if supplied and supplied.is_timed else _artifact(result)
     text_path, json_path = persist_transcript(video_path, artifact)
     return PipelineResult(
         video_path=video_path,
         transcript_text_path=text_path,
         transcript_json_path=json_path,
-        transcript_source=result.transcript.source,
+        transcript_source=artifact.source,
         # A YouTube job has nowhere left to look for timing: captions and Scribe are both
         # already behind it. Reporting it as untimed is what stops a transcript the next
         # stage cannot use from being handed on as a finished one.
