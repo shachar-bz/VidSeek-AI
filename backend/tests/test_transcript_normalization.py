@@ -81,17 +81,17 @@ def test_overlapping_cues_never_produce_overlapping_segments() -> None:
     assert second.start_seconds == 5.0
 
 
-def test_a_cue_with_no_end_is_closed_at_the_next_cue_and_the_last_at_the_duration() -> None:
-    """TTML cues can carry a begin and no end; neither gap is filled by guessing."""
+def test_a_mid_transcript_cue_with_no_end_is_refused_rather_than_closed_at_the_next_cue() -> None:
+    """TTML cues can carry a begin and no end. Closing it at the next cue's start would
+    claim the speaker filled whatever pause sits between them, so the whole source is
+    refused instead — the caller falls back to forced alignment for text like this."""
     transcript = normalize_caption_cues(
         [WebCue(text="one.", start_seconds=0.0), WebCue(text="two.", start_seconds=6.0)],
         source="captions",
         media_duration_seconds=12.0,
     )
 
-    assert [(segment.start_seconds, segment.end_seconds) for segment in transcript.segments] == [
-        (0.0, 12.0)
-    ]
+    assert transcript is None
 
 
 def test_a_trailing_cue_with_nothing_to_close_it_is_given_a_reading_length() -> None:

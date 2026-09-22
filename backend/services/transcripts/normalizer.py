@@ -10,9 +10,12 @@ consecutive pieces into segments of a readable length.
 
 The rule that makes this safe is that a segment boundary is only ever a boundary the
 source itself measured. Pieces are merged, never split, so every start and end this module
-emits is a timestamp that came from the transcription service. Nothing is interpolated,
-and a transcript whose source measured no timing at all is rejected rather than given
-invented timing — see `TimingFidelity`.
+emits is a timestamp that came from the transcription service. Nothing is interpolated: a
+piece with no trustworthy end of its own is never closed at the next piece's start, since
+that would claim someone was speaking through whatever pause separates them. A transcript
+whose source measured no timing at all, or left a mid-transcript piece with no way to
+close it, is rejected rather than given invented timing — see `TimingFidelity` — so the
+caller can fall back to timing the same text against the audio instead.
 
 Where a segment ends is decided by, in order: a gap in the speech, the end of a sentence,
 and finally a length ceiling, so that a monologue with no pauses and no punctuation still
@@ -99,31 +102,38 @@ def _placeable(items: Iterable[TimedText] | None) -> list[tuple[str, float, floa
 
 
 def _clean(items: Iterable[TimedText] | None, media_duration_seconds: float | None) -> list[_Piece]:
-    """Put the placeable pieces in order, and repair the ends that need it.
+    """Put the placeable pieces in order, and refuse to close a gap by guessing.
 
-    A missing or backwards end is taken from the next piece's start, which is itself a
-    measured boundary. Only the final piece can run out of neighbours, and it falls back
-    to the media duration, or failing that to how long its own text takes to say — the one
-    estimate in this module, and one that moves a single end time by a second or two at
-    the very end of a video.
+    A missing or backwards end means the source never measured how long this piece lasted.
+    Closing it at the next piece's start would claim someone was speaking for the whole gap
+    between them, silence included, so that is not done — a piece like this is worth nothing
+    to this module unless it is the last one, with no next piece to wrongly claim speech up
+    to. The final piece alone falls back to the media duration, or failing that to how long
+    its own text takes to say — the one estimate this module makes, and one that moves a
+    single end time by a second or two at the very end of a video. Any other piece missing
+    an end fails the whole batch, telling the caller this source cannot be trusted as timed
+    so it can fall back to timing the same text against the audio instead.
 
-    Overlaps are trimmed the same way. Automatic caption tracks routinely emit a cue that
-    runs past the start of the one after it, which would otherwise produce segments whose
-    ranges overlap and a transcript that no longer reads as a sequence.
+    Overlaps are trimmed separately, and only once a piece's own end is trusted. Automatic
+    caption tracks routinely emit a cue that runs past the start of the one after it, which
+    would otherwise produce segments whose ranges overlap and a transcript that no longer
+    reads as a sequence.
     """
     placeable = sorted(_placeable(items), key=lambda piece: piece[1])
     pieces = []
     for position, (text, start, end) in enumerate(placeable):
         next_start = placeable[position + 1][1] if position + 1 < len(placeable) else None
-        if end is None or end <= start:
-            end = next_start
+        if end is not None and end <= start:
+            end = None
         if end is None:
+            if next_start is not None:
+                return []
             end = (
                 media_duration_seconds
                 if media_duration_seconds is not None and media_duration_seconds > start
                 else start + _estimated_reading_seconds(text)
             )
-        if next_start is not None:
+        elif next_start is not None:
             end = min(end, max(next_start, start))
         pieces.append(_Piece(text, start, max(end, start)))
     return pieces

@@ -82,9 +82,10 @@ def transcript_from_caption(candidate: CaptionCandidate, media_duration_seconds:
         segments, source="captions", language=candidate.language, media_duration_seconds=media_duration_seconds
     )
     # A track whose cues carry no times at all — TTML written with no `begin` attributes —
-    # parses into text that cannot be placed in the video. It is no better than a page
-    # transcript, so it is offered as one: still worth keeping as a last resort, but not
-    # something the pipeline may hand on as a timed transcript.
+    # or one whose end times cannot be trusted past the last cue, parses into text that
+    # cannot be placed in the video. It is no better than a page transcript, so it is
+    # offered as one: still worth keeping as a last resort — the pipeline aligns it against
+    # the audio instead — but not something it may hand on already timed.
     if normalized is None:
         return TranscriptArtifact(
             source="page_transcript",
