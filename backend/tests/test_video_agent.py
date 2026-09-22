@@ -1,7 +1,16 @@
 """Tests the agent's fixed model, tool set, citation check, and persisted-history conversion."""
 
+import asyncio
+
 import pytest
-from pydantic_ai import ModelRetry
+from pydantic_ai import (
+    AgentRunResultEvent,
+    ModelRetry,
+    PartDeltaEvent,
+    PartStartEvent,
+    UnexpectedModelBehavior,
+)
+from pydantic_ai.messages import TextPart, TextPartDelta
 
 from backend.storage.postgres import StoredMessage
 from backend.video_agent import runner
@@ -16,6 +25,57 @@ class FakeRunContext:
 
     def __init__(self, deps: ConversationDeps):
         self.deps = deps
+
+
+class FakeEventStream:
+    """One agent run's events, optionally ending the way a spent retry budget ends it."""
+
+    def __init__(self, events, failure=None):
+        self._events = events
+        self._failure = failure
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+    def __aiter__(self):
+        async def replay():
+            for event in self._events:
+                yield event
+            if self._failure is not None:
+                raise self._failure
+
+        return replay()
+
+
+class FakeStreamingAgent:
+    def __init__(self, events, failure=None):
+        self._events = events
+        self._failure = failure
+
+    def run_stream_events(self, prompt, *, deps, message_history):
+        return FakeEventStream(self._events, self._failure)
+
+
+def _written(text: str):
+    return [
+        PartStartEvent(index=0, part=TextPart(content="")),
+        PartDeltaEvent(index=0, delta=TextPartDelta(content_delta=text)),
+    ]
+
+
+def _run(agent, deps) -> list:
+    async def collect():
+        return [
+            event
+            async for event in runner.PydanticConversationAgentRunner(agent).stream(
+                "question", history=[], deps=deps
+            )
+        ]
+
+    return asyncio.run(collect())
 
 
 def test_agent_selects_the_requested_model_and_all_five_tools(monkeypatch) -> None:
@@ -102,3 +162,44 @@ def test_a_refused_answer_is_kept_so_it_can_be_delivered_without_its_bad_citatio
 
     assert deps.draft.rejected is True
     assert deps.draft.verifiable_text() == "Grounded. [12:14] Invented."
+
+
+def test_no_text_reaches_the_reader_before_the_checked_answer_does() -> None:
+    deps = ConversationDeps(video_id="video")
+    answer = "The model is used last. [12:14]"
+    agent = FakeStreamingAgent(
+        [*_written(answer), AgentRunResultEvent(result=_FakeResult(answer))]
+    )
+
+    emitted = _run(agent, deps)
+
+    assert [event.text for event in emitted] == [answer]
+
+
+def test_an_answer_that_never_passed_the_check_is_delivered_without_its_citations() -> None:
+    deps = ConversationDeps(video_id="video")
+    deps.draft.spans = list(RETRIEVED)
+    deps.draft.rejected = True
+    agent = FakeStreamingAgent(
+        _written("Grounded. [12:14] Invented. [13:05]"),
+        failure=UnexpectedModelBehavior("Exceeded maximum output retries (1)"),
+    )
+
+    emitted = _run(agent, deps)
+
+    assert [event.text for event in emitted] == ["Grounded. [12:14] Invented."]
+
+
+def test_unexpected_behaviour_that_is_not_a_refused_citation_still_fails() -> None:
+    deps = ConversationDeps(video_id="video")
+    agent = FakeStreamingAgent(
+        _written("Half an answer"), failure=UnexpectedModelBehavior("Received empty response")
+    )
+
+    with pytest.raises(UnexpectedModelBehavior):
+        _run(agent, deps)
+
+
+class _FakeResult:
+    def __init__(self, output: str):
+        self.output = output
