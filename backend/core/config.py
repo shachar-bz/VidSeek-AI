@@ -42,7 +42,8 @@ def require(name: str) -> str:
     """Return a configuration value, or explain where to put it if it is missing.
 
     Raising at the point of use rather than at import time is deliberate: a service that
-    never calls Firecrawl should still start on a machine with no FIRECRAWL_API_KEY.
+    never touches Blob Storage should still start on a machine with no
+    AZURE_STORAGE_CONNECTION_STRING.
     """
     value = get(name)
     if not value:

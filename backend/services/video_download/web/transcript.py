@@ -1,18 +1,13 @@
-"""Transcript selection, parsing, Firecrawl extraction, and artifact persistence."""
+"""Transcript selection, parsing, and artifact persistence."""
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
-import requests
-
-from backend.core import config
 from backend.core.captions import CaptionSegment, parse_ttml, parse_webvtt_or_srt
 from backend.storage import transcript_store
 from backend.schemas.browser import CaptionCandidate
@@ -26,8 +21,6 @@ from backend.services.transcripts import (
 
 from .structured import parse_json_captions
 
-FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
-FIRECRAWL_API_KEY_NAME = "FIRECRAWL_API_KEY"
 MIN_VISIBLE_TRANSCRIPT_CHARACTERS = 80
 FORCED_ALIGNMENT_SOURCE = "forced_alignment"
 
@@ -142,69 +135,6 @@ def transcript_from_subtitle_files(paths: list[Path]) -> TranscriptArtifact | No
         if result:
             return result
     return None
-
-
-def _firecrawl_api_key() -> str | None:
-    return config.get(FIRECRAWL_API_KEY_NAME)
-
-
-def _comparable_text(value: str) -> str:
-    value = re.sub(r"[*_`#>\[\]()]", " ", value)
-    return " ".join(value.split()).casefold()
-
-
-def _without_credentials_in_query(page_url: str) -> str:
-    """Drop the query and fragment, which carry this session's signed parameters."""
-    parsed = urlsplit(page_url)
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
-
-
-def scrape_public_page_transcript(page_url: str, timeout_seconds: float = 65.0) -> str | None:
-    """Extract a verbatim public transcript without sending browser credentials."""
-    api_key = _firecrawl_api_key()
-    if not api_key:
-        return None
-    public_url = _without_credentials_in_query(page_url)
-    schema = {
-        "type": "object",
-        "properties": {
-            "transcript_found": {"type": "boolean"},
-            "transcript_text": {"type": "string"},
-        },
-        "required": ["transcript_found", "transcript_text"],
-    }
-    response = requests.post(
-        FIRECRAWL_ENDPOINT,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "url": public_url,
-            "formats": [
-                "markdown",
-                {
-                    "type": "json",
-                    "schema": schema,
-                    "prompt": (
-                        "Return only the complete verbatim spoken transcript or captions "
-                        "published on this page. Do not summarize or invent missing text."
-                    ),
-                },
-            ],
-            "onlyMainContent": True,
-            "storeInCache": False,
-            "timeout": 60_000,
-        },
-        timeout=timeout_seconds,
-    )
-    response.raise_for_status()
-    data = response.json().get("data") or {}
-    extracted = data.get("json") or {}
-    transcript_text = " ".join(str(extracted.get("transcript_text") or "").split())
-    markdown = str(data.get("markdown") or "")
-    if not extracted.get("transcript_found") or not transcript_text:
-        return None
-    if _comparable_text(transcript_text) not in _comparable_text(markdown):
-        return None
-    return transcript_text
 
 
 def transcribe_with_elevenlabs(video_path: Path) -> TranscriptArtifact:

@@ -7,7 +7,6 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
 from yt_dlp.utils import DownloadCancelled
 
 from backend.schemas.browser import CaptionCandidate
@@ -22,7 +21,6 @@ from .transcript import (
     align_supplied_transcript,
     choose_supplied_transcript,
     persist_transcript,
-    scrape_public_page_transcript,
     transcript_from_subtitle_files,
     transcribe_with_elevenlabs,
 )
@@ -101,24 +99,6 @@ def _raise_if_cancelled(cancel_event: threading.Event) -> None:
         raise DownloadCancelled("Job cancelled")
 
 
-def _untimed_text(page_url: str, parked: TranscriptArtifact | None) -> TranscriptArtifact | None:
-    """The best untimed text still available, for when no timing could be produced.
-
-    A transcript published on the page is text somebody wrote out, with nothing saying
-    when any of it was said. It cannot meet the pipeline's contract, so it is no longer
-    raced against the captions: it is what is left to save when the captions were untimed
-    and transcription came back with nothing, and it costs a Firecrawl call only then
-    rather than on every uncaptioned video.
-    """
-    if parked is not None:
-        return parked
-    try:
-        page_text = scrape_public_page_transcript(page_url)
-    except (requests.RequestException, ValueError):
-        return None
-    return TranscriptArtifact(source="page_transcript", text=page_text) if page_text else None
-
-
 def _transcribe_downloaded_video(
     *,
     video: DownloadedVideo,
@@ -165,9 +145,9 @@ def _transcribe_downloaded_video(
             artifact, transcription_failure = None, error
 
         if artifact is None or not artifact.is_timed:
-            # Transcription either failed or measured nothing. Whatever untimed text is
-            # left is still worth writing, and is looked for exactly once.
-            artifact = _untimed_text(request.page_url, supplied) or artifact
+            # Transcription either failed or measured nothing. Whatever untimed text was
+            # supplied earlier is still worth writing, rather than losing it outright.
+            artifact = supplied or artifact
         if artifact is None:
             # Nothing was transcribed and there is no text to fall back on, so the
             # transcription failure is the whole story and belongs to the caller.

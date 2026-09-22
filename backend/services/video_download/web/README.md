@@ -13,7 +13,6 @@ when captions or a published transcript are unavailable.
    ```dotenv
    VIDSEEK_EXTENSION_IDS=the_extension_id
    ELEVENLABS_API_KEY_TRANSCRIPT=your_key
-   FIRECRAWL_API_KEY=your_key
    # Optional; this must match Chrome's Downloads/VidSeek directory.
    VIDSEEK_DOWNLOAD_ROOT=C:\Users\you\Downloads\VidSeek
    # Required for a job to finish: Blob Storage is where a finished video is uploaded,
@@ -39,10 +38,8 @@ when captions or a published transcript are unavailable.
    ```
 
 By default the service refuses non-loopback clients, private network targets, live streams,
-and DRM-protected media. Firecrawl receives the page URL
-with its query string and fragment removed, so this session's signed parameters stay local;
-Chrome cookies and captured request headers are kept on the machine and discarded after the
-job.
+and DRM-protected media. Chrome cookies and captured request headers are kept on the machine
+and discarded after the job.
 
 ## Hosted API
 
