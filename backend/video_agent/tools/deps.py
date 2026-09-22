@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from ..citations import AnswerDraft
 
 
 @dataclass
@@ -11,6 +13,12 @@ class ConversationDeps:
 
     video_id: str
     timestamps_reliable: bool = True
+
+    # Shared, and deliberately mutable: the runner fills it as the agent retrieves and
+    # writes, the citation check reads it to decide what the answer may claim, and the API
+    # falls back to it when a run ends with no checked answer to send. All three need the
+    # same per-run record, and deps is the one thing all three already hold.
+    draft: AnswerDraft = field(default_factory=AnswerDraft)
 
     # The connection pool every tool's store is built on, rather than a store per tool: a
     # store holds nothing but its pool, so injecting one per table would be injecting the
