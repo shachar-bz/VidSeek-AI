@@ -30,6 +30,7 @@ import { getPinnedAnswers, pinAnswer, unpinAnswer } from "../../api/video";
 import { Button, Dialog, EmptyState, Panel } from "../../components/ui";
 import { videoPath } from "../../routes";
 import { featureFailureMessage } from "../shared";
+import { splitMessageCitations } from "./format";
 import { beginGeneration, applyStreamEvent, endIncompleteStream, type LiveGeneration } from "./streamState";
 import { ToolTrace } from "./ToolTrace";
 
@@ -72,27 +73,66 @@ export function chatUnavailableMessage(stage: VideoDetail["stage"]): string | nu
   return `${stage.charAt(0).toUpperCase() + stage.slice(1)} is in progress. Questions become available when processing completes.`;
 }
 
+export function AnswerText({
+  content,
+  approximate,
+  onSeek
+}: {
+  content: string;
+  approximate: boolean;
+  onSeek(seconds: number): void;
+}) {
+  return (
+    <>
+      {splitMessageCitations(content).map((segment, index) => segment.kind === "citation" ? (
+        <button
+          key={index}
+          className={approximate ? "chat-message__timestamp chat-message__timestamp--approximate" : "chat-message__timestamp"}
+          type="button"
+          title={approximate ? "Seek using this approximate timestamp" : "Seek to this timestamp"}
+          onClick={() => onSeek(segment.seconds)}
+        >
+          {segment.text}
+        </button>
+      ) : <span key={index}>{segment.text}</span>)}
+    </>
+  );
+}
+
 function MessageCard({
   message,
   pinPending,
   pinDisabled,
+  approximate,
+  onSeek,
   onTogglePin
 }: {
   message: ConversationMessage;
   pinPending: boolean;
   pinDisabled: boolean;
+  approximate: boolean;
+  onSeek(seconds: number): void;
   onTogglePin(message: ConversationMessage): void;
 }) {
+  const assistant = message.role === "assistant";
   return (
     <article className={`chat-message chat-message--${message.role}`}>
-      <header><span>{message.role === "user" ? "You" : "VidSeek"}</span>{message.role === "assistant" ? <Button variant="ghost" pending={pinPending} disabled={pinDisabled} onClick={() => onTogglePin(message)}>{message.pinned ? "Unpin" : "Pin answer"}</Button> : null}</header>
-      <div className="chat-message__content">{message.content || (message.role === "assistant" ? "Waiting for an answer…" : "")}</div>
-      {message.role === "assistant" ? <ToolTrace calls={message.tool_trace} /> : null}
+      <header><span>{assistant ? "VidSeek" : "You"}</span>{assistant ? <Button variant="ghost" pending={pinPending} disabled={pinDisabled} onClick={() => onTogglePin(message)}>{message.pinned ? "Unpin" : "Pin answer"}</Button> : null}</header>
+      <div className="chat-message__content">{!message.content ? (assistant ? "Waiting for an answer…" : "") : assistant ? <AnswerText content={message.content} approximate={approximate} onSeek={onSeek} /> : message.content}</div>
+      {assistant ? <ToolTrace calls={message.tool_trace} /> : null}
     </article>
   );
 }
 
-export function ConversationWorkspace({ video }: { video: VideoDetail }) {
+export function ConversationWorkspace({
+  video,
+  approximate,
+  onSeek
+}: {
+  video: VideoDetail;
+  approximate: boolean;
+  onSeek(seconds: number): void;
+}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const selectedId = searchParams.get("conversation");
@@ -356,14 +396,14 @@ export function ConversationWorkspace({ video }: { video: VideoDetail }) {
           <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
           {!selectedId ? <EmptyState title="Start a new chat" description="Ask VidSeek anything about this video." action={<Button variant="primary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}>{creating ? "Creating…" : "New chat"}</Button>} /> : !detail ? <p className="muted-text">Loading chat…</p> : <>
             <form className="conversation-title-form" onSubmit={saveRename}><input aria-label="Chat title" maxLength={200} value={renameDraft} placeholder="New chat" onChange={(event) => setRenameDraft(event.target.value)} /><Button variant="ghost" pending={renaming} type="submit" disabled={!renameDraft.trim()}>Rename</Button>{selectedSummary ? <Button className="danger-button" variant="ghost" onClick={() => setDeleting(selectedSummary)}>Delete</Button> : null}</form>
-            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} onTogglePin={(item) => void togglePin(item)} />)}</div>
+            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
             <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" disabled={!canChat || !draft.trim()}>Send</Button>}</div></form>
           </>}
         </Panel>
         <Panel className="chat-sidebar">
           <Button className="new-chat-button" variant="secondary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}><span aria-hidden="true">＋</span>{creating ? "Creating…" : "New chat"}</Button>
-          <section className="pins-panel" aria-labelledby="pinned-answers-heading"><div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>{pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p>{pin.content}</p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source chat</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}</section>
+          <section className="pins-panel" aria-labelledby="pinned-answers-heading"><div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>{pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p className="chat-message__content"><AnswerText content={pin.content} approximate={approximate} onSeek={onSeek} /></p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source chat</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}</section>
           <section className="conversation-list-panel" aria-labelledby="recents-heading"><div className="chat-sidebar__heading"><h2 id="recents-heading">Recents</h2></div>{loading ? <p className="muted-text">Loading chats…</p> : conversations.length === 0 ? <p className="muted-text">No chats yet.</p> : <ol className="conversation-list">{conversations.map((conversation) => <li key={conversation.conversation_id} className={conversation.conversation_id === selectedId ? "conversation-list__item conversation-list__item--active" : "conversation-list__item"}><button type="button" onClick={() => navigate(videoPath(video.video_id, conversation.conversation_id))}><strong>{conversation.title ?? "New chat"}</strong><span>{formatLastUsed(conversation.updated_at)}</span></button><Button variant="ghost" aria-label={`Delete ${conversation.title ?? "chat"}`} onClick={() => setDeleting(conversation)}>×</Button></li>)}</ol>}</section>
         </Panel>
       </div>

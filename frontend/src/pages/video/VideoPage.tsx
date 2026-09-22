@@ -110,7 +110,7 @@ export function VideoPage() {
           <VideoPlayer videoId={videoId} available={browsing} title={video.title} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
           <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
         </div>
-        <ConversationWorkspace video={video} />
+        <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} />
       </div>
     </div>
   );

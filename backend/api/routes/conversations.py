@@ -263,14 +263,23 @@ async def _answer_stream(
     yield _sse(MessageStartEvent(user_message_id=user_message.id, message_id=assistant.id))
 
     queue: asyncio.Queue[tuple[str, object | None]] = asyncio.Queue()
+    deps = ConversationDeps(
+        video_id=conversation.video_id,
+        timestamps_reliable=timestamps_reliable,
+        pool=getattr(messages, "_pool", None),
+    )
+
+    def delivered() -> str:
+        """The answer to keep, whether or not the run got to finish one.
+
+        A checked answer arrives whole and becomes `content`. Until it does there is nothing
+        to show but the draft the agent was still writing, and no chance to ask it to fix a
+        citation, so the draft is handed back with only the citations it can support.
+        """
+        return content or deps.draft.verifiable_text()
 
     async def produce() -> None:
         try:
-            deps = ConversationDeps(
-                video_id=conversation.video_id,
-                timestamps_reliable=timestamps_reliable,
-                pool=getattr(messages, "_pool", None),
-            )
             async for event in runner.stream(prompt, history=history, deps=deps):
                 await queue.put(("event", event))
         except asyncio.CancelledError:
@@ -293,10 +302,11 @@ async def _answer_stream(
                 producer.cancel()
                 with suppress(asyncio.CancelledError):
                     await producer
+                kept = delivered()
                 persisted = await _finalize(
-                    generation, assistant.id, content, trace, messages
+                    generation, assistant.id, kept, trace, messages
                 )
-                _maybe_title(first_exchange, conversation, prompt, content, conversations)
+                _maybe_title(first_exchange, conversation, prompt, kept, conversations)
                 completed = True
                 yield _sse(StoppedEvent(message=_message(persisted, pinned=False)))
                 return
@@ -332,8 +342,9 @@ async def _answer_stream(
                     )
                     yield _sse(ToolResultEvent(call=trace[index]))
             elif kind == "error":
-                await _finalize(generation, assistant.id, content, trace, messages)
-                _maybe_title(first_exchange, conversation, prompt, content, conversations)
+                kept = delivered()
+                await _finalize(generation, assistant.id, kept, trace, messages)
+                _maybe_title(first_exchange, conversation, prompt, kept, conversations)
                 completed = True
                 yield _sse(ErrorEvent(message="Unable to finish the answer."))
                 return
@@ -351,8 +362,9 @@ async def _answer_stream(
             with suppress(asyncio.CancelledError):
                 await producer
         if not completed:
-            await _finalize(generation, assistant.id, content, trace, messages)
-            _maybe_title(first_exchange, conversation, prompt, content, conversations)
+            kept = delivered()
+            await _finalize(generation, assistant.id, kept, trace, messages)
+            _maybe_title(first_exchange, conversation, prompt, kept, conversations)
         await generations.finish(conversation.id, generation)
 
 

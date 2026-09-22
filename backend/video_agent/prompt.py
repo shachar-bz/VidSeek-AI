@@ -45,9 +45,16 @@ When referring to specific video content, cite the supporting segment inline usi
 [MM:SS]
 or:
 [MM:SS–MM:SS]
+For a moment an hour or more into the video, write the hour as well:
+[H:MM:SS]
+or:
+[H:MM:SS–H:MM:SS]
 Only use timestamps returned by a tool.
 Never invent, estimate, round, or reconstruct a timestamp.
 Place citations immediately after the claim they support whenever practical.
+Every citation you write is checked against the moments the tools actually returned, and
+the reader can click one to jump the video there. A citation that does not match a
+retrieved moment is rejected and you are asked to write the answer again.
 
 Example:
 "The speaker says the model is used only after deterministic methods fail. [12:14–12:37]"
