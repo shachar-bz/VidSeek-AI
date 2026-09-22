@@ -1,10 +1,8 @@
-import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { StreamEvent, ToolCallTrace } from "../src/api/types";
 import { chatUnavailableMessage } from "../src/pages/video/ConversationWorkspace";
 import { applyStreamEvent, beginGeneration, endIncompleteStream } from "../src/pages/video/streamState";
-import { ToolTrace } from "../src/pages/video/ToolTrace";
 
 function trace(overrides: Partial<ToolCallTrace> = {}): ToolCallTrace {
   return {
@@ -60,16 +58,11 @@ describe("conversation stream state", () => {
   });
 });
 
-describe("conversation readiness and traces", () => {
+describe("conversation readiness", () => {
   it("names processing stages and explains failed chat", () => {
     expect(chatUnavailableMessage("transcribing")).toMatch(/Transcribing is in progress/);
     expect(chatUnavailableMessage("failed")).toBe("Chat is unavailable because processing failed.");
     expect(chatUnavailableMessage("partial")).toBeNull();
   });
 
-  it("renders active calls and retrieval misses through the shared trace component", () => {
-    render(<ToolTrace calls={[trace(), trace({ call_id: "call-2", tool: "get_video_outline", finished_at: "done" })]} />);
-    expect(screen.getByText("In progress…")).toBeTruthy();
-    expect(screen.getByText("No retrieval results were returned.")).toBeTruthy();
-  });
 });

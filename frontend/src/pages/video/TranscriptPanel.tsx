@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { TranscriptLine, VideoTranscript } from "../../api/types";
+import type { VideoTranscript } from "../../api/types";
 import { Button, EmptyState, Panel } from "../../components/ui";
-import { formatTimestamp, transcriptLineText } from "./format";
+import { formatTimestamp } from "./format";
 
-async function copyText(value: string): Promise<void> {
-  await navigator.clipboard.writeText(value);
+/** Keeps the spoken line in view without scrolling the page around the transcript. */
+function scrollLineIntoView(list: HTMLOListElement, line: HTMLLIElement) {
+  const target = line.offsetTop - (list.clientHeight - line.clientHeight) / 2;
+  const top = Math.max(0, Math.min(target, list.scrollHeight - list.clientHeight));
+  if (typeof list.scrollTo === "function") list.scrollTo({ top, behavior: "smooth" });
+  else list.scrollTop = top;
 }
 
 export interface TranscriptPanelProps {
@@ -24,46 +28,24 @@ export function TranscriptPanel({
   onSeek
 }: TranscriptPanelProps) {
   const lines = transcript?.lines ?? [];
-  const [selected, setSelected] = useState<Set<number>>(() => new Set());
-  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
   const [following, setFollowing] = useState(true);
-  const [copyStatus, setCopyStatus] = useState("");
+  const listRef = useRef<HTMLOListElement | null>(null);
   const lineRefs = useRef(new Map<number, HTMLLIElement>());
 
   useEffect(() => {
     if (!following || activeIndex < 0) return;
-    lineRefs.current.get(activeIndex)?.scrollIntoView?.({ block: "nearest" });
+    const list = listRef.current;
+    const line = lineRefs.current.get(activeIndex);
+    if (list && line) scrollLineIntoView(list, line);
   }, [activeIndex, following]);
 
   useEffect(() => {
-    setSelected(new Set());
-    setSelectionAnchor(null);
+    setFollowing(true);
   }, [transcript?.video_id]);
 
-  function updateSelection(index: number, checked: boolean, shiftKey: boolean) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (shiftKey && selectionAnchor !== null) {
-        const start = Math.min(selectionAnchor, index);
-        const end = Math.max(selectionAnchor, index);
-        for (let cursor = start; cursor <= end; cursor += 1) {
-          if (checked) next.add(cursor);
-          else next.delete(cursor);
-        }
-      } else if (checked) next.add(index);
-      else next.delete(index);
-      return next;
-    });
-    setSelectionAnchor(index);
-  }
-
-  async function copyLines(linesToCopy: TranscriptLine[]) {
-    try {
-      await copyText(linesToCopy.map((line) => transcriptLineText(line, approximate)).join("\n"));
-      setCopyStatus(linesToCopy.length === 1 ? "Line copied" : `${linesToCopy.length} lines copied`);
-    } catch {
-      setCopyStatus("Copy failed. Select the transcript text and copy it manually.");
-    }
+  function seekToLine(seconds: number) {
+    setFollowing(true);
+    onSeek(seconds);
   }
 
   if (lines.length === 0) {
@@ -85,27 +67,21 @@ export function TranscriptPanel({
           <h2>Transcript</h2>
           <p>{lines.length.toLocaleString()} lines · {transcript?.timing_fidelity ?? "unknown"} timing</p>
         </div>
-        <div className="transcript-actions">
-          {!following ? <Button variant="ghost" onClick={() => setFollowing(true)}>Follow playback</Button> : null}
-          <Button
-            variant="ghost"
-            disabled={selected.size === 0}
-            onClick={() => void copyLines(lines.filter((_, index) => selected.has(index)))}
-          >
-            Copy selected ({selected.size})
-          </Button>
-        </div>
+        {!following ? (
+          <div className="transcript-actions">
+            <Button variant="ghost" onClick={() => setFollowing(true)}>Follow playback</Button>
+          </div>
+        ) : null}
       </div>
-      {approximate ? <p className="inline-notice">Timestamps are approximate for this partial result. Seeking and copied timestamp references may be inaccurate.</p> : null}
-      <p className="visually-hidden" aria-live="polite">{copyStatus}</p>
+      {approximate ? <p className="inline-notice">Timestamps are approximate for this partial result. Seeking may be inaccurate.</p> : null}
       <ol
         className="transcript-lines"
+        ref={listRef}
         onWheel={() => setFollowing(false)}
-        onPointerDown={() => setFollowing(false)}
+        onTouchMove={() => setFollowing(false)}
       >
         {lines.map((line, index) => {
           const active = index === activeIndex;
-          const selectedLine = selected.has(index);
           return (
             <li
               key={`${line.index}-${line.start_seconds}`}
@@ -116,34 +92,14 @@ export function TranscriptPanel({
               className={active ? "transcript-line transcript-line--active" : "transcript-line"}
               aria-current={active ? "true" : undefined}
             >
-              <input
-                type="checkbox"
-                aria-label={`Select transcript line ${index + 1}`}
-                checked={selectedLine}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  updateSelection(
-                    index,
-                    event.target.checked,
-                    Boolean((event.nativeEvent as unknown as { shiftKey?: boolean }).shiftKey)
-                  )
-                }
-              />
               <button
-                className="transcript-line__time"
+                className="transcript-line__body"
                 type="button"
                 title={approximate ? "Seek using this approximate timestamp" : "Seek to this timestamp"}
-                onClick={() => onSeek(line.start_seconds)}
+                onClick={() => seekToLine(line.start_seconds)}
               >
-                {approximate ? "≈" : ""}{formatTimestamp(line.start_seconds)}
-              </button>
-              <span>{line.text}</span>
-              <button
-                className="transcript-line__copy"
-                type="button"
-                aria-label={`Copy transcript line ${index + 1}`}
-                onClick={() => void copyLines([line])}
-              >
-                Copy
+                <span className="transcript-line__time">{approximate ? "≈" : ""}{formatTimestamp(line.start_seconds)}</span>
+                <span className="transcript-line__text">{line.text}</span>
               </button>
             </li>
           );

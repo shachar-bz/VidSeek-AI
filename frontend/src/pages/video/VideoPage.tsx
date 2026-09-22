@@ -107,7 +107,7 @@ export function VideoPage() {
       {artifactError ? <div className="inline-notice" role="status">{artifactError}</div> : null}
       <div className="video-workspace-grid">
         <div className="video-viewer-column">
-          <VideoPlayer videoId={videoId} available={browsing} title={video.title} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
+          <VideoPlayer videoId={videoId} available={browsing} title={video.title} captionLines={transcript?.lines} captionLanguage={video.transcript_language} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
           <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
         </div>
         <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} />
