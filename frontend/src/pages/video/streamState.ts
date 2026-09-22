@@ -46,7 +46,7 @@ function protocolError(state: LiveGeneration): LiveGeneration {
   return {
     ...state,
     terminal: "error",
-    error: "The answer stream ended unexpectedly. Reopen the conversation to check the saved response."
+    error: "The answer stream ended unexpectedly. Reopen the chat to check the saved response."
   };
 }
 

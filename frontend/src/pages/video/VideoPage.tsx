@@ -6,9 +6,8 @@ import { getVideo, getVideoOutline, getVideoTranscript } from "../../api/video";
 import { ErrorState, LoadingState, StatusBadge, type StatusTone } from "../../components/ui";
 import { ROUTES } from "../../routes";
 import { featureFailureMessage } from "../shared";
-import { ConversationWorkspace, type SuggestedQuestionRequest } from "./ConversationWorkspace";
-import { InsightsPanel, OutlinePanel } from "./OutlineInsights";
-import { TranscriptPanel } from "./TranscriptPanel";
+import { ConversationWorkspace } from "./ConversationWorkspace";
+import { VideoDetailsTabs } from "./OutlineInsights";
 import { VideoPlayer } from "./VideoPlayer";
 import { activeTranscriptIndex } from "./format";
 
@@ -34,7 +33,6 @@ export function VideoPage() {
   const [reloadVersion, setReloadVersion] = useState(0);
   const [activeLineIndex, setActiveLineIndex] = useState(-1);
   const activeLineIndexRef = useRef(-1);
-  const [suggestedQuestion, setSuggestedQuestion] = useState<SuggestedQuestionRequest | null>(null);
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const rememberPlayer = useCallback((player: HTMLVideoElement | null) => { playerRef.current = player; }, []);
 
@@ -90,10 +88,6 @@ export function VideoPage() {
     setActiveLineIndex(next);
   }
 
-  function handleSuggestedQuestion(question: string) {
-    setSuggestedQuestion((current) => ({ requestId: (current?.requestId ?? 0) + 1, text: question }));
-  }
-
   if (loading && !video) return <LoadingState label="Loading video…" />;
   if (error || !video) return <ErrorState title="Unable to load video" message={error ?? "This video is unavailable."} actionLabel="Try again" onAction={() => setReloadVersion((current) => current + 1)} />;
 
@@ -111,15 +105,13 @@ export function VideoPage() {
       {approximate ? <div className="inline-notice" role="status"><strong>Partial transcript:</strong> timestamps, seeking, and timestamp-like references in answers may be unreliable. All video features remain available.</div> : null}
       {video.stage === "failed" ? <div className="inline-notice" role="alert">Processing failed. Chat is unavailable, and video artifacts may be incomplete.</div> : null}
       {artifactError ? <div className="inline-notice" role="status">{artifactError}</div> : null}
-      <VideoPlayer videoId={videoId} available={browsing} title={video.title} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
-      <div className="video-content-grid">
-        <TranscriptPanel transcript={transcript} activeIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
-        <div className="video-content-grid__side">
-          <OutlinePanel outline={outline} stageLabel={stageLabel(video.stage)} approximate={approximate} onSeek={seek} />
-          <InsightsPanel video={video} onSuggestedQuestion={handleSuggestedQuestion} />
+      <div className="video-workspace-grid">
+        <div className="video-viewer-column">
+          <VideoPlayer videoId={videoId} available={browsing} title={video.title} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
+          <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
         </div>
+        <ConversationWorkspace video={video} />
       </div>
-      <ConversationWorkspace video={video} suggestedQuestion={suggestedQuestion} />
     </div>
   );
 }

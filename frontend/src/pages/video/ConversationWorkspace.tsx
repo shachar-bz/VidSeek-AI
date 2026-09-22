@@ -33,11 +33,6 @@ import { featureFailureMessage } from "../shared";
 import { beginGeneration, applyStreamEvent, endIncompleteStream, type LiveGeneration } from "./streamState";
 import { ToolTrace } from "./ToolTrace";
 
-export interface SuggestedQuestionRequest {
-  requestId: number;
-  text: string;
-}
-
 function summaryFromDetail(detail: ConversationDetail): ConversationSummary {
   return {
     conversation_id: detail.conversation_id,
@@ -59,6 +54,16 @@ function formatLastUsed(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+export function starterQuestionsForVideo(video: Pick<VideoDetail, "title" | "insights">): string[] {
+  const generated = video.insights?.suggested_questions ?? [];
+  const fallbacks = [
+    `What are the main ideas in “${video.title}”?`,
+    "What are the most important details to remember?",
+    "Can you explain the key concepts with examples?"
+  ];
+  return Array.from(new Set([...generated, ...fallbacks])).slice(0, 3);
 }
 
 export function chatUnavailableMessage(stage: VideoDetail["stage"]): string | null {
@@ -87,13 +92,7 @@ function MessageCard({
   );
 }
 
-export function ConversationWorkspace({
-  video,
-  suggestedQuestion
-}: {
-  video: VideoDetail;
-  suggestedQuestion: SuggestedQuestionRequest | null;
-}) {
+export function ConversationWorkspace({ video }: { video: VideoDetail }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const selectedId = searchParams.get("conversation");
@@ -116,7 +115,7 @@ export function ConversationWorkspace({
   const generationRef = useRef(0);
   const streamControllerRef = useRef<AbortController | null>(null);
   const draftConversationRef = useRef<string | null>(null);
-  const handledSuggestionRef = useRef(0);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const canChat = allowsChat(video.stage);
 
   const updateLive = useCallback((next: LiveGeneration | null) => {
@@ -135,7 +134,7 @@ export function ConversationWorkspace({
     setWorkspaceError(null);
     void Promise.all([loadConversationList(controller.signal), getPinnedAnswers(video.video_id, controller.signal).then((response) => setPins(response.pins))])
       .catch((caught: unknown) => {
-        if (!controller.signal.aborted) setWorkspaceError(featureFailureMessage(caught, "Conversations and pins could not be loaded."));
+        if (!controller.signal.aborted) setWorkspaceError(featureFailureMessage(caught, "Chats and pins could not be loaded."));
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -161,12 +160,12 @@ export function ConversationWorkspace({
     setWorkspaceError(null);
     getConversation(selectedId, controller.signal)
       .then((response) => {
-        if (response.video_id !== video.video_id) throw new Error("This conversation belongs to another video.");
+        if (response.video_id !== video.video_id) throw new Error("This chat belongs to another video.");
         setDetail(response);
         setRenameDraft(response.title ?? "");
       })
       .catch((caught: unknown) => {
-        if (!controller.signal.aborted) setWorkspaceError(featureFailureMessage(caught, "This conversation could not be loaded."));
+        if (!controller.signal.aborted) setWorkspaceError(featureFailureMessage(caught, "This chat could not be loaded."));
       });
     return () => controller.abort();
   }, [selectedId, updateLive, video.video_id]);
@@ -182,17 +181,11 @@ export function ConversationWorkspace({
       setDraft(prefill);
       navigate(videoPath(video.video_id, created.conversation_id));
     } catch (caught) {
-      setWorkspaceError(featureFailureMessage(caught, "A new conversation could not be created."));
+      setWorkspaceError(featureFailureMessage(caught, "A new chat could not be created."));
     } finally {
       setCreating(false);
     }
   }, [canChat, navigate, video.video_id]);
-
-  useEffect(() => {
-    if (!suggestedQuestion || suggestedQuestion.requestId === handledSuggestionRef.current) return;
-    handledSuggestionRef.current = suggestedQuestion.requestId;
-    void startNewConversation(suggestedQuestion.text);
-  }, [startNewConversation, suggestedQuestion]);
 
   function commitLiveToHistory(current: LiveGeneration, terminalMessage?: ConversationMessage) {
     setDetail((existing) => existing ? {
@@ -237,7 +230,7 @@ export function ConversationWorkspace({
             }
           } catch (caught) {
             if (generationRef.current === generation) {
-              setWorkspaceError(featureFailureMessage(caught, "The answer was saved, but conversation details could not be refreshed."));
+              setWorkspaceError(featureFailureMessage(caught, "The answer was saved, but chat details could not be refreshed."));
             }
           }
         } else if (next.terminal === "error") {
@@ -318,7 +311,7 @@ export function ConversationWorkspace({
       setConversations((current) => newestFirst(current.map((item) => item.conversation_id === renamed.conversation_id ? renamed : item)));
       setDetail((current) => current ? { ...current, title: renamed.title, updated_at: renamed.updated_at } : current);
     } catch (caught) {
-      setWorkspaceError(featureFailureMessage(caught, "The conversation could not be renamed."));
+      setWorkspaceError(featureFailureMessage(caught, "The chat could not be renamed."));
     } finally {
       setRenaming(false);
     }
@@ -334,7 +327,7 @@ export function ConversationWorkspace({
       if (selectedId === deleting.conversation_id) navigate(videoPath(video.video_id));
       setDeleting(null);
     } catch (caught) {
-      setWorkspaceError(featureFailureMessage(caught, "The conversation could not be deleted."));
+      setWorkspaceError(featureFailureMessage(caught, "The chat could not be deleted."));
     } finally {
       setDeletePending(false);
     }
@@ -346,27 +339,35 @@ export function ConversationWorkspace({
     ...(live ? [live.userMessage, live.assistantMessage] : [])
   ], [detail?.messages, live]);
   const unavailable = chatUnavailableMessage(video.stage);
+  const starterQuestions = useMemo(() => starterQuestionsForVideo(video), [video]);
+
+  function chooseStarterQuestion(question: string) {
+    draftConversationRef.current = selectedId;
+    setDraft(question);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
 
   return (
     <section className="conversation-feature" aria-labelledby="conversation-heading">
-      <div className="video-section__heading video-section__heading--split"><div><h2 id="conversation-heading">Conversations</h2><p>Ask questions about this video and inspect how VidSeek retrieved the answer.</p></div><Button variant="primary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}>{creating ? "Creating…" : "New conversation"}</Button></div>
       {unavailable ? <div className="inline-notice" role="status">{unavailable}</div> : null}
       {workspaceError ? <div className="inline-notice" role="alert">{workspaceError}</div> : null}
       <div className="conversation-grid">
-        <Panel className="conversation-list-panel" aria-label="Conversation list">
-          {loading ? <p className="muted-text">Loading conversations…</p> : conversations.length === 0 ? <p className="muted-text">No conversations yet.</p> : <ol className="conversation-list">{conversations.map((conversation) => <li key={conversation.conversation_id} className={conversation.conversation_id === selectedId ? "conversation-list__item conversation-list__item--active" : "conversation-list__item"}><button type="button" onClick={() => navigate(videoPath(video.video_id, conversation.conversation_id))}><strong>{conversation.title ?? "New conversation"}</strong><span>{formatLastUsed(conversation.updated_at)}</span></button><Button variant="ghost" aria-label={`Delete ${conversation.title ?? "conversation"}`} onClick={() => setDeleting(conversation)}>×</Button></li>)}</ol>}
-        </Panel>
         <Panel className="chat-panel">
-          {!selectedId ? <EmptyState title="Choose or start a conversation" description="Each conversation has its own context for this video." /> : !detail ? <p className="muted-text">Loading conversation…</p> : <>
-            <form className="conversation-title-form" onSubmit={saveRename}><input aria-label="Conversation title" maxLength={200} value={renameDraft} placeholder="New conversation" onChange={(event) => setRenameDraft(event.target.value)} /><Button variant="ghost" pending={renaming} type="submit" disabled={!renameDraft.trim()}>Rename</Button>{selectedSummary ? <Button className="danger-button" variant="ghost" onClick={() => setDeleting(selectedSummary)}>Delete</Button> : null}</form>
-            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <p className="muted-text">Ask the first question to begin.</p> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} onTogglePin={(item) => void togglePin(item)} />)}</div>
+          <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
+          {!selectedId ? <EmptyState title="Start a new chat" description="Ask VidSeek anything about this video." action={<Button variant="primary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}>{creating ? "Creating…" : "New chat"}</Button>} /> : !detail ? <p className="muted-text">Loading chat…</p> : <>
+            <form className="conversation-title-form" onSubmit={saveRename}><input aria-label="Chat title" maxLength={200} value={renameDraft} placeholder="New chat" onChange={(event) => setRenameDraft(event.target.value)} /><Button variant="ghost" pending={renaming} type="submit" disabled={!renameDraft.trim()}>Rename</Button>{selectedSummary ? <Button className="danger-button" variant="ghost" onClick={() => setDeleting(selectedSummary)}>Delete</Button> : null}</form>
+            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
-            <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea id="video-chat-input" maxLength={8000} rows={3} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask a question about this video…" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" disabled={!canChat || !draft.trim()}>Send</Button>}</div></form>
+            <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" disabled={!canChat || !draft.trim()}>Send</Button>}</div></form>
           </>}
         </Panel>
-        <Panel className="pins-panel" aria-label="Pinned answers"><div className="video-section__heading"><h2>Pinned answers</h2></div>{pins.length === 0 ? <p className="muted-text">Pin an assistant answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p>{pin.content}</p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source conversation</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}</Panel>
+        <Panel className="chat-sidebar">
+          <Button className="new-chat-button" variant="secondary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}><span aria-hidden="true">＋</span>{creating ? "Creating…" : "New chat"}</Button>
+          <section className="pins-panel" aria-labelledby="pinned-answers-heading"><div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>{pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p>{pin.content}</p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source chat</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}</section>
+          <section className="conversation-list-panel" aria-labelledby="recents-heading"><div className="chat-sidebar__heading"><h2 id="recents-heading">Recents</h2></div>{loading ? <p className="muted-text">Loading chats…</p> : conversations.length === 0 ? <p className="muted-text">No chats yet.</p> : <ol className="conversation-list">{conversations.map((conversation) => <li key={conversation.conversation_id} className={conversation.conversation_id === selectedId ? "conversation-list__item conversation-list__item--active" : "conversation-list__item"}><button type="button" onClick={() => navigate(videoPath(video.video_id, conversation.conversation_id))}><strong>{conversation.title ?? "New chat"}</strong><span>{formatLastUsed(conversation.updated_at)}</span></button><Button variant="ghost" aria-label={`Delete ${conversation.title ?? "chat"}`} onClick={() => setDeleting(conversation)}>×</Button></li>)}</ol>}</section>
+        </Panel>
       </div>
-      <Dialog open={deleting !== null} title="Delete this conversation?" onClose={() => setDeleting(null)} actions={<><Button variant="ghost" onClick={() => setDeleting(null)}>Cancel</Button><Button className="danger-button" pending={deletePending} onClick={() => void confirmDelete()}>{deletePending ? "Deleting…" : "Delete permanently"}</Button></>}><p>This permanently removes the conversation, all of its messages, and every answer pinned from it. This cannot be undone.</p></Dialog>
+      <Dialog open={deleting !== null} title="Delete this chat?" onClose={() => setDeleting(null)} actions={<><Button variant="ghost" onClick={() => setDeleting(null)}>Cancel</Button><Button className="danger-button" pending={deletePending} onClick={() => void confirmDelete()}>{deletePending ? "Deleting…" : "Delete permanently"}</Button></>}><p>This permanently removes the chat, all of its messages, and every answer pinned from it. This cannot be undone.</p></Dialog>
     </section>
   );
 }

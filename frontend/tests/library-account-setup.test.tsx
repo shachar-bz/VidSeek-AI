@@ -131,7 +131,7 @@ describe("library page", () => {
     render(<MemoryRouter><LibraryPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Remove Keep this" }));
     expect(screen.getByText(/re-adding the video later restores its shared video content and artifacts/i)).toBeTruthy();
-    expect(screen.getByText(/conversation history is permanently lost/i)).toBeTruthy();
+    expect(screen.getByText(/chat history is permanently lost/i)).toBeTruthy();
   });
 });
 

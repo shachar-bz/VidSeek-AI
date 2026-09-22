@@ -1,6 +1,9 @@
-import type { VideoDetail, VideoOutlineResponse } from "../../api/types";
+import { useState } from "react";
+
+import type { VideoDetail, VideoOutlineResponse, VideoTranscript } from "../../api/types";
 import { Button, EmptyState, Panel } from "../../components/ui";
 import { formatTimestamp } from "./format";
+import { TranscriptPanel } from "./TranscriptPanel";
 
 export function OutlinePanel({
   outline,
@@ -60,6 +63,108 @@ export function InsightsPanel({
           <section className="suggested-questions"><h3>Suggested questions</h3><div>{insights.suggested_questions.map((question, index) => <Button variant="ghost" key={index} onClick={() => onSuggestedQuestion(question)}>{question}</Button>)}</div></section>
         </div>
       )}
+    </Panel>
+  );
+}
+
+export function VideoDetailsTabs({
+  video,
+  transcript,
+  outline,
+  activeLineIndex,
+  approximate,
+  onSeek
+}: {
+  video: VideoDetail;
+  transcript: VideoTranscript | null;
+  outline: VideoOutlineResponse | null;
+  activeLineIndex: number;
+  approximate: boolean;
+  onSeek(seconds: number): void;
+}) {
+  const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
+  const insights = video.insights;
+  const chapters = outline?.chapters ?? [];
+
+  return (
+    <Panel className="video-details-tabs">
+      <div className="video-details-tabs__list" role="tablist" aria-label="Video details">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "transcript"}
+          aria-controls="video-transcript-panel"
+          id="video-transcript-tab"
+          onClick={() => setActiveTab("transcript")}
+        >
+          Transcript
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "summary"}
+          aria-controls="video-summary-panel"
+          id="video-summary-tab"
+          onClick={() => setActiveTab("summary")}
+        >
+          Summary
+        </button>
+      </div>
+
+      <div
+        id="video-transcript-panel"
+        role="tabpanel"
+        aria-labelledby="video-transcript-tab"
+        hidden={activeTab !== "transcript"}
+      >
+        <TranscriptPanel
+          transcript={transcript}
+          activeIndex={activeLineIndex}
+          approximate={approximate}
+          embedded
+          onSeek={onSeek}
+        />
+      </div>
+
+      <div
+        className="video-summary-panel"
+        id="video-summary-panel"
+        role="tabpanel"
+        aria-labelledby="video-summary-tab"
+        hidden={activeTab !== "summary"}
+      >
+        {!insights ? (
+          <EmptyState title="Summary is still processing" description="The summary and key points will appear here when they are ready." />
+        ) : (
+          <div className="video-summary-panel__content">
+            <section>
+              <h2>Summary</h2>
+              <p>{insights.summary}</p>
+            </section>
+            <section>
+              <h2>{insights.takeaways.length === 5 ? "5 key points" : "Key points"}</h2>
+              <ol className="key-points-list">
+                {insights.takeaways.map((takeaway, index) => <li key={index}>{takeaway}</li>)}
+              </ol>
+            </section>
+            {chapters.length > 0 ? (
+              <section>
+                <h2>Chapters</h2>
+                <ol className="summary-chapter-list">
+                  {chapters.map((chapter) => (
+                    <li key={chapter.chapter_id}>
+                      <button type="button" onClick={() => onSeek(chapter.start_seconds)}>
+                        {approximate ? "≈" : ""}{formatTimestamp(chapter.start_seconds)}
+                      </button>
+                      <div><h3>{chapter.title}</h3><p>{chapter.summary}</p></div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }

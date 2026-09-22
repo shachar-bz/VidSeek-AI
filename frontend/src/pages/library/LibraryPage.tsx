@@ -519,7 +519,7 @@ export function LibraryPage() {
       )}
 
       <MetadataDialog video={editing} mode={editMode} suggestions={tags} onClose={() => setEditing(null)} onSaved={(saved) => { setVideos((current) => { const updated = current.map((video) => video.video_id === saved.video_id ? saved : video); videosRef.current = updated; return updated; }); setTags((current) => Array.from(new Set([...current, ...saved.tags])).sort()); setEditing(null); }} />
-      <Dialog open={removing !== null} title="Remove this video?" onClose={() => setRemoving(null)} actions={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button className="danger-button" pending={removalPending} onClick={confirmRemoval}>{removalPending ? "Removing…" : "Remove video"}</Button></>}><p>Removing this link permanently deletes your conversation history and pins for this video. Re-adding the video later restores its shared video content and artifacts, but your conversation history is permanently lost.</p>{removalError ? <p className="form-error" role="alert">{removalError}</p> : null}</Dialog>
+      <Dialog open={removing !== null} title="Remove this video?" onClose={() => setRemoving(null)} actions={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button className="danger-button" pending={removalPending} onClick={confirmRemoval}>{removalPending ? "Removing…" : "Remove video"}</Button></>}><p>Removing this link permanently deletes your chat history and pins for this video. Re-adding the video later restores its shared video content and artifacts, but your chat history is permanently lost.</p>{removalError ? <p className="form-error" role="alert">{removalError}</p> : null}</Dialog>
     </div>
   );
 }

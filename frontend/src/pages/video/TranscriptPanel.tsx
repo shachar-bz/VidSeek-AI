@@ -12,6 +12,7 @@ export interface TranscriptPanelProps {
   transcript: VideoTranscript | null;
   activeIndex: number;
   approximate: boolean;
+  embedded?: boolean;
   onSeek(seconds: number): void;
 }
 
@@ -19,6 +20,7 @@ export function TranscriptPanel({
   transcript,
   activeIndex,
   approximate,
+  embedded = false,
   onSeek
 }: TranscriptPanelProps) {
   const lines = transcript?.lines ?? [];
@@ -65,16 +67,19 @@ export function TranscriptPanel({
   }
 
   if (lines.length === 0) {
-    return (
-      <Panel className="video-section transcript-panel">
+    const emptyContent = (
+      <>
         <div className="video-section__heading"><h2>Transcript</h2></div>
         <EmptyState title="Transcript not available yet" description="The complete transcript will appear here as processing progresses." />
-      </Panel>
+      </>
     );
+    return embedded
+      ? <section className="video-section transcript-panel transcript-panel--embedded">{emptyContent}</section>
+      : <Panel className="video-section transcript-panel">{emptyContent}</Panel>;
   }
 
-  return (
-    <Panel className="video-section transcript-panel">
+  const content = (
+    <>
       <div className="video-section__heading video-section__heading--split">
         <div>
           <h2>Transcript</h2>
@@ -144,6 +149,10 @@ export function TranscriptPanel({
           );
         })}
       </ol>
-    </Panel>
+    </>
   );
+
+  return embedded
+    ? <section className="video-section transcript-panel transcript-panel--embedded">{content}</section>
+    : <Panel className="video-section transcript-panel">{content}</Panel>;
 }

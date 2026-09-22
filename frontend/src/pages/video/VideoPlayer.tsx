@@ -81,7 +81,7 @@ export function VideoPlayer({
       } catch (caught) {
         if (!controller.signal.aborted) {
           const reason = featureFailureMessage(caught, "The video file is unavailable right now.");
-          setError(`${reason} Only the video file is unavailable; transcript, outline, insights, conversations, and pins remain usable.`);
+          setError(`${reason} Only the video file is unavailable; transcript, summary, chats, and pins remain usable.`);
           setLoading(false);
         }
       }
