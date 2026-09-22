@@ -80,6 +80,7 @@ def _run(agent, deps) -> list:
 
 def test_agent_selects_the_requested_model_and_all_five_tools(monkeypatch) -> None:
     captured = {}
+    monkeypatch.setenv(runner.API_KEY_NAME, "sk-test-key")
 
     class FakeAgent:
         def __init__(self, model, **kwargs):
@@ -95,7 +96,11 @@ def test_agent_selects_the_requested_model_and_all_five_tools(monkeypatch) -> No
 
     assert isinstance(built, FakeAgent)
     assert built.validators == [runner._verify_citations]
-    assert captured["model"] == "openai:gpt-5.6-terra"
+    assert captured["model"].model_name == "gpt-5.6-terra"
+    # A bare "openai:model" string leans on pydantic_ai's default provider, which reads the
+    # standard OPENAI_API_KEY rather than this project's OPENAI_API_KEY_DUDU. Pinning the key
+    # actually reaching the client is what would have caught that mismatch.
+    assert captured["model"].client.api_key == "sk-test-key"
     assert captured["defer_model_check"] is True
     assert {tool.__name__ for tool in captured["tools"]} == {
         "get_video_info",
@@ -105,6 +110,13 @@ def test_agent_selects_the_requested_model_and_all_five_tools(monkeypatch) -> No
         "get_memory_context",
     }
     assert "sole source of evidence" in captured["system_prompt"]
+
+
+def test_agent_refuses_to_build_without_the_project_api_key(monkeypatch) -> None:
+    monkeypatch.delenv(runner.API_KEY_NAME, raising=False)
+
+    with pytest.raises(RuntimeError, match=runner.API_KEY_NAME):
+        runner.build_agent()
 
 
 def test_only_supplied_conversation_messages_become_model_history() -> None:

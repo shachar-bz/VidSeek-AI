@@ -28,7 +28,10 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
+from backend.core import config
 from backend.storage.postgres import StoredMessage
 
 from . import citations
@@ -40,7 +43,11 @@ from .tools.get_video_info import get_video_info
 from .tools.get_video_outline import get_video_outline
 from .tools.memories_semantic_search import memories_semantic_search
 
-MODEL_NAME = "openai:gpt-5.6-terra"
+# Every other OpenAI call site in the backend (video_insights, grouper, segmenter,
+# transcriber) reads this same key explicitly; pydantic_ai's default OpenAI provider
+# looks for the standard OPENAI_API_KEY instead, which this project never sets.
+API_KEY_NAME = "OPENAI_API_KEY_DUDU"
+MODEL_NAME = "gpt-5.6-terra"
 PARTIAL_TIMING_PROMPT = (
     "The current video's transcript timing may be unreliable. Warn the user when making "
     "timestamp-based statements, while still answering from the retrieved video content."
@@ -99,8 +106,11 @@ class ConversationAgentRunner(Protocol):
 def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
     """Build the production agent with exactly the five video-scoped retrieval tools."""
 
+    chat_model = OpenAIChatModel(
+        model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))
+    )
     agent = Agent(
-        model,
+        chat_model,
         deps_type=ConversationDeps,
         output_type=str,
         system_prompt=SYSTEM_PROMPT,
