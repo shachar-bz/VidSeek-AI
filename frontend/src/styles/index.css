@@ -1999,6 +1999,26 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.chat-message__timestamp {
+  padding: 0;
+  border: 0;
+  color: var(--color-ash-text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.chat-message__timestamp:hover,
+.chat-message__timestamp:focus-visible {
+  color: inherit;
+}
+
+.chat-message__timestamp--approximate {
+  text-decoration-style: dashed;
+}
+
 .tool-trace {
   margin-top: var(--spacing-16);
   padding-top: var(--spacing-12);

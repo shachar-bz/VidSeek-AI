@@ -119,7 +119,7 @@ export function VideoPage() {
           <InsightsPanel video={video} onSuggestedQuestion={handleSuggestedQuestion} />
         </div>
       </div>
-      <ConversationWorkspace video={video} suggestedQuestion={suggestedQuestion} />
+      <ConversationWorkspace video={video} suggestedQuestion={suggestedQuestion} approximate={approximate} onSeek={seek} />
     </div>
   );
 }
