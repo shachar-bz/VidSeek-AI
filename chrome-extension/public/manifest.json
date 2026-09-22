@@ -34,6 +34,7 @@
     "scripting",
     "sidePanel",
     "storage",
+    "tabs",
     "webNavigation"
   ],
   "optional_permissions": [
