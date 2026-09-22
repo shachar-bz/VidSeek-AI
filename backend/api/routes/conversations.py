@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Sequence
 from contextlib import suppress
 from typing import Annotated
@@ -51,6 +52,8 @@ from backend.video_agent import (
 )
 from backend.video_agent.generation import ActiveGeneration, GenerationRegistry
 from backend.video_agent.tools.deps import ConversationDeps
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -285,6 +288,7 @@ async def _answer_stream(
         except asyncio.CancelledError:
             raise
         except Exception as error:
+            logger.exception("Conversation agent failed to answer")
             await queue.put(("error", error))
         finally:
             await queue.put(("done", None))
