@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { VideoTranscript } from "../src/api/types";
 import { activeTranscriptIndex } from "../src/pages/video/format";
 import { TranscriptPanel } from "../src/pages/video/TranscriptPanel";
+import { sourceLabel } from "../src/pages/shared";
+import { languageName } from "../src/pages/video/VideoPage";
 import { playbackRefreshDelay } from "../src/pages/video/VideoPlayer";
 
 afterEach(() => {
@@ -67,4 +69,16 @@ describe("transcript", () => {
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
   });
 
+});
+
+describe("video page metadata", () => {
+  it("names the platform a video came from", () => {
+    expect(sourceLabel({ source_site: "www.youtube.com" })).toBe("YouTube");
+    expect(sourceLabel({ source_site: "www.coursera.org" })).toBe("Coursera");
+  });
+
+  it("names the transcript language rather than showing its code", () => {
+    expect(languageName("en")).toBe("English");
+    expect(languageName("not a language")).toBe("not a language");
+  });
 });

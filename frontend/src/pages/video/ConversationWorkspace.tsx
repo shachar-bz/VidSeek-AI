@@ -28,7 +28,7 @@ import {
 } from "../../api/types";
 import { getPinnedAnswers, pinAnswer, unpinAnswer } from "../../api/video";
 import agentAvatar from "../../assets/vidseek-video-chat-agent-icon.png";
-import { Button, Dialog, EmptyState, Panel } from "../../components/ui";
+import { Button, Dialog, Panel } from "../../components/ui";
 import { videoPath } from "../../routes";
 import { featureFailureMessage } from "../shared";
 import { splitMessageCitations } from "./format";
@@ -77,10 +77,10 @@ export function nextChatName(conversations: ConversationSummary[]): string {
   return `Chat ${highest + 1}`;
 }
 
-export function starterQuestionsForVideo(video: Pick<VideoDetail, "title" | "insights">): string[] {
+export function starterQuestionsForVideo(video: Pick<VideoDetail, "insights">): string[] {
   const generated = video.insights?.suggested_questions ?? [];
   const fallbacks = [
-    `What are the main ideas in “${video.title}”?`,
+    "What are the main ideas in this video?",
     "What are the most important details to remember?",
     "Can you explain the key concepts with examples?"
   ];
@@ -201,6 +201,9 @@ export function ConversationWorkspace({
   const generationRef = useRef(0);
   const streamControllerRef = useRef<AbortController | null>(null);
   const draftConversationRef = useRef<string | null>(null);
+  // A chat this page has just created for the message it is about to send. Selecting it must
+  // not reset the panel the way opening a chat does, or it would abort that message's stream.
+  const adoptedConversationRef = useRef<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const canChat = allowsChat(video.stage);
 
@@ -227,6 +230,10 @@ export function ConversationWorkspace({
   }, [loadConversationList, video.video_id]);
 
   useEffect(() => {
+    if (selectedId && adoptedConversationRef.current === selectedId) {
+      adoptedConversationRef.current = null;
+      return;
+    }
     generationRef.current += 1;
     streamControllerRef.current?.abort();
     streamControllerRef.current = null;
@@ -252,12 +259,23 @@ export function ConversationWorkspace({
     return () => controller.abort();
   }, [selectedId, updateLive, video.video_id]);
 
-  const startNewConversation = useCallback(async (prefill = "") => {
+  /**
+   * A new chat is only a blank panel until its first message is sent: nothing is stored for
+   * a chat the user opened and left without typing into.
+   */
+  function openNewChat() {
     if (!canChat) return;
+    if (selectedId) navigate(videoPath(video.video_id));
+    else setDraft("");
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  /** Stores the new chat the first message is being sent from, and opens it. */
+  async function createChatForFirstMessage(): Promise<string | null> {
     setCreating(true);
     setWorkspaceError(null);
     try {
-      const created = await createConversation(video.video_id, prefill ? { first_message: prefill } : {});
+      const created = await createConversation(video.video_id);
       let summary = summaryFromDetail(created);
       try {
         summary = await renameConversation(created.conversation_id, { title: nextChatName(conversations) });
@@ -265,15 +283,18 @@ export function ConversationWorkspace({
         // The chat exists either way; without its number the backend titles it from the first question.
       }
       setConversations((current) => newestFirst([summary, ...current.filter((item) => item.conversation_id !== summary.conversation_id)]));
+      setDetail({ ...created, title: summary.title });
+      adoptedConversationRef.current = created.conversation_id;
       draftConversationRef.current = created.conversation_id;
-      setDraft(prefill);
       navigate(videoPath(video.video_id, created.conversation_id));
+      return created.conversation_id;
     } catch (caught) {
       setWorkspaceError(featureFailureMessage(caught, "A new chat could not be created."));
+      return null;
     } finally {
       setCreating(false);
     }
-  }, [canChat, conversations, navigate, video.video_id]);
+  }
 
   function commitLiveToHistory(current: LiveGeneration, terminalMessage?: ConversationMessage) {
     setDetail((existing) => existing ? {
@@ -284,9 +305,11 @@ export function ConversationWorkspace({
 
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
-    if (!selectedId || !canChat || !draft.trim() || streaming) return;
-    if (liveRef.current) commitLiveToHistory(liveRef.current);
+    if (!canChat || !draft.trim() || streaming || creating) return;
     const content = draft;
+    const conversationId = selectedId ?? await createChatForFirstMessage();
+    if (!conversationId) return;
+    if (liveRef.current) commitLiveToHistory(liveRef.current);
     const initial = beginGeneration(content);
     updateLive(initial);
     setDraft("");
@@ -299,7 +322,7 @@ export function ConversationWorkspace({
     let terminal = false;
 
     try {
-      for await (const streamEvent of sendConversationMessage(selectedId, { content }, controller.signal)) {
+      for await (const streamEvent of sendConversationMessage(conversationId, { content }, controller.signal)) {
         if (generationRef.current !== generation) return;
         const current = liveRef.current;
         if (!current) return;
@@ -311,7 +334,7 @@ export function ConversationWorkspace({
           updateLive(null);
           try {
             await loadConversationList();
-            const refreshed = await getConversation(selectedId);
+            const refreshed = await getConversation(conversationId);
             if (generationRef.current === generation) setDetail(refreshed);
           } catch (caught) {
             if (generationRef.current === generation) {
@@ -445,10 +468,10 @@ export function ConversationWorkspace({
       <div className={drawerOpen ? "conversation-grid" : "conversation-grid conversation-grid--collapsed"}>
         <Panel className="chat-panel">
           <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
-          {!selectedId ? <EmptyState title="Start a new chat" description="Ask VidSeek anything about this video." action={<Button variant="primary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}>{creating ? "Creating…" : "New chat"}</Button>} /> : !detail ? <p className="muted-text">Loading chat…</p> : <>
+          {selectedId && !detail ? <p className="muted-text">Loading chat…</p> : <>
             <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
-            <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (canChat && !streaming && draft.trim()) event.currentTarget.form?.requestSubmit(); } }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" disabled={!canChat || !draft.trim()}><ArrowUpIcon /></Button>}</div></form>
+            <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming || creating} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (canChat && !streaming && !creating && draft.trim()) event.currentTarget.form?.requestSubmit(); } }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" pending={creating} disabled={!canChat || creating || !draft.trim()}><ArrowUpIcon /></Button>}</div></form>
           </>}
         </Panel>
         <div className="conversation-drawer">
@@ -464,7 +487,7 @@ export function ConversationWorkspace({
           </button>
           <div className="conversation-drawer__panel" id="conversation-drawer-panel" aria-hidden={!drawerOpen}>
             <Panel className="chat-sidebar">
-              <Button className="new-chat-button" variant="secondary" pending={creating} disabled={!canChat} onClick={() => void startNewConversation()}><span aria-hidden="true">＋</span>{creating ? "Creating…" : "New chat"}</Button>
+              <Button className="new-chat-button" variant="secondary" disabled={!canChat || creating} onClick={openNewChat}><span aria-hidden="true">＋</span>New chat</Button>
               <section className="conversation-list-panel" aria-labelledby="recents-heading">
                 <div className="chat-sidebar__heading"><h2 id="recents-heading">Chats</h2></div>
                 {loading ? <p className="muted-text">Loading chats…</p> : conversations.length === 0 ? <p className="muted-text">No chats yet.</p> : (

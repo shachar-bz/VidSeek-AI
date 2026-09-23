@@ -26,7 +26,7 @@ import type {
 } from "../../api/types";
 import { Button, Dialog, EmptyState, ErrorState, Field, LoadingState } from "../../components/ui";
 import { ROUTES, videoPath } from "../../routes";
-import { featureFailureMessage } from "../shared";
+import { featureFailureMessage, sourceLabel } from "../shared";
 
 const EXTENSION_INSTALL_URL =
   "https://github.com/shachar-bz/VidSeek-AI/tree/main/chrome-extension";
@@ -110,16 +110,6 @@ function formatDate(value: string | null): string {
 function stageLabel(stage: ReadinessStage): string {
   if (stage === "understanding") return "Indexing";
   return stage.charAt(0).toUpperCase() + stage.slice(1);
-}
-
-function sourceLabel(video: LibraryVideo): string {
-  if (video.source === "youtube_pipeline" || video.source_site.includes("youtube")) return "YouTube";
-  if (video.source_site.includes("drive.google")) return "Google Drive";
-  if (video.source_site.includes("vimeo")) return "Vimeo";
-  if (video.source === "browser_download" || video.source === "captured_request") return "Upload";
-  const host = video.source_site.replace(/^www\./, "");
-  const service = host.split(".").at(0) ?? "";
-  return service ? service.replace(/^./, (letter) => letter.toUpperCase()) : "Upload";
 }
 
 function applyProgress(video: LibraryVideo, event: LibraryProgressEvent): LibraryVideo {

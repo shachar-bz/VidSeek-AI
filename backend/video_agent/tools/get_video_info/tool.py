@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext
 
 from backend.core.errors import VideoNotFoundError
+from backend.core.page_titles import display_title
 from backend.storage.postgres import PostgresVideoRecords
 
 from ..deps import ConversationDeps
@@ -37,7 +38,7 @@ def get_video_info(ctx: RunContext[ConversationDeps]) -> VideoMetadata:
         raise VideoNotFoundError(ctx.deps.video_id)
     return VideoMetadata(
         source_url=stored.video.source_url,
-        title=stored.video.title,
+        title=display_title(stored.video.title, stored.video.source_url),
         transcript_source=stored.video.transcript_source,
         transcript_language=stored.video.transcript_language,
     )
