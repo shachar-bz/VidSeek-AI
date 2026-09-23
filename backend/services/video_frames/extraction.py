@@ -9,7 +9,8 @@ before the time and decodes forward to it, instead of decoding the video from th
 frames of one call are extracted in parallel, one ffmpeg process each.
 
 A SAS URL is a credential for the blob. It never appears in a log line or an exception here:
-ffmpeg repeats its input in its error messages, so every message is scrubbed of it first.
+ffmpeg repeats its input in its error messages -- and its host alone in a DNS error -- so every
+message is scrubbed of both first.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import subprocess
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 # The long side of an extracted frame: enough to read a slide, small enough that one frame
 # is one cheap image for a VLM.
@@ -39,6 +41,10 @@ EXTRACTION_TIMEOUT_SECONDS = 30.0
 # redirect target, say -- is scrubbed as well.
 URL_PATTERN = re.compile(r"https?://\S+")
 SCRUBBED = "<video>"
+
+# What ffmpeg says when the seek landed past the last frame: there was nothing to encode, so
+# the encoder never opened and the output stayed empty. Not a broken video, just no frame.
+NO_FRAME_MARKERS = ("received no packets", "Nothing was written")
 
 logger = logging.getLogger(__name__)
 
@@ -99,16 +105,17 @@ def extract_frame(
             f"Extracting the frame at {time_seconds:.1f} s took longer than "
             f"{timeout_seconds:g} s"
         ) from None
+    stderr = completed.stderr.decode("utf-8", errors="replace")
+    if not completed.stdout and (
+        completed.returncode == 0 or any(marker in stderr for marker in NO_FRAME_MARKERS)
+    ):
+        raise FrameExtractionError(f"The video has no frame at {time_seconds:.1f} s")
     if completed.returncode != 0:
-        detail = scrub(completed.stderr.decode("utf-8", errors="replace"), source)
+        detail = scrub(stderr, source)
         raise FrameExtractionError(
             f"ffmpeg could not extract the frame at {time_seconds:.1f} s: "
             f"{detail or f'exit code {completed.returncode}'}"
         )
-    if not completed.stdout:
-        # ffmpeg exits cleanly when asked for a time past the last frame; it just writes
-        # nothing.
-        raise FrameExtractionError(f"The video has no frame at {time_seconds:.1f} s")
     return ExtractedFrame(time_seconds=time_seconds, jpeg=completed.stdout)
 
 
@@ -136,5 +143,9 @@ def extract_frames(
 
 
 def scrub(message: str, source: str) -> str:
-    """`message` with `source` and anything else URL-shaped taken out of it."""
-    return URL_PATTERN.sub(SCRUBBED, message.replace(source, SCRUBBED)).strip()
+    """`message` with `source`, its host, and anything else URL-shaped taken out of it."""
+    scrubbed = URL_PATTERN.sub(SCRUBBED, message.replace(source, SCRUBBED))
+    host = urlsplit(source).hostname if "://" in source else None
+    if host:
+        scrubbed = scrubbed.replace(host, SCRUBBED)
+    return scrubbed.strip()

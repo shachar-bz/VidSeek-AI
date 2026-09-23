@@ -72,8 +72,12 @@ class SearchSettings:
     # Raw cosine at which a frame is a hit even if it does not stand out, because the thing is
     # on screen for most of the video. English queries score higher than Hebrew ones.
     image_present_similarity: float = 0.15
-    # e5 cosine under which a saved caption is not a match; e5's scores bunch up high.
+    # e5 cosine under which a saved caption is not a match. e5's scores bunch up high --
+    # right captions scored 0.81-0.94 and wrong ones up to 0.815 for the same queries -- so a
+    # floor alone cannot separate them, and a caption must also be within
+    # `caption_margin_from_best` of the query's best caption.
     caption_similarity_floor: float = 0.8
+    caption_margin_from_best: float = 0.05
     caption_candidates: int = 10
     # MiniLM cosine under which a memory is not a match.
     transcript_similarity_floor: float = 0.3
@@ -262,9 +266,13 @@ def _caption_matches(video_id, query, settings, pool, encoder):
 
         encoder = embed_query
     matches = store.similarities(video_id, encoder(query))
-    return [
-        match for match in matches if match.similarity >= settings.caption_similarity_floor
-    ][: settings.caption_candidates]
+    if not matches:
+        return []
+    cutoff = max(
+        settings.caption_similarity_floor,
+        max(match.similarity for match in matches) - settings.caption_margin_from_best,
+    )
+    return [match for match in matches if match.similarity >= cutoff][: settings.caption_candidates]
 
 
 def _transcript_matches(video_id, query, settings, pool, encoder):

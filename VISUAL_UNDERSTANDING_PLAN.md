@@ -1,6 +1,9 @@
 # Visual Understanding Layer — Plan
 
-Status: agreed design, not yet implemented. Branch: `feat/visual-understanding-layer`.
+Status: ingestion, storage and the query-time services are implemented (branch
+`feat/visual-index-ingestion-and-search`); OCR (§3.2 step 5), the insights re-run that depends on
+it (step 6), the visual sub-agent, its tools and `investigate_visual` are not yet. §12 lists where
+the implementation departs from this design and why.
 
 ## 1. Goal
 
@@ -62,7 +65,7 @@ general footage), in English and Hebrew:
   video's visual indexing, but two visual indexing runs never share the GPU at once.
 * **The visual task owns the local video file.** Deleting it moves from the end of the text run
   to the end of the visual task, in a `finally`, so the file is also removed when indexing fails
-  or is skipped. *(Open item: trace where the local file is deleted today before moving it.)*
+  or is skipped. *(Resolved: it was deleted by `upload_job_video` right after the upload.)*
 * A failure in visual indexing never fails the job: it becomes a problem code and
   `visual_status = failed`, like stages 3–5 today.
 
@@ -381,3 +384,52 @@ Each step ships something usable. The riskiest assumption is tested first.
   motion; `services/shot_detection/` stays in the repo untouched.
 * Storing keyframe images (added only if the step 1 latency measurement calls for it).
 * Running on machines other than the developer's (no GPU, CPU-only) or a hosted deployment.
+
+## 12. Implementation notes
+
+Where the code departs from the sections above, and why. Measurements are from the developer
+machine (GTX 1650).
+
+* **No `chapter_id` on `video_visual_segments`** (§7). Indexing runs in parallel with the
+  transcript stages, so the chapters usually do not exist when segments are written, and a
+  chapter's times change when the transcript is re-segmented. The chapter is read by time
+  instead (`services/visual_search/video_map.py`).
+* **Captions are keyed by `video_id` + time, not `segment_id`** (§4.4, §7). A caption is paid
+  for and describes a moment; keyed by segment, a re-index would cascade-delete it. The segment
+  is found by time. `end_seconds` is added for a caption of a `view_sequence` grid.
+* **No OCR columns yet** (§7). `video_keyframes` holds timestamps only; `ocr_text`,
+  `ocr_language`, `ocr_embedding` and the `pg_trgm` index arrive with the OCR engine.
+  `services/visual_search/search.py` takes the OCR lists as two more inputs to the fusion.
+* **`embeddings/multilingual_text_embedding/`** instead of `ocr_text_embedding/` (§6): the same
+  e5-small model embeds saved captions now and OCR text later. Saving captions is
+  `services/frame_captions.py:save_frame_captions`, for `investigate_visual` to call.
+* **A text change must be stable** (§3.2 step 3). On moving footage the pHash of consecutive
+  samples differs by 20-30 of 64 bits while the embedding moves ~0.015, so a hash change counts
+  only when the new picture then holds still across the confirming samples (≤ 6 bits), the way a
+  slide does. The boundary is placed on the first stable frame after the change, which is also
+  the reference and the keyframe. On a synthetic clip (moving pattern, two slides, a 4 s shot,
+  a moving scene) this finds every cut and slide change exactly; on an 8.5-minute fixed-camera
+  padel match it keeps one segment.
+* **Two absolute levels beside the z-score** (§5). SigLIP scores within a video are tightly
+  bunched (std ~0.005), so chance standouts appear in any video: "a dog" on the padel match
+  stood out at z 4.3 with a similarity of 0.03, where real matches score 0.12+. A floor
+  (0.08) drops those. Something on screen the whole time ("a padel court", 0.18 in every frame)
+  stands out nowhere, so a frame at or above 0.15 is a hit whatever its z-score. Hebrew queries
+  score lower than English ones (the same court: 0.11); the eval should tune both levels.
+* **Saved captions are matched against the best one, not only a floor.** e5-small's scores
+  bunch up: for the same queries, right captions scored 0.81-0.94 and wrong ones up to 0.815,
+  so a caption must clear 0.8 *and* be within 0.05 of the query's best caption. A Hebrew
+  question against an English caption scores low (0.75 for "איפה הכוס" against the cup's
+  caption); writing captions in the video's language, or both, is worth checking in the eval.
+* **Fusion is per segment.** Frames, captions and memories have different granularities, so
+  each list ranks segments; a moment is one segment with the precise ranges that matched in it.
+* **SigLIP runs in fp32, not fp16.** On the GTX 1650 fp16 measured 2.6x slower (32 frames in
+  4.8 s vs 1.8 s). Peak VRAM at batch 32 is ~1.8 GB. Indexing an hour of 1080p video costs
+  ~85 s of decode and ~105 s of embedding, about 3 minutes.
+* **Frame extraction latency** (§4.2, risk 2): 6 frames from a local 1080p MP4 in 0.65 s.
+  Over a Blob SAS link it is not measured yet; `python -m backend.services.video_frames.measure_latency
+  <video_id>` measures it against a stored video.
+* **`VIDSEEK_VISUAL_INDEXING=false`** turns ingestion off on a machine without a GPU; its videos
+  are marked `skipped`. Videos recorded before migration 0022 are marked `skipped` with
+  `ingested_before_visual_indexing`.
+
