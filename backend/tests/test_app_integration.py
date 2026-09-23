@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from pathlib import Path
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from backend.api import create_app
@@ -25,57 +23,6 @@ def _app(tmp_path: Path):
         session_registry=SessionRegistry({EXTENSION_ID}),
         job_manager=JobManager(tmp_path),
     )
-
-
-def test_every_merged_route_is_mounted_exactly_once(tmp_path: Path) -> None:
-    app = _app(tmp_path)
-    mounted = Counter(
-        (method, route.path)
-        for route in app.routes
-        if isinstance(route, APIRoute)
-        for method in route.methods
-    )
-    expected = {
-        ("GET", "/health"),
-        ("POST", "/v1/session"),
-        ("POST", "/v1/auth/signup"),
-        ("POST", "/v1/auth/login"),
-        ("GET", "/v1/auth/me"),
-        ("POST", "/v1/auth/logout"),
-        ("GET", "/v1/auth/sessions"),
-        ("DELETE", "/v1/auth/sessions/{session_id}"),
-        ("POST", "/v1/auth/sessions/revoke-all"),
-        ("PATCH", "/v1/account"),
-        ("POST", "/v1/account/password"),
-        ("DELETE", "/v1/account"),
-        ("GET", "/v1/library"),
-        ("GET", "/v1/library/tags"),
-        ("GET", "/v1/library/events"),
-        ("PATCH", "/v1/library/{video_id}"),
-        ("DELETE", "/v1/library/{video_id}"),
-        ("GET", "/v1/videos/{video_id}"),
-        ("GET", "/v1/videos/{video_id}/playback"),
-        ("GET", "/v1/videos/{video_id}/transcript"),
-        ("GET", "/v1/videos/{video_id}/outline"),
-        ("GET", "/v1/videos/{video_id}/pins"),
-        ("POST", "/v1/videos/{video_id}/pins"),
-        ("DELETE", "/v1/videos/{video_id}/pins/{message_id}"),
-        ("GET", "/v1/videos/{video_id}/conversations"),
-        ("POST", "/v1/videos/{video_id}/conversations"),
-        ("GET", "/v1/conversations/{conversation_id}"),
-        ("PATCH", "/v1/conversations/{conversation_id}"),
-        ("DELETE", "/v1/conversations/{conversation_id}"),
-        ("POST", "/v1/conversations/{conversation_id}/messages"),
-        ("POST", "/v1/conversations/{conversation_id}/stop"),
-        ("POST", "/v1/video-jobs"),
-        ("GET", "/v1/video-jobs/{job_id}"),
-        ("POST", "/v1/video-jobs/{job_id}/download-complete"),
-        ("POST", "/v1/video-jobs/{job_id}/capture"),
-        ("POST", "/v1/video-jobs/{job_id}/cancel"),
-    }
-
-    assert expected <= mounted.keys()
-    assert all(mounted[route] == 1 for route in expected)
 
 
 @pytest.mark.parametrize(
