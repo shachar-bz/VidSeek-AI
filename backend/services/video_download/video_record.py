@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
+from backend.core.page_titles import clean_page_title
 from backend.schemas.video_jobs import CreateVideoJobRequest
 from backend.services.transcripts import NormalizedTranscript
 from backend.services.video_download.youtube.comments import CommentEntry
@@ -77,7 +78,7 @@ def record_job_video(
         VideoRecord(
             source=acquisition_mode,
             source_url=request.source_identity_url,
-            title=request.page_title,
+            title=clean_page_title(request.page_title, request.page_url),
             blob_container=stored_video.container,
             blob_name=stored_video.name,
             file_size_bytes=stored_video.size_bytes,

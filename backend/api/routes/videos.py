@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 
 from backend.api.dependencies import current_user
+from backend.core.page_titles import clean_page_title
 from backend.api.routes.library import _require_uuid, _stage, library_views
 from backend.schemas.videos import (
     PLAYBACK_URL_LIFETIME_SECONDS,
@@ -95,11 +96,12 @@ def video_detail(
             takeaways=row.insights_takeaways or [],
             suggested_questions=row.insights_suggested_questions or [],
         )
+    original_title = clean_page_title(row.original_title, row.source_url)
     return VideoDetail(
         video_id=video_id,
-        title=row.custom_title or row.original_title,
+        title=row.custom_title or original_title,
         custom_title=row.custom_title,
-        original_title=row.original_title,
+        original_title=original_title,
         source_site=urlsplit(row.source_url).hostname or "",
         source_url=row.source_url,
         duration_seconds=row.duration_seconds,
