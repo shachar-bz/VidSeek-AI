@@ -144,7 +144,7 @@ version shows which videos need re-indexing after a model change.
 
 | Tool | What it does | Costs an image? |
 |---|---|---|
-| `list_segments(t0, t1)` | Text-only map: each segment's start/end, `boundary_kind`, chapter, OCR snippet, transcript snippet | No |
+| `list_segments(t0, t1)` | Text-only map: each segment's start/end, `boundary_kind`, chapter, OCR snippet, transcript snippet, and saved frame captions (§4.4) | No |
 | `search_visual_moments(query, range?)` | Hybrid search (§5). Returns time ranges, each with the segment it falls in | No |
 | `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
 | `view_frames(timestamps)` | Frames, downscaled (~512 px long side) | Yes, 1 per frame |
@@ -156,8 +156,12 @@ version shows which videos need re-indexing after a model change.
   * objects, places, people → `view_frames`;
   * actions → `view_sequence`.
 
-  Start with free tools (`list_segments`, search, OCR, transcript) to decide where to spend
-  images.
+  Metadata first, pixels last. The stored metadata (embeddings, OCR text, segment boundaries,
+  transcript, saved captions) answers text questions and most "when does Y appear" questions by
+  itself. The image embedding is only a vector for similarity search and says nothing an LLM can
+  read about what is in the frame. So for what a frame *shows* (objects, where things are, what
+  a diagram means, actions), the sub-agent looks at the frame, unless a saved caption (§4.4)
+  already answers it.
 * **Budget per investigation:** at most **6 tool calls** and at most **8 images** (a grid counts
   as one).
   * Enforced by Pydantic AI `UsageLimits` plus an image counter in deps.
@@ -180,7 +184,8 @@ version shows which videos need re-indexing after a model change.
 ```
 VisualInvestigation {
   answer: str
-  findings: [{ start_seconds, end_seconds, chapter, observation, evidence: ocr | image | transcript }]
+  findings: [{ start_seconds, end_seconds, chapter, observation, evidence: ocr | image | transcript | caption }]
+  frame_captions: [{ time_seconds, caption }]   # saved (§4.4), stripped before the main agent sees the result
 }
 ```
 
@@ -193,6 +198,28 @@ VisualInvestigation {
 * **"Where is X when Y appears"** is answered as a place in the scene, plus the segment range and
   the chapter it falls in, e.g. "on the kitchen table — 04:12–04:30, chapter 'Preparing the
   sauce'". No bounding boxes.
+
+### 4.4 Saved captions: pay for pixels at most once
+
+No image is ever stored. When the sub-agent has to see pixels, the frame is extracted on
+demand. Whatever it learned from them is kept as metadata, so the next question about that
+part of the video reads text instead of pixels.
+
+* **What is saved.** For every frame it viewed (`view_frames`) or grid (`view_sequence`), the
+  sub-agent writes a short **general** caption in `frame_captions`: what is visible, where things
+  are, what is happening. It is not an answer to the current question, because a caption biased
+  toward one question is useless for the next. This costs only output tokens: no extra call and
+  no extra image.
+* **Where it goes.** After the run, `investigate_visual` stores each caption against its segment
+  and timestamp, with the VLM model name, and embeds it with multilingual-e5-small.
+* **How it is used.**
+  * `list_segments` shows the saved captions, so the map gets richer the more a video is asked
+    about. This softens the "thin map on general footage" risk (§10).
+  * `search_visual_moments` includes caption hits in the rank fusion (§5).
+  * The prompt tells the sub-agent to use a saved caption that answers the question before
+    looking at pixels again.
+* **Cost model.** Each part of a video is paid for at most once, and only if someone asks about
+  it. Captioning every segment at ingestion stays out of scope for v1.
 
 ## 5. Search and score thresholds
 
@@ -208,8 +235,8 @@ things in each list. Instead:
    returning the least-bad frames. Without this the sub-agent tends to invent a match.
 3. **Hits become time ranges.** Consecutive hit samples merge into ranges ("03:10–03:24,
    12:40–12:44"). Each range is tagged with the segment and chapter it falls in.
-4. **Combine by rank.** Image-embedding hits, OCR trigram hits, OCR e5 hits and transcript hits
-   are combined with **reciprocal rank fusion**. It uses only rank, so the lists' different score
+4. **Combine by rank.** Image-embedding hits, OCR trigram hits, OCR e5 hits, saved-caption e5
+   hits (§4.4) and transcript hits are combined with **reciprocal rank fusion**. It uses only rank, so the lists' different score
    scales never have to be compared.
 5. **A low floor per model** drops obvious junk. It is tuned on the eval set to favour catching
    matches, not precision: the sub-agent's look is the real acceptance step.
@@ -277,6 +304,7 @@ MiniLM and TransNetV2 all stay resident in 4 GB of VRAM.
 | `video_frame_embeddings` | ~1,800 | `video_id`, `time_seconds`, `embedding vector(768)`. B-tree on `video_id`, **no ANN index**: queries are always for one video and need every score for the per-video scoring |
 | `video_visual_segments` | ~20–300 | `video_id`, `start_seconds`, `end_seconds`, `boundary_kind` (`shot_cut` / `content_change`), `chapter_id` |
 | `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_embedding vector(384)` |
+| `video_frame_captions` | grows with use (0 at ingestion) | `segment_id`, `time_seconds`, `caption`, `caption_embedding vector(384)`, `model`, `created_at` |
 | `videos` (new columns) | 1 | `visual_status`, `visual_error`, `visual_index_version` |
 
 No images are stored: Blob keeps only the video, as today.
@@ -311,7 +339,8 @@ Each step ships something usable. The riskiest assumption is tested first.
    * The visual executor, the local-file lifetime change and `visual_status`.
    * TransNetV2, 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
      migrations.
-3. **Search and navigate.** `search_visual_moments` (§5), `list_segments`, `view_sequence`.
+3. **Search and navigate.** `search_visual_moments` (§5), `list_segments`, `view_sequence`, and
+   saved captions (§4.4).
 4. **Enrich and evaluate.** Insights re-run with OCR text, and the eval set to set the models
    and thresholds.
 
@@ -326,16 +355,21 @@ Each step ships something usable. The riskiest assumption is tested first.
    footage. Surya is the fallback.
 4. **One frame can't show an action,** so single-frame embeddings only find candidate moments
    for "picks up the cup". `view_sequence` has to confirm them.
-5. **The segment map is thin on general footage.** Without captions, a segment of footage with
-   no speech or text carries little besides its times. If the eval shows the sub-agent spending
-   images on the wrong segments, add per-segment VLM captions (v2).
+5. **The segment map is thin on general footage.** Until someone asks about it, a segment of
+   footage with no speech or text carries little besides its times. Saved captions (§4.4) fill
+   the map in as the video is used. If the eval shows the sub-agent still spending images on the
+   wrong segments of fresh videos, caption segments at ingestion (v2).
+6. **Saved captions can be wrong or incomplete.** A later question may trust a caption that
+   missed a detail. The sub-agent treats a caption as a lead and looks at the pixels when the
+   answer depends on a detail the caption doesn't state.
 
 ## 11. Out of scope for v1
 
 * Exact positions in the frame (bounding boxes) and grouping shots into scenes.
 * Thumbnails next to visual citations in the website (v1 keeps today's clickable timestamps).
 * Backfilling videos ingested before this ships.
-* VLM captions per segment at ingestion.
+* VLM captions for every segment at ingestion (v1 saves captions only when a frame is viewed,
+  §4.4).
 * Chapters or memories that use visual signals (only insights are enriched).
 * Moving transcript and memory search from MiniLM (English-only) to a multilingual model.
 * Sharing one decode pass between TransNetV2 and the 0.5 fps sampling.
