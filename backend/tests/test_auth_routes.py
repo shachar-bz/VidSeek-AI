@@ -118,7 +118,7 @@ def test_signup_with_a_taken_email_is_a_conflict() -> None:
     app = create_app(
         session_registry=SessionRegistry({"allowed"}),
         job_manager=JobManager(Path.cwd()),
-        user_auth_registry=UserAuthRegistry(),
+        user_auth_registry=UserAuthRegistry(PostgresSessions(pool=pool)),
         users_store=PostgresUsers(pool=pool),
     )
     with TestClient(app) as client:

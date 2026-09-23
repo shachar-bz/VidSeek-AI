@@ -8,17 +8,17 @@ other, so a route can require one, the other, both or neither.
 
 Tokens are backed by the `sessions` table (`backend.storage.postgres.sessions`) rather than
 an in-process dictionary, so one sign-in is recognised by both the website and the Chrome
-extension and survives a process restart.
+extension and survives a process restart. `core/` imports no other project package, so that
+store is described here by the `SessionsStore` protocol and handed in by `api/`.
 """
 
 from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Protocol
 
 import bcrypt
-
-from backend.storage.postgres.sessions import PostgresSessions, StoredSession
 
 # Long enough that a signed-in user is not asked to log in again every time they return,
 # short enough that a token copied out of storage does not stay valid forever.
@@ -48,6 +48,23 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+class SessionRecord(Protocol):
+    """The parts of one stored session this module reads."""
+
+    id: str
+    user_id: str
+
+
+class SessionsStore(Protocol):
+    """Durable session storage, as `PostgresSessions` provides it."""
+
+    def create(self, user_id: str, token: str, surface: str, expires_at) -> SessionRecord: ...
+
+    def verify(self, token: str) -> SessionRecord | None: ...
+
+    def revoke(self, user_id: str, session_id: str) -> bool: ...
+
+
 class UserAuthRegistry:
     """Issues and verifies the bearer tokens login and signup hand back, via `sessions`.
 
@@ -57,10 +74,10 @@ class UserAuthRegistry:
 
     def __init__(
         self,
-        sessions_store: PostgresSessions | None = None,
+        sessions_store: SessionsStore,
         ttl_seconds: int = AUTH_TOKEN_TTL_SECONDS,
     ):
-        self._sessions = sessions_store if sessions_store is not None else PostgresSessions()
+        self._sessions = sessions_store
         self._ttl_seconds = ttl_seconds
 
     def issue(self, user_id: str, surface: str) -> str:
@@ -71,7 +88,7 @@ class UserAuthRegistry:
         self._sessions.create(user_id, token, surface, expires_at)
         return token
 
-    def verify(self, token: str) -> StoredSession | None:
+    def verify(self, token: str) -> SessionRecord | None:
         """The live session `token` belongs to, or None if it is unknown, expired or revoked.
 
         `PostgresSessions.verify` bumps `last_used_at` in the same statement that checks
