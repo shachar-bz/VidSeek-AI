@@ -18,12 +18,19 @@ from .chapters import (
 )
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
+from .frame_captions import (
+    FrameCaptionMatch,
+    NewFrameCaption,
+    PostgresFrameCaptions,
+    StoredFrameCaption,
+)
 from .conversations import PostgresConversations, StoredConversation
 from .memories import NewMemory, PostgresMemories, StoredMemory
 from .memory_embeddings import (
     MemoryEmbedding,
     MemoryForEmbedding,
     MemoryMatch,
+    MemorySimilarity,
     PostgresMemoryEmbeddings,
 )
 from .library_views import LibraryViewRow, PostgresLibraryViews
@@ -37,25 +44,40 @@ from .users import NewUser, PostgresUsers, StoredUser
 from .video_insights import NewVideoInsights, PostgresVideoInsights, StoredVideoInsights
 from .video_jobs import PostgresVideoJobs, StoredVideoJob, VideoJob
 from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
+from .visual_index import (
+    FrameSimilarity,
+    NewFrameEmbedding,
+    NewVisualSegment,
+    PostgresVisualIndex,
+    StoredVisualSegment,
+    VisualIndexState,
+)
 
 __all__ = [
     "ChapterEmbedding",
     "ChapterForEmbedding",
     "ChapterHeading",
     "ChapterWithNeighbours",
+    "FrameCaptionMatch",
+    "FrameSimilarity",
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",
+    "MemorySimilarity",
     "LibraryViewRow",
     "NewChapter",
+    "NewFrameCaption",
+    "NewFrameEmbedding",
     "NewMemory",
     "NewUser",
     "NewVideoInsights",
+    "NewVisualSegment",
     "PinnedAnswerForVideo",
     "PostgresChapterEmbeddings",
     "PostgresChapters",
     "PostgresComments",
     "PostgresConversations",
+    "PostgresFrameCaptions",
     "PostgresMemories",
     "PostgresMemoryEmbeddings",
     "PostgresLibraryViews",
@@ -69,10 +91,12 @@ __all__ = [
     "PostgresVideoInsights",
     "PostgresVideoJobs",
     "PostgresVideoRecords",
+    "PostgresVisualIndex",
     "StoredChapter",
     "StoredChapterMemory",
     "StoredChapterOutline",
     "StoredConversation",
+    "StoredFrameCaption",
     "StoredMemory",
     "StoredMessage",
     "StoredPinnedAnswer",
@@ -82,8 +106,10 @@ __all__ = [
     "StoredVideoInsights",
     "StoredVideoJob",
     "StoredVideoRecord",
+    "StoredVisualSegment",
     "VideoJob",
     "VideoRecord",
+    "VisualIndexState",
     "build_pool",
     "connection",
     "hash_token",

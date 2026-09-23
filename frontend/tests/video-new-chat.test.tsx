@@ -36,6 +36,7 @@ const video: VideoDetail = {
   transcript_language: "en",
   transcript_timing_fidelity: "caption",
   conversation_count: 0,
+  visual_status: "ready",
   insights: null
 };
 
@@ -48,14 +49,22 @@ const created: ConversationDetail = {
   messages: []
 };
 
-function renderWorkspace() {
+function renderWorkspace(playerTime?: () => number | null) {
   return render(
     <MemoryRouter initialEntries={["/videos/video-1"]}>
       <Routes>
-        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} />} />
+        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} playerTime={playerTime} />} />
       </Routes>
     </MemoryRouter>
   );
+}
+
+async function sendFirstMessage(text: string) {
+  await screen.findByText("No chats yet.");
+  fireEvent.click(screen.getByRole("button", { name: /New chat/ }));
+  fireEvent.change(screen.getByLabelText("Ask about this video"), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+  await waitFor(() => expect(api.sendConversationMessage).toHaveBeenCalled());
 }
 
 describe("a new chat", () => {
@@ -90,5 +99,22 @@ describe("a new chat", () => {
     expect(api.renameConversation).toHaveBeenCalledWith("conversation-1", { title: "Chat 1" });
     expect(api.sendConversationMessage.mock.calls[0]?.slice(0, 2)).toEqual(["conversation-1", { content: "What is evaporation?" }]);
     expect(await screen.findByText("Chat 1")).toBeTruthy();
+  });
+
+  it("sends where the player was, so 'what is this?' has a moment to point at", async () => {
+    renderWorkspace(() => 312.4);
+    await sendFirstMessage("What is this diagram?");
+
+    expect(api.sendConversationMessage.mock.calls[0]?.[1]).toEqual({
+      content: "What is this diagram?",
+      current_time_seconds: 312.4
+    });
+  });
+
+  it("sends no position when the player has none to give", async () => {
+    renderWorkspace(() => null);
+    await sendFirstMessage("What is evaporation?");
+
+    expect(api.sendConversationMessage.mock.calls[0]?.[1]).toEqual({ content: "What is evaporation?" });
   });
 });

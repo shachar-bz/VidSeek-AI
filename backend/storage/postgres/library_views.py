@@ -40,6 +40,9 @@ class LibraryViewRow:
     insights_summary: str | None = None
     insights_takeaways: list[str] | None = None
     insights_suggested_questions: list[str] | None = None
+    # How far the video's visual index is (`videos.visual_status`); None for a job with
+    # no video row yet.
+    visual_status: str | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> "LibraryViewRow":
@@ -79,6 +82,7 @@ class LibraryViewRow:
             insights_suggested_questions=list(
                 row.get("insights_suggested_questions") or []
             ),
+            visual_status=row.get("visual_status"),
         )
 
 
@@ -104,6 +108,7 @@ with linked as (
            v.transcript_timing_fidelity, v.blob_container, v.blob_name,
            vi.summary as insights_summary, vi.takeaways as insights_takeaways,
            vi.suggested_questions as insights_suggested_questions,
+           v.visual_status,
            (select count(*) from public.conversations c
              where c.user_id = uv.user_id and c.video_id = uv.video_id) as conversation_count
     from public.user_videos uv
@@ -126,7 +131,8 @@ with linked as (
            null::text as transcript_timing_fidelity, null::text as blob_container,
            null::text as blob_name, null::text as insights_summary,
            null::text[] as insights_takeaways,
-           null::text[] as insights_suggested_questions, 0::bigint as conversation_count
+           null::text[] as insights_suggested_questions, null::text as visual_status,
+           0::bigint as conversation_count
     from public.video_jobs j
     where j.user_id = %s::uuid and (
         j.video_id is null or not exists (

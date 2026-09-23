@@ -21,6 +21,7 @@ const video: VideoDetail = {
   transcript_language: "en",
   transcript_timing_fidelity: "caption",
   conversation_count: 0,
+  visual_status: "ready",
   insights: {
     summary: "Water moves continuously through the atmosphere and the ground.",
     takeaways: ["Evaporation", "Condensation", "Precipitation", "Collection", "The cycle repeats"],

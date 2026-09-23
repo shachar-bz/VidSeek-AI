@@ -26,6 +26,7 @@ from backend.schemas.videos import (
     VideoInsights,
     VideoOutlineResponse,
     VideoTranscript,
+    VisualStatus,
 )
 from backend.services.video_download.thumbnail import (
     ThumbnailGenerationError,
@@ -113,6 +114,7 @@ def video_detail(
         transcript_timing_fidelity=row.transcript_timing_fidelity,
         insights=insights,
         conversation_count=row.conversation_count,
+        visual_status=VisualStatus(row.visual_status) if row.visual_status else None,
     )
 
 

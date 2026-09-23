@@ -20,6 +20,12 @@ that mirror write lands, so this process only ever holds what an active run need
 and cancellation state. A page whose video is already recorded skips the pipeline
 altogether -- `create` checks `videos.normalized_source_url` first and reports a completed
 job without ever entering this dictionary.
+
+Two executors, one worker each. The job executor runs the pipeline -- download, store, then
+the transcript stages -- and a job's slot frees when those finish. The visual executor runs
+the visual indexing the pipeline hands over right after Store, so the next job's transcript
+stages may overlap this video's indexing, while two indexing runs never share the GPU. A job
+reports done without waiting for its index; `videos.visual_status` tracks that separately.
 """
 
 from __future__ import annotations
@@ -27,13 +33,14 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from yt_dlp.utils import DownloadCancelled
 
+from backend.core import config
 from backend.core.errors import (
     JobNotFoundError,
     JobStateConflictError,
@@ -53,6 +60,7 @@ from backend.download_pipeline import (
     AcquisitionRoute,
     ProcessedVideo,
     VideoStorageError,
+    index_video_visually,
     run_download_pipeline,
 )
 from backend.schemas.browser import MediaKind
@@ -235,9 +243,17 @@ class JobManager:
         self._jobs: dict[str, _Job] = {}
         self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vidseek-job")
+        self._visual_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="vidseek-visual"
+        )
+        # Set on shutdown, so an index being built stops at its next frame instead of
+        # holding the process open for the rest of a long video.
+        self._visual_stop = threading.Event()
 
     def shutdown(self) -> None:
+        self._visual_stop.set()
         self._executor.shutdown(wait=False, cancel_futures=True)
+        self._visual_executor.shutdown(wait=False, cancel_futures=True)
 
     def create(
         self, request: CreateVideoJobRequest, user_id: str | None = None
@@ -514,6 +530,9 @@ class JobManager:
                 ),
                 user_id=user_id,
                 local_path=local_path,
+                schedule_visual_indexing=(
+                    self._schedule_visual_indexing if config.visual_indexing_enabled() else None
+                ),
             )
         except DownloadCancelled:
             self._mark_cancelled(job_id)
@@ -536,6 +555,24 @@ class JobManager:
             )
         else:
             self._finish(job_id, processed)
+
+    def _schedule_visual_indexing(self, video_id: str, local_path: Path) -> None:
+        """Queue one stored video's visual index on the visual executor, which now owns its file.
+
+        The task deletes the local file itself when it ends. A task that never starts --
+        cancelled because the manager shut down first -- cannot, so the future's callback
+        does it instead; the video's row stays `pending`, which is the truth about an index
+        nobody built.
+        """
+        future = self._visual_executor.submit(
+            index_video_visually, video_id, local_path, stop_event=self._visual_stop
+        )
+
+        def delete_if_never_run(finished: Future) -> None:
+            if finished.cancelled():
+                local_path.unlink(missing_ok=True)
+
+        future.add_done_callback(delete_if_never_run)
 
     def _fail_acquisition(
         self,
@@ -586,8 +623,8 @@ class JobManager:
         acquired = processed.acquired
         with self._lock:
             job = self._require(job_id)
-            # The video now lives only in Blob Storage; the local copy made for
-            # transcription is gone.
+            # The video now lives in Blob Storage. The local copy made for transcription is
+            # visual indexing's until it is deleted, and nothing the extension should use.
             job.video_path = None
             job.transcript_text_path = (
                 str(acquired.transcript_text_path) if acquired.transcript_text_path else None

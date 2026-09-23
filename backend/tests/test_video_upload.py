@@ -68,11 +68,14 @@ def test_the_video_is_stored_under_the_job_that_produced_it(tmp_path: Path) -> N
     assert storage.thumbnails[0][1] == STORED.name
 
 
-def test_the_local_copy_is_deleted_once_it_is_safely_in_the_container(tmp_path: Path) -> None:
+def test_the_local_copy_outlives_the_upload_for_visual_indexing(tmp_path: Path) -> None:
+    # Visual indexing reads the local file after the upload and deletes it when it is done
+    # (`download_pipeline/visual_indexing.py`); the thumbnail has no later reader.
     video_path = tmp_path / "clip.mp4"
     _upload(tmp_path, FakeVideoStorage(), video_path=video_path)
 
-    assert not video_path.exists()
+    assert video_path.exists()
+    assert not (tmp_path / "clip.thumbnail.jpg").exists()
 
 
 def test_a_missing_container_configuration_fails_the_upload_rather_than_skipping_it(

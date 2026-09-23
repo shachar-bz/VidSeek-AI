@@ -9,6 +9,10 @@
 4. Embed — turn the memories and chapters into vectors (`embedding`).
 5. Insights — generate the video's summary, takeaways and suggested questions (`insights`).
 
+Right after Store, the video is also handed to visual indexing (`visual_indexing`), which runs
+on the job manager's own visual executor, in parallel with stages three to five, and outlives
+the run: the job reports done when the transcript stages do, and the index follows later.
+
 Each stage is a module of its own and each one is callable on its own; this is only the
 order and the handover between them. This module performs no stage work itself; each stage
 delegates generation or processing to a service and owns only its durable handoff.
@@ -44,6 +48,7 @@ from .insights import generate_and_store_insights
 from .result import ProcessedVideo
 from .segmentation import segment_and_store
 from .video_storage import store_video
+from .visual_indexing import ScheduleVisualIndexing, hand_over_for_visual_indexing
 
 SEGMENTATION_PROGRESS = 0.92
 SEGMENTATION_MESSAGE = "Finding the video's moments and chapters"
@@ -69,6 +74,7 @@ def run_download_pipeline(
     user_id: str | None = None,
     local_path: Path | None = None,
     pool=None,
+    schedule_visual_indexing: ScheduleVisualIndexing | None = None,
 ) -> ProcessedVideo:
     """Take one video from `route` to stored vectors and generated insights.
 
@@ -76,6 +82,10 @@ def run_download_pipeline(
     `VideoStorageError` if Blob Storage would not take the video, and whatever the download
     service raised if the video could not be obtained at all. Every other failure comes back
     as a problem code on the result.
+
+    `schedule_visual_indexing` is how the job manager's visual executor is reached; it is
+    handed the stored video and its local file right after Store, and from then on owns that
+    file. None means visual indexing is off, and the local file is deleted after Store.
 
     `pool` is threaded through to the stages that write to PostgreSQL so a test can point
     them at its own database; it is None everywhere else, which uses the shared pool.
@@ -99,6 +109,13 @@ def run_download_pipeline(
         progress_callback=progress_callback,
     )
     problems = [storage.problem] if storage.problem else []
+    hand_over_for_visual_indexing(
+        storage.video_id,
+        acquired.video_path,
+        schedule=schedule_visual_indexing,
+        cancel_event=cancel_event,
+        pool=pool,
+    )
 
     reason = _reason_to_stop_after_storage(acquired, storage.video_id, cancel_event)
     if reason is not None:

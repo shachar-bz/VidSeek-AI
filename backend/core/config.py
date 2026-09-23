@@ -98,3 +98,20 @@ def require_loopback() -> bool:
         "VIDSEEK_REQUIRE_LOOPBACK must be true or false "
         f"(received {raw_value!r})"
     )
+
+
+def visual_indexing_enabled() -> bool:
+    """Whether a stored video is indexed for what it shows, as well as for what is said.
+
+    On by default. Indexing runs SigLIP 2 over every sampled frame, which is quick on the
+    developer machine's GPU and slow on a CPU, so a machine without one can turn it off; its
+    videos are then marked `skipped` rather than left looking queued.
+    """
+    raw_value = (get("VIDSEEK_VISUAL_INDEXING", "true") or "true").strip().lower()
+    if raw_value in {"true", "1", "yes", "on"}:
+        return True
+    if raw_value in {"false", "0", "no", "off"}:
+        return False
+    raise RuntimeError(
+        f"VIDSEEK_VISUAL_INDEXING must be true or false (received {raw_value!r})"
+    )

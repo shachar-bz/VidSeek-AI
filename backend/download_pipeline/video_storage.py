@@ -2,8 +2,8 @@
 
 The two halves fail differently and that asymmetry is the whole content of this module.
 Blob Storage is the video's only home — the local copy was made to get the video
-transcribed and is deleted as soon as the upload returns — so a container that will not
-take it leaves the run with nothing, and `VideoStorageError` says so. The `videos` row is
+transcribed and visually indexed, and is deleted once that is done — so a container that
+will not take it leaves the run with nothing, and `VideoStorageError` says so. The `videos` row is
 a description of a blob that already exists, and can be written again later from the blob
 name alone, so a database that refuses it is reported and the run carries on.
 
@@ -59,11 +59,10 @@ def store_video(
     written to the row as its `source`; it is passed through rather than derived from the
     route so that the value the extension was told matches the value the database keeps.
 
-    Duration is probed here, on `acquired.video_path`, because this is the last point that
-    file still exists: `upload_job_video` deletes the local copy the moment the upload
-    returns. A file ffprobe cannot measure still gets stored -- `probe_media_duration_seconds`
-    reports that as None rather than raising, and a video is worth keeping with or without
-    its length.
+    Duration is probed here, on `acquired.video_path`, before the upload, because the row
+    written after it records the length. A file ffprobe cannot measure still gets stored --
+    `probe_media_duration_seconds` reports that as None rather than raising, and a video is
+    worth keeping with or without its length.
     """
     duration_seconds = probe_media_duration_seconds(acquired.video_path)
     try:

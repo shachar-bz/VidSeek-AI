@@ -16,6 +16,8 @@ drag the other along is exactly the coupling that would make the tools hard to c
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 from .readiness import ReadinessStage
@@ -29,6 +31,22 @@ PLAYBACK_URL_LIFETIME_SECONDS = 3600
 # than a slow request and far shorter than the lifetime, so a refresh never races the
 # expiry it is avoiding.
 PLAYBACK_URL_REFRESH_MARGIN_SECONDS = 300
+
+
+class VisualStatus(str, Enum):
+    """How far a video's visual index is. Matches `videos_visual_status_known` in
+    `migrations/0022_video_visual_index.sql`.
+
+    Separate from the readiness stage on purpose: the index is built in the background after
+    the transcript stages, a video is `ready` to chat about long before its index is, and a
+    video whose index failed or was skipped still answers everything its transcript can.
+    """
+
+    PENDING = "pending"
+    INDEXING = "indexing"
+    READY = "ready"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class VideoInsights(BaseModel):
@@ -82,6 +100,10 @@ class VideoDetail(BaseModel):
 
     insights: VideoInsights | None = None
     conversation_count: int = 0
+
+    # Whether questions about what the video shows can search the whole video yet. Null only
+    # when the row carries no status to report.
+    visual_status: VisualStatus | None = None
 
 
 class PlaybackUrl(BaseModel):
