@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { allowsBrowsing, type VideoDetail, type VideoOutlineResponse, type VideoTranscript } from "../../api/types";
 import { getVideo, getVideoOutline, getVideoTranscript } from "../../api/video";
 import { ErrorState, LoadingState, StatusBadge, type StatusTone } from "../../components/ui";
-import { featureFailureMessage } from "../shared";
+import { featureFailureMessage, sourceLabel } from "../shared";
 import { ConversationWorkspace } from "./ConversationWorkspace";
 import { VideoDetailsTabs } from "./OutlineInsights";
 import { VideoPlayer } from "./VideoPlayer";
@@ -19,6 +19,15 @@ function stageTone(stage: VideoDetail["stage"]): StatusTone {
   if (stage === "partial") return "caution";
   if (stage === "failed") return "critical";
   return "active";
+}
+
+/** `en` reads as "English"; a code the browser cannot name is shown as it is. */
+export function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames(undefined, { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 export function VideoPage() {
@@ -97,7 +106,7 @@ export function VideoPage() {
       <header className="feature-page__heading video-page__heading">
         <div>
           <h1>{video.title}</h1>
-          <div className="video-page__metadata">{video.stage !== "ready" ? <StatusBadge tone={stageTone(video.stage)}>{stageLabel(video.stage)}</StatusBadge> : null}{video.duration_seconds !== null ? <span>{Math.round(video.duration_seconds / 60)} min</span> : null}{video.transcript_language ? <span>{video.transcript_language}</span> : null}</div>
+          <div className="video-page__metadata">{video.stage !== "ready" ? <StatusBadge tone={stageTone(video.stage)}>{stageLabel(video.stage)}</StatusBadge> : null}<span>{sourceLabel(video)}</span>{video.duration_seconds !== null ? <span>{Math.round(video.duration_seconds / 60)} min</span> : null}{video.transcript_language ? <span>{languageName(video.transcript_language)}</span> : null}</div>
         </div>
       </header>
       {approximate ? <div className="inline-notice" role="status"><strong>Partial transcript:</strong> timestamps, seeking, and timestamp-like references in answers may be unreliable. All video features remain available.</div> : null}

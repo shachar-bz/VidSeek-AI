@@ -212,7 +212,8 @@ A video page lists the user's conversations about that video, newest first, each
 and when it was last used. Opening one restores its full message history.
 
 - **New conversation** starts a fresh context beside the existing ones. Nothing is lost; the
-  agent simply starts with no memory of the other threads.
+  agent simply starts with no memory of the other threads. A new conversation is stored only
+  once its first message is sent; one opened and left without typing leaves nothing behind.
 - **Auto-generated title** from the first exchange, so the list is readable.
 - **Rename** a conversation.
 - **Delete** a conversation. This permanently removes its messages **and any answers pinned from
