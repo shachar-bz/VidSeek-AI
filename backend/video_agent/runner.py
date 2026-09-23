@@ -47,7 +47,7 @@ from .tools.memories_semantic_search import memories_semantic_search
 # transcriber) reads this same key explicitly; pydantic_ai's default OpenAI provider
 # looks for the standard OPENAI_API_KEY instead, which this project never sets.
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
-MODEL_NAME = "gpt-5.6-terra"
+MODEL_NAME = "gpt-6-sol"
 PARTIAL_TIMING_PROMPT = (
     "The current video's transcript timing may be unreliable. Warn the user when making "
     "timestamp-based statements, while still answering from the retrieved video content."
