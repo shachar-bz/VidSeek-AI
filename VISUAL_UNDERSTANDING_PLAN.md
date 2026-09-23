@@ -37,7 +37,7 @@ general footage), in English and Hebrew:
             │                             ├─► segments                                         main agent (gpt-6-sol)
             └─► ffmpeg 0.5 fps ─┬─► SigLIP 2 embeddings ──► search index         investigate_visual(question, current_time, range?)
                                 ├─► content-change detection ┘                              │
-                                └─► keyframes ─► JPEG to Blob                              ▼
+                                └─► keyframes (timestamps only)                            ▼
                                                └─► OCR (if text) ─► trigram + e5      visual sub-agent (cheap VLM)
                                                                                      list_segments / search_visual_moments /
  after both pipelines finish: re-run insights with OCR text                          read_frame_text / view_frames /
@@ -88,8 +88,13 @@ general footage), in English and Hebrew:
    Each segment records `boundary_kind`: `shot_cut` or `content_change`.
 5. **Keyframes.** Each segment gets one keyframe (the first stable frame, a sample or two after
    the boundary), plus one more every ~60 s for long static segments such as a board being
-   written on slowly. Keyframes are stored as JPEGs in Blob; this is the frame cache (~100–300
-   per hour, a few MB).
+   written on slowly (~100–300 per hour).
+
+   **Frames are processed in place and never stored.** Every decoded frame is used in memory
+   (embedding, phash, text check, OCR) and then discarded. Only what came out of it is kept:
+   embeddings, segment boundaries, and each keyframe's timestamp, OCR text and OCR embedding.
+   When pixels are needed at query time, they are extracted again from the Blob video (§4.2);
+   the keyframe timestamp is enough to get the same frame back.
 6. **OCR.** Each keyframe first goes through a cheap "does this frame contain text?" check,
    since general footage has many frames without any. Frames that pass get OCR through a
    pluggable `OcrEngine` interface:
@@ -141,7 +146,7 @@ version shows which videos need re-indexing after a model change.
 |---|---|---|
 | `list_segments(t0, t1)` | Text-only map: each segment's start/end, `boundary_kind`, chapter, OCR snippet, transcript snippet | No |
 | `search_visual_moments(query, range?)` | Hybrid search (§5). Returns time ranges, each with the segment it falls in | No |
-| `read_frame_text(timestamps)` | OCR of keyframes (cached), or of any timestamp on demand | No |
+| `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
 | `view_frames(timestamps)` | Frames, downscaled (~512 px long side) | Yes, 1 per frame |
 | `view_sequence(t0, t1, n)` | n frames across a window as **one grid image**. Defaults to the segment's range and never crosses a shot cut | Yes, 1 per grid |
 | `get_transcript_window(t0, t1)` | What was said in that window | No |
@@ -158,9 +163,10 @@ version shows which videos need re-indexing after a model change.
   * Enforced by Pydantic AI `UsageLimits` plus an image counter in deps.
   * When the budget is spent, the tool says so and the agent must answer with what it has,
     including "not found" or "low confidence".
-* **Where frames come from:**
-  * keyframe timestamps → the JPEG cache in Blob (instant);
-  * any other timestamp, e.g. "now" → ffmpeg seeks the Blob video through a read (SAS) URL.
+* **Where frames come from:** always extracted on demand. ffmpeg seeks the Blob video through a
+  read (SAS) URL; the frames of one tool call are extracted in parallel. There is no frame cache
+  in v1. Step 1 of the build measures the latency, and a keyframe JPEG cache is added only if a
+  batch of frames takes more than ~1–2 s (an isolated change inside `services/video_frames/`).
 * **How images reach the VLM:** tools return
   `ToolReturn(return_value=..., content=[BinaryContent(...)])`, and Pydantic AI delivers the
   image as a user message. DeepSeek accepts images only in user messages, so this must be tested
@@ -249,7 +255,7 @@ backend/
 ├── services/video_download/jobs.py     # CHANGED: second (visual) executor; the local file's lifetime moves
 ├── storage/
 │   ├── postgres/                       # NEW stores + migrations 0022+
-│   └── blob/                           # CHANGED: keyframe JPEGs, read URLs for seeking
+│   └── blob/                           # CHANGED: read (SAS) URLs so ffmpeg can seek the video
 └── schemas/                            # CHANGED: current_time_seconds on the conversation request; visual_status on the video
 frontend/src/api/types.ts               # CHANGED: mirrors the schema changes
 frontend/src/pages/video/               # CHANGED: the player's currentTime goes out with each message
@@ -270,10 +276,10 @@ MiniLM and TransNetV2 all stay resident in 4 GB of VRAM.
 |---|---|---|
 | `video_frame_embeddings` | ~1,800 | `video_id`, `time_seconds`, `embedding vector(768)`. B-tree on `video_id`, **no ANN index**: queries are always for one video and need every score for the per-video scoring |
 | `video_visual_segments` | ~20–300 | `video_id`, `start_seconds`, `end_seconds`, `boundary_kind` (`shot_cut` / `content_change`), `chapter_id` |
-| `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `blob_name`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_embedding vector(384)` |
+| `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_embedding vector(384)` |
 | `videos` (new columns) | 1 | `visual_status`, `visual_error`, `visual_index_version` |
 
-Blob keyframe path: `{video_id}/keyframes/{time_ms}.jpg`.
+No images are stored: Blob keeps only the video, as today.
 
 ## 8. Evaluation
 
@@ -281,7 +287,8 @@ A small eval set of **~15 real questions over 2–3 videos**, mixing lectures an
 and covering every question type in §1. It is used to:
 
 * pick the VLM (OpenAI cheap vision vs DeepSeek vision-exp);
-* pick the OCR engine (Tesseract vs Surya), with Hebrew included;
+* pick the OCR engine (Tesseract vs Surya), with Hebrew included. With no stored frames, the
+  comparison re-reads keyframe timestamps from local copies of the eval videos;
 * tune the z-score cutoff, the per-model floors, and the content-change thresholds (embedding
   distance, phash distance);
 * tune the grid layout of `view_sequence`. DeepSeek's 384-token image cap may make grids
@@ -299,10 +306,10 @@ Each step ships something usable. The riskiest assumption is tested first.
    * `visual_agent/` with `view_frames`, `read_frame_text` (on-demand OCR) and
      `get_transcript_window`, plus the main agent's `investigate_visual`.
    * This already answers "what's on screen now" with no index. Test image delivery to both VLM
-     candidates here.
+     candidates here, and measure Blob seek latency to decide whether a frame cache is needed.
 2. **Build the index.**
    * The visual executor, the local-file lifetime change and `visual_status`.
-   * TransNetV2, 0.5 fps sampling, SigLIP embeddings, segments, keyframes to Blob, OCR, and
+   * TransNetV2, 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
      migrations.
 3. **Search and navigate.** `search_visual_moments` (§5), `list_segments`, `view_sequence`.
 4. **Enrich and evaluate.** Insights re-run with OCR text, and the eval set to set the models
@@ -312,8 +319,9 @@ Each step ships something usable. The riskiest assumption is tested first.
 
 1. **DeepSeek vision is experimental.** It caps each image at 384 tokens and accepts images only
    in user messages. Verify image delivery through Pydantic AI's `ToolReturn` in step 1.
-2. **Seeking in a WebM file over HTTP can be slow** when it has no seek cues. This affects frames
-   at arbitrary timestamps, such as "now". Measure it; if it is slow, remux at Store time.
+2. **Seeking in a WebM file over HTTP can be slow** when it has no seek cues, and every frame the
+   sub-agent looks at is a seek. Measure it; if it is slow, remux at Store time, and if it is
+   still slow, add the keyframe JPEG cache.
 3. **Tesseract may be weak on Hebrew** that isn't clean slide text, such as boards or text over
    footage. Surya is the fallback.
 4. **One frame can't show an action,** so single-frame embeddings only find candidate moments
@@ -331,4 +339,5 @@ Each step ships something usable. The riskiest assumption is tested first.
 * Chapters or memories that use visual signals (only insights are enriched).
 * Moving transcript and memory search from MiniLM (English-only) to a multilingual model.
 * Sharing one decode pass between TransNetV2 and the 0.5 fps sampling.
+* Storing keyframe images (added only if the step 1 latency measurement calls for it).
 * Running on machines other than the developer's (no GPU, CPU-only) or a hosted deployment.
