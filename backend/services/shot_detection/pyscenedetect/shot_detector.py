@@ -23,6 +23,12 @@ DEFAULT_CONTENT_THRESHOLD = 27.0
 # so that the behaviour does not change with the video's frame rate.
 DEFAULT_MIN_SHOT_DURATION_SECONDS = 0.5
 
+# Width every frame is shrunk towards before it is compared with the previous one. Cuts
+# are whole-frame changes, so detail above roughly 256-480 px only adds decode cost and
+# sensor noise. PySceneDetect can only downscale by a whole-number factor, so the width it
+# actually works at is the source width divided by the factor nearest to reaching this.
+TARGET_PROCESS_WIDTH = 320
+
 
 @dataclass(frozen=True)
 class Shot:
@@ -50,6 +56,8 @@ class ShotDetectionResult:
     video_path: str
     fps: float
     frame_count: int
+    process_width: int
+    process_height: int
     shots: list[Shot] = field(default_factory=list)
 
     @property
@@ -80,8 +88,11 @@ def detect_shots(
 
     video = open_video(video_path)
     fps = float(video.frame_rate)
+    source_width, source_height = video.frame_size
 
     scene_manager = SceneManager()
+    scene_manager.auto_downscale = False
+    scene_manager.downscale = max(1, round(source_width / TARGET_PROCESS_WIDTH))
     scene_manager.add_detector(
         ContentDetector(
             threshold=content_threshold,
@@ -112,5 +123,7 @@ def detect_shots(
         video_path=video_path,
         fps=fps,
         frame_count=video.duration.frame_num,
+        process_width=source_width // scene_manager.downscale,
+        process_height=source_height // scene_manager.downscale,
         shots=shots,
     )
