@@ -1686,7 +1686,7 @@ h3 {
 
 .video-player__controls {
   position: absolute;
-  top: 0.55rem;
+  bottom: 3.25rem;
   right: 0.55rem;
   display: flex;
   gap: 0.35rem;

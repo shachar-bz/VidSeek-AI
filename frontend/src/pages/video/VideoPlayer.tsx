@@ -55,7 +55,6 @@ export function VideoPlayer({
   const intentRef = useRef<PlaybackIntent | null>(null);
   const captionsOnRef = useRef(false);
   const [captionsOn, setCaptionsOn] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   const [playback, setPlayback] = useState<PlaybackUrl | null>(null);
   const [loading, setLoading] = useState(available);
   const [error, setError] = useState<string | null>(null);
@@ -77,14 +76,11 @@ export function VideoPlayer({
   useEffect(() => {
     function readFullscreen() {
       const frame = frameRef.current;
-      // `controlsList` removes the browser's own fullscreen button where it is honoured.
-      // Where it is not, the video itself goes fullscreen and the overlay disappears with
-      // it, so the frame takes that fullscreen over.
+      // The browser's own fullscreen button targets the video element, which would drop
+      // the CC overlay, so redirect that fullscreen request to the frame around it.
       if (frame && document.fullscreenElement === videoRef.current) {
         void document.exitFullscreen().then(() => frame.requestFullscreen()).catch(() => undefined);
-        return;
       }
-      setFullscreen(document.fullscreenElement === frame);
     }
     document.addEventListener("fullscreenchange", readFullscreen);
     return () => document.removeEventListener("fullscreenchange", readFullscreen);
@@ -99,11 +95,6 @@ export function VideoPlayer({
     captionsOnRef.current = !captionsOnRef.current;
     setCaptionsOn(captionsOnRef.current);
     applyCaptionMode();
-  }
-
-  function toggleFullscreen() {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    else void frameRef.current?.requestFullscreen?.().catch(() => undefined);
   }
 
   const rememberIntent = useCallback(() => {
@@ -198,7 +189,6 @@ export function VideoPlayer({
           key={playback?.url}
           src={playback?.url}
           controls
-          controlsList="nofullscreen"
           preload="metadata"
           aria-label={title}
           onLoadedMetadata={onLoadedMetadata}
@@ -226,19 +216,6 @@ export function VideoPlayer({
               <span className="visually-hidden">{captionsOn ? "Turn subtitles off" : "Turn subtitles on"}</span>
             </button>
           ) : null}
-          <button
-            className="video-player__control"
-            type="button"
-            title={fullscreen ? "Exit fullscreen" : "Full screen"}
-            onClick={toggleFullscreen}
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
-              {fullscreen
-                ? <path d="M9 4v5H4m11-5v5h5M9 20v-5H4m11 5v-5h5" />
-                : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5m11-5v5h-5" />}
-            </svg>
-            <span className="visually-hidden">{fullscreen ? "Exit fullscreen" : "Full screen"}</span>
-          </button>
         </div>
       </div>
       {error ? <p className="video-player__notice" role="status">Playback refresh failed. The current link may continue working.</p> : null}
