@@ -34,8 +34,10 @@ VidSeek-AI/
 │   │   │   ├── chapter_embedding/          # Embeds a video's chapters and stores the vectors.
 │   │   │   └── memory_embedding/           # Embeds a video's memories and stores the vectors.
 │   │   ├── shot_detection/                 # Shot boundary detection services.
-│   │   │   ├── omni/                       # Shot boundary detection on a GPU.
-│   │   │   └── pyscenedetect/              # Shot boundary detection without a GPU.
+│   │   │   ├── omni/                       # Shot boundary detection on a GPU (OmniShotCut).
+│   │   │   ├── pyscenedetect/              # Shot boundary detection without a GPU.
+│   │   │   ├── transnetv2/                 # Shot boundary detection with TransNetV2, CPU or GPU.
+│   │   │   └── results/                    # Generated output of the detector comparison; never imported.
 │   │   └── video_download/                 # Video acquisition, one package per source, plus shared orchestration.
 │   │       ├── web/                        # Authenticated non-YouTube download and transcript pipeline.
 │   │       └── youtube/                    # Downloads a YouTube video, its transcript and its top comments.

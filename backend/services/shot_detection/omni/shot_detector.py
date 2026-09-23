@@ -68,6 +68,8 @@ class ShotDetectionResult:
     video_path: str
     fps: float
     frame_count: int
+    process_width: int
+    process_height: int
     shots: list[Shot] = field(default_factory=list)
 
     @property
@@ -209,5 +211,10 @@ def detect_shots(
         shots = [shot for shot in shots if not shot.begins_with_gradual_transition]
 
     return ShotDetectionResult(
-        video_path=video_path, fps=fps, frame_count=len(frames), shots=shots
+        video_path=video_path,
+        fps=fps,
+        frame_count=len(frames),
+        process_width=process_width,
+        process_height=process_height,
+        shots=shots,
     )

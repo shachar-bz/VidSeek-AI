@@ -2,7 +2,8 @@
 
 Wraps TransNetV2 (https://github.com/soCzech/TransNetV2) via its PyTorch
 reimplementation, the `transnetv2-pytorch` package. Runs on CPU, CUDA or MPS, and
-downloads its converted weights from the HuggingFace Hub on first use.
+downloads its converted weights from the HuggingFace Hub on first use. Frames are decoded
+here with the ffmpeg binary, straight to the 48x27 the network was trained at.
 
 This package is deliberately standalone: it shares no code with the other detectors in
 `backend/services/shot_detection` (`omni`, `pyscenedetect`), so any one of the three can
@@ -13,12 +14,23 @@ import functools
 import os
 from dataclasses import dataclass, field, replace
 
+import ffmpeg
+import numpy as np
 import torch
 from huggingface_hub import hf_hub_download
 from transnetv2_pytorch import TransNetV2
 
 DEFAULT_CHECKPOINT_REPO = "Sn4kehead/TransNetV2"
 DEFAULT_CHECKPOINT_FILENAME = "transnetv2-pytorch-weights.pth"
+
+# The only input size the network accepts: it was trained on 48x27 thumbnails, and its
+# first layer asserts on the shape.
+PROCESS_WIDTH = 48
+PROCESS_HEIGHT = 27
+
+# Keeps every source frame exactly as stored, so frame indices in the decoded array line
+# up with frame numbers in the source video. `fps_mode` needs ffmpeg >= 5.0.
+PASSTHROUGH_OPTIONS = {"fps_mode": "passthrough"}
 
 # TransNetV2's own default: a frame is a shot boundary once the model's predicted
 # probability for it crosses this line.
@@ -59,6 +71,8 @@ class ShotDetectionResult:
     video_path: str
     fps: float
     frame_count: int
+    process_width: int
+    process_height: int
     shots: list[Shot] = field(default_factory=list)
 
     @property
@@ -133,6 +147,25 @@ def _merge_short_shots(shots: list[Shot], min_duration_seconds: float) -> list[S
     return [replace(shot, index=index) for index, shot in enumerate(merged)]
 
 
+def _decode_video_frames(video_path: str) -> np.ndarray:
+    """Decode every frame of a video at the network's 48x27, as (T, H, W, 3) RGB uint8."""
+    try:
+        stream, _ = (
+            ffmpeg.input(video_path)
+            .output("pipe:", format="rawvideo", pix_fmt="rgb24",
+                    s=f"{PROCESS_WIDTH}x{PROCESS_HEIGHT}", **PASSTHROUGH_OPTIONS)
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+    except ffmpeg.Error as error:
+        stderr = (error.stderr or b"").decode("utf-8", "ignore")
+        raise RuntimeError(f"ffmpeg failed to decode {video_path}\n{stderr}") from error
+
+    frames = np.frombuffer(stream, np.uint8).reshape(-1, PROCESS_HEIGHT, PROCESS_WIDTH, 3)
+    if len(frames) == 0:
+        raise ValueError(f"Decoded 0 frames from: {video_path}")
+    return frames
+
+
 def detect_shots(
     video_path: str,
     *,
@@ -157,29 +190,47 @@ def detect_shots(
         raise FileNotFoundError(f"Video not found: {video_path}")
 
     model = load_detection_model(checkpoint_repo, checkpoint_filename, device)
+    fps = model.get_video_fps(video_path)
+    frames = _decode_video_frames(video_path)
 
     with torch.no_grad():
-        analysis = model.analyze_video(video_path)
+        single_frame_predictions, _ = model.predict_frames(
+            torch.from_numpy(frames.copy()).to(model.device), quiet=True
+        )
 
-    fps = float(analysis["fps"])
-    scenes = model.predictions_to_scenes_with_data(
-        analysis["single_frame_predictions"], fps=fps, threshold=threshold
-    )
+    # The package reports each scene as an inclusive [first, last] frame pair and leaves
+    # the frames of a gradual transition out of both neighbours. Only each scene's first
+    # frame is kept, and every shot is extended to where the next one starts, so the shots
+    # tile the whole video the same way the other detectors' do.
+    scene_start_frames = [
+        int(start) for start, _ in model.predictions_to_scenes(
+            single_frame_predictions.cpu().numpy(), threshold=threshold
+        )
+    ]
+    scene_start_frames[0] = 0
+    frame_count = len(frames)
+    scene_end_frames = scene_start_frames[1:] + [frame_count]
 
     shots = [
         Shot(
             index=index,
-            start_frame=round(scene["start_time"] * fps),
-            end_frame=round(scene["end_time"] * fps),
-            start_seconds=scene["start_time"],
-            end_seconds=scene["end_time"],
+            start_frame=start_frame,
+            end_frame=end_frame,
+            start_seconds=start_frame / fps,
+            end_seconds=end_frame / fps,
         )
-        for index, scene in enumerate(scenes)
+        for index, (start_frame, end_frame) in enumerate(
+            zip(scene_start_frames, scene_end_frames)
+        )
     ]
 
     shots = _merge_short_shots(shots, min_shot_duration_seconds)
 
-    frame_count = shots[-1].end_frame if shots else 0
     return ShotDetectionResult(
-        video_path=video_path, fps=fps, frame_count=frame_count, shots=shots
+        video_path=video_path,
+        fps=fps,
+        frame_count=frame_count,
+        process_width=PROCESS_WIDTH,
+        process_height=PROCESS_HEIGHT,
+        shots=shots,
     )

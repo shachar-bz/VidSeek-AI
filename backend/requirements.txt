@@ -19,10 +19,12 @@ scenedetect<0.8
 # --- transnetv2 shot detection module ---
 # Remove this block together with backend/services/shot_detection/transnetv2/ if the
 # module is dropped. Runs on CPU, CUDA or MPS (torch is already a dependency above), and
-# downloads its converted weights from the HuggingFace Hub on first use, so no ffmpeg
-# binary is required.
+# downloads its converted weights from the HuggingFace Hub on first use. Frames are
+# decoded to 48x27 through ffmpeg-python, so the ffmpeg binary (>= 5.0) must be on PATH;
+# ffmpeg-python is listed again here so this block stands on its own.
 transnetv2-pytorch
 huggingface_hub
+ffmpeg-python
 # --- end transnetv2 shot detection module ---
 
 # --- elevenlabs transcription module ---
