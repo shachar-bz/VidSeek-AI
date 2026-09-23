@@ -1684,12 +1684,24 @@ h3 {
   object-fit: contain;
 }
 
+/* Chrome lays its control bar out in fixed 48px slots, anchored to the bottom-right: the
+   overflow menu in the last slot and fullscreen in the one before it. The margin opens an
+   empty slot between the speaker and fullscreen buttons, and the CC control is centred in
+   it, so the three icons keep the same spacing. Pixels, not rems, to match those slots.
+   Only a video with captions has a CC control, so only it gets the extra slot. */
+.video-player__frame--with-captions video::-webkit-media-controls-fullscreen-button {
+  margin-left: 48px;
+}
+
 .video-player__controls {
   position: absolute;
-  bottom: 3.25rem;
-  right: 0.55rem;
+  bottom: 24px;
+  right: 96px;
+  width: 48px;
+  height: 48px;
   display: flex;
-  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
   opacity: 0.35;
   transition: opacity 150ms ease;
 }
@@ -1700,17 +1712,17 @@ h3 {
 }
 
 .video-player__control {
-  min-width: 2.15rem;
-  height: 2.15rem;
+  min-width: 28px;
+  height: 24px;
   display: grid;
   place-items: center;
-  padding: 0 0.45rem;
+  padding: 0 0.3rem;
   border: 1px solid rgb(255 255 255 / 22%);
-  border-radius: 0.45rem;
+  border-radius: 0.35rem;
   color: #fff;
   background: rgb(12 16 30 / 68%);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.04em;
 }

@@ -183,7 +183,10 @@ export function VideoPlayer({
 
   return (
     <div className="video-player">
-      <div className="video-player__frame" ref={frameRef}>
+      <div
+        className={captionsUrl ? "video-player__frame video-player__frame--with-captions" : "video-player__frame"}
+        ref={frameRef}
+      >
         <video
           ref={connectVideo}
           key={playback?.url}
