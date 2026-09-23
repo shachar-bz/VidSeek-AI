@@ -33,11 +33,11 @@ general footage), in English and Hebrew:
 ```
                         INGESTION (background)                          QUERY (per question)
 
- video file ──► TransNetV2 ──► shot cuts ─┐                 website ── message + current_time ──►
-            │                             ├─► segments                                         main agent (gpt-6-sol)
-            └─► ffmpeg 0.5 fps ─┬─► SigLIP 2 embeddings ──► search index         investigate_visual(question, current_time, range?)
-                                ├─► content-change detection ┘                              │
-                                └─► keyframes (timestamps only)                            ▼
+ video file ──► ffmpeg 0.5 fps ─┬─► SigLIP 2 embeddings ──► search index      website ── message + current_time ──►
+                                │                                                          main agent (gpt-6-sol)
+                                ├─► content-change detection ──► segments        investigate_visual(question, current_time, range?)
+                                │                                                               │
+                                └─► keyframes (timestamps only)                                ▼
                                                └─► OCR (if text) ─► trigram + e5      visual sub-agent (cheap VLM)
                                                                                      list_segments / search_visual_moments /
  after both pipelines finish: re-run insights with OCR text                          read_frame_text / view_frames /
@@ -68,25 +68,23 @@ general footage), in English and Hebrew:
 
 ### 3.2 Steps
 
-1. **Shot cuts — TransNetV2.** It runs on the local file and gives hard cut boundaries. It is
-   trained to ignore motion inside a shot (pans, people walking), so on general footage it gives
-   clean boundaries. For v1 it decodes the file itself; sharing one decode pass with step 2 is a
-   later optimisation, since this work is off the critical path.
-2. **Frame sampling — 0.5 fps.** ffmpeg samples **one frame every 2 seconds**, at ~384 px on the
-   long side. For a 1-hour video that is **~1,800 frames**.
-3. **Image embeddings.** Every sampled frame is embedded with **SigLIP 2 (multilingual, base)**,
+1. **Frame sampling — 0.5 fps.** ffmpeg decodes the local file once and samples **one frame
+   every 2 seconds**, at ~384 px on the long side. For a 1-hour video that is **~1,800 frames**.
+   This is the only decode pass in indexing.
+2. **Image embeddings.** Every sampled frame is embedded with **SigLIP 2 (multilingual, base)**,
    so both Hebrew and English text queries can search it. That is ~1,800 × 768-dim vectors per
    hour, about 5.5 MB. These vectors are the searchable layer for "when does Y appear".
-4. **Segments — the sub-agent's map.** A segment is a TransNetV2 shot, split further wherever
-   the screen content changes. This matters for lectures, where one "shot" can run ~3 minutes
-   and cover many slides. Walking the 0.5 fps stream inside each shot, a new segment starts when
-   either
-   * the SigLIP embedding differs enough from the segment's first frame (a new scene or view), or
+3. **Segments — the sub-agent's map.** No shot detection model is used; segments come from the
+   0.5 fps stream itself. Walking it in order, a new segment starts when either
+   * the SigLIP embedding differs enough from the segment's first frame (a new scene, a camera
+     cut or a new view), or
    * the perceptual hash (phash) changes enough (a new slide or new text on a board; SigLIP can
      see two slides as near-identical, so this check matters).
 
-   Each segment records `boundary_kind`: `shot_cut` or `content_change`.
-5. **Keyframes.** Each segment gets one keyframe (the first stable frame, a sample or two after
+   To keep camera motion, people walking or a brief flash from splitting a segment, a change
+   must hold for **2 consecutive samples**, and segments have a **minimum length of ~6 s**.
+   Each segment records `boundary_kind`: `scene_change` (embedding) or `text_change` (phash).
+4. **Keyframes.** Each segment gets one keyframe (the first stable frame, a sample or two after
    the boundary), plus one more every ~60 s for long static segments such as a board being
    written on slowly (~100–300 per hour).
 
@@ -95,7 +93,7 @@ general footage), in English and Hebrew:
    embeddings, segment boundaries, and each keyframe's timestamp, OCR text and OCR embedding.
    When pixels are needed at query time, they are extracted again from the Blob video (§4.2);
    the keyframe timestamp is enough to get the same frame back.
-6. **OCR.** Each keyframe first goes through a cheap "does this frame contain text?" check,
+5. **OCR.** Each keyframe first goes through a cheap "does this frame contain text?" check,
    since general footage has many frames without any. Frames that pass get OCR through a
    pluggable `OcrEngine` interface:
    * v1: **Tesseract** `eng+heb` (CPU).
@@ -104,7 +102,7 @@ general footage), in English and Hebrew:
 
    The OCR text is indexed two ways: **pg_trgm** for exact words, and **multilingual-e5-small**
    (384-dim) for meaning. The existing MiniLM is English-only, so it is not used for OCR text.
-7. **Insights enrichment.** When indexing is done, the visual task waits for this video's text
+6. **Insights enrichment.** When indexing is done, the visual task waits for this video's text
    run to finish (it holds that run's future), then re-runs **only the insights stage** (summary,
    takeaways, suggested questions) with the segments' OCR text added. Chapters and memories stay
    transcript-only. Waiting on the future gives the right order with no race and no database
@@ -148,7 +146,7 @@ version shows which videos need re-indexing after a model change.
 | `search_visual_moments(query, range?)` | Hybrid search (§5). Returns time ranges, each with the segment it falls in | No |
 | `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
 | `view_frames(timestamps)` | Frames, downscaled (~512 px long side) | Yes, 1 per frame |
-| `view_sequence(t0, t1, n)` | n frames across a window as **one grid image**. Defaults to the segment's range and never crosses a shot cut | Yes, 1 per grid |
+| `view_sequence(t0, t1, n)` | n frames across a window as **one grid image**. Defaults to the segment's range and never crosses a `scene_change` boundary | Yes, 1 per grid |
 | `get_transcript_window(t0, t1)` | What was said in that window | No |
 
 * **Tool choice by question type** (in the prompt):
@@ -268,14 +266,13 @@ backend/
 ├── services/
 │   ├── visual_indexing/                # NEW: builds one video's index from its local file
 │   │   ├── sampling/                   # ffmpeg 0.5 fps frame stream
-│   │   ├── segments/                   # shot cuts + content-change split, keyframe choice
+│   │   ├── segments/                   # content-change segmentation, keyframe choice
 │   │   └── ocr/                        # OcrEngine protocol; tesseract/ now, surya/ later
 │   ├── visual_search/                  # NEW: per-video scoring, time ranges, RRF, segment/chapter tagging
 │   ├── video_frames/                   # NEW: frame at time t from Blob, grid building
 │   ├── embeddings/
 │   │   ├── image_embedding/            # NEW: SigLIP 2 multilingual (image + text encoders)
 │   │   └── ocr_text_embedding/         # NEW: multilingual-e5-small
-│   └── shot_detection/transnetv2/      # REUSED as is for v1
 ├── download_pipeline/
 │   ├── visual_indexing.py              # NEW stage: calls services/visual_indexing, returns problem codes
 │   └── pipeline.py                     # CHANGED: schedules visual indexing after Store
@@ -295,14 +292,14 @@ the local file.
 **Models in one process.** Each model is loaded once per process (like
 `services/embeddings/model.py`) and inference runs behind a lock. The SigLIP text encoder serves
 chat queries while the indexing thread may be using the image encoder. SigLIP-base, e5-small,
-MiniLM and TransNetV2 all stay resident in 4 GB of VRAM.
+and MiniLM all stay resident in 4 GB of VRAM.
 
 ## 7. Storage
 
 | Table | Rows per hour of video | Columns / notes |
 |---|---|---|
 | `video_frame_embeddings` | ~1,800 | `video_id`, `time_seconds`, `embedding vector(768)`. B-tree on `video_id`, **no ANN index**: queries are always for one video and need every score for the per-video scoring |
-| `video_visual_segments` | ~20–300 | `video_id`, `start_seconds`, `end_seconds`, `boundary_kind` (`shot_cut` / `content_change`), `chapter_id` |
+| `video_visual_segments` | ~20–300 | `video_id`, `start_seconds`, `end_seconds`, `boundary_kind` (`scene_change` / `text_change`), `chapter_id` |
 | `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_embedding vector(384)` |
 | `video_frame_captions` | grows with use (0 at ingestion) | `segment_id`, `time_seconds`, `caption`, `caption_embedding vector(384)`, `model`, `created_at` |
 | `videos` (new columns) | 1 | `visual_status`, `visual_error`, `visual_index_version` |
@@ -321,7 +318,9 @@ and covering every question type in §1. It is used to:
   distance, phash distance);
 * tune the grid layout of `view_sequence`. DeepSeek's 384-token image cap may make grids
   unreadable;
-* check that segments catch real cuts and slide changes on the shot-detection test videos;
+* check that segments catch real cuts and slide changes without over-splitting on motion. The
+  shot-detection comparison in `services/shot_detection/results/` already lists the cuts on two
+  test videos and serves as ground truth for the cuts;
 * confirm the 6-call / 8-image budget answers most questions.
 
 ## 9. Build order
@@ -337,7 +336,7 @@ Each step ships something usable. The riskiest assumption is tested first.
      candidates here, and measure Blob seek latency to decide whether a frame cache is needed.
 2. **Build the index.**
    * The visual executor, the local-file lifetime change and `visual_status`.
-   * TransNetV2, 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
+   * 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
      migrations.
 3. **Search and navigate.** `search_visual_moments` (§5), `list_segments`, `view_sequence`, and
    saved captions (§4.4).
@@ -362,16 +361,23 @@ Each step ships something usable. The riskiest assumption is tested first.
 6. **Saved captions can be wrong or incomplete.** A later question may trust a caption that
    missed a detail. The sub-agent treats a caption as a lead and looks at the pixels when the
    answer depends on a detail the caption doesn't state.
+7. **Segmentation without a shot detector can be off.** On general footage, a camera pan or a
+   person crossing the frame may still split a segment, and two similar-looking shots in a row
+   may merge. The 2-sample and ~6 s rules limit this. The eval checks it against the known cuts;
+   if it fails, TransNetV2 comes back for the boundaries only.
 
 ## 11. Out of scope for v1
 
-* Exact positions in the frame (bounding boxes) and grouping shots into scenes.
+* Exact positions in the frame (bounding boxes) and grouping segments into scenes.
 * Thumbnails next to visual citations in the website (v1 keeps today's clickable timestamps).
 * Backfilling videos ingested before this ships.
 * VLM captions for every segment at ingestion (v1 saves captions only when a frame is viewed,
   §4.4).
 * Chapters or memories that use visual signals (only insights are enriched).
 * Moving transcript and memory search from MiniLM (English-only) to a multilingual model.
-* Sharing one decode pass between TransNetV2 and the 0.5 fps sampling.
+* Shot detection (TransNetV2). It was dropped for the time it takes (~5 min of GPU per hour of
+  video on the GTX 1650, the slowest part of indexing) and because its value over content-change segmentation is
+  unproven. Bring it back only if the eval shows segments missing real cuts or splitting on
+  motion; `services/shot_detection/` stays in the repo untouched.
 * Storing keyframe images (added only if the step 1 latency measurement calls for it).
 * Running on machines other than the developer's (no GPU, CPU-only) or a hosted deployment.
