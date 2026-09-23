@@ -63,7 +63,7 @@ ffmpeg-python
 # --- memory segmentation module ---
 # Remove this block together with backend/semantic_processing/memories/ if the module is
 # dropped.
-# Divides a transcript into semantic memories through OpenAI's hosted gpt-5.6-sol: one
+# Divides a transcript into semantic memories through OpenAI's hosted gpt-6-sol: one
 # request per video, no GPU and no ffmpeg. The response schema is enforced with Structured
 # Outputs, so pydantic is a hard requirement rather than an incidental one; it already
 # arrives with FastAPI and is listed here so this block stands on its own. Needs
