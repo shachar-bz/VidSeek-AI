@@ -51,6 +51,7 @@ def record_job_video(
     comments: Sequence[CommentEntry] | None = None,
     user_id: str | None = None,
     duration_seconds: float | None = None,
+    reported_title: str | None = None,
 ) -> StoredVideoRecord | None:
     """Write the video's row, transcript and comments, or None when no database is configured.
 
@@ -60,6 +61,9 @@ def record_job_video(
     in the table that nobody measured. The transcript's own duration is not borrowed for the
     video's either — it is where the last person stopped talking, which is not where the
     video ends.
+
+    `reported_title` is what the video's own platform calls it, when the pipeline asked;
+    it is kept over the tab title, which is only what the browser tab happened to say.
 
     `comments` is None for every pipeline but YouTube's, which is the only one with
     anything to fetch; an empty sequence still means something (the fetch ran and found
@@ -78,7 +82,7 @@ def record_job_video(
         VideoRecord(
             source=acquisition_mode,
             source_url=request.source_identity_url,
-            title=clean_page_title(request.page_title, request.page_url),
+            title=reported_title or clean_page_title(request.page_title, request.page_url),
             blob_container=stored_video.container,
             blob_name=stored_video.name,
             file_size_bytes=stored_video.size_bytes,

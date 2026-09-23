@@ -129,4 +129,5 @@ def run_youtube_job(
         comments_path=Path(result.comments_path) if result.comments_path else None,
         normalized_transcript=artifact.normalized,
         comments=tuple(result.comments),
+        reported_title=result.title or None,
     )

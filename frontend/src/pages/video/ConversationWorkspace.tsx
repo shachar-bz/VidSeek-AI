@@ -77,10 +77,10 @@ export function nextChatName(conversations: ConversationSummary[]): string {
   return `Chat ${highest + 1}`;
 }
 
-export function starterQuestionsForVideo(video: Pick<VideoDetail, "title" | "insights">): string[] {
+export function starterQuestionsForVideo(video: Pick<VideoDetail, "insights">): string[] {
   const generated = video.insights?.suggested_questions ?? [];
   const fallbacks = [
-    `What are the main ideas in “${video.title}”?`,
+    "What are the main ideas in this video?",
     "What are the most important details to remember?",
     "Can you explain the key concepts with examples?"
   ];

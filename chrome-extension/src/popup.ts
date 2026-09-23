@@ -355,7 +355,7 @@ async function inspectTab(): Promise<void> {
     if (isYouTubeUrl(tab.url)) {
       discovery = {
         page_url: tab.url,
-        page_title: tab.title ?? "video",
+        page_title: tab.title || "video",
         drm_detected: false,
         media_candidates: [],
         caption_candidates: [],

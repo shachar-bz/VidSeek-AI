@@ -60,6 +60,12 @@ class PipelineResult:
     # video with comments disabled the same way: nothing found, not nothing attempted.
     comments: tuple[CommentEntry, ...] | None = None
 
+    # What the platform itself calls the video, set only by the YouTube pipeline: yt-dlp
+    # reads it from YouTube's own metadata. A generic page's yt-dlp title is usually the
+    # stream's file name (`master`, `index`), so the web route leaves it None and the
+    # tab title stands.
+    reported_title: str | None = None
+
 
 def process_downloaded_video(
     *,

@@ -88,6 +88,7 @@ def store_video(
             comments=acquired.comments,
             user_id=user_id,
             duration_seconds=duration_seconds,
+            reported_title=acquired.reported_title,
         )
     except Exception:
         logger.exception("Recording %s in the database failed", stored_video.name)

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import current_user
-from backend.core.page_titles import clean_page_title
+from backend.core.page_titles import display_title
 from backend.schemas.library import (
     LibraryPage,
     LibraryProgressEvent,
@@ -90,7 +90,7 @@ def _library_video(row: LibraryViewRow) -> LibraryVideo:
     return LibraryVideo(
         video_id=row.video_id,
         job_id=row.job_id,
-        title=row.custom_title or clean_page_title(row.original_title, row.source_url),
+        title=row.custom_title or display_title(row.original_title, row.source_url, row.added_at),
         custom_title=row.custom_title,
         source_site=(urlsplit(row.source_url).hostname or ""),
         source=row.source or "",

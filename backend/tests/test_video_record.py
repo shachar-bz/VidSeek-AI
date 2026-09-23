@@ -108,6 +108,7 @@ def _record(
     comments: list[CommentEntry] | None = None,
     user_id: str | None = None,
     duration_seconds: float | None = None,
+    reported_title: str | None = None,
 ):
     with (
         patch.object(video_record, "is_postgres_configured", return_value=configured),
@@ -138,6 +139,7 @@ def _record(
             comments=comments,
             user_id=user_id,
             duration_seconds=duration_seconds,
+            reported_title=reported_title,
         )
 
 
@@ -154,6 +156,13 @@ def test_the_row_ties_the_stored_blob_back_to_the_page_it_came_from() -> None:
     assert written.transcript_source == "page_transcript"
     assert written.job_id == "job-42"
     assert stored is not None and stored.video == written
+
+
+def test_the_platform_s_own_title_is_kept_over_the_tab_title() -> None:
+    records = FakeVideoRecords()
+    _record(records, reported_title="Lecture 3: Recursion")
+
+    assert records.upserted[0].title == "Lecture 3: Recursion"
 
 
 def test_the_video_is_linked_into_the_account_that_started_the_job() -> None:
