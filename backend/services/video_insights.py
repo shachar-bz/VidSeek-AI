@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from backend.core import config
 
-MODEL = "gpt-5.6-terra"
+MODEL = "gpt-6-luna"
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 DEFAULT_MAX_RETRIES = 5
 

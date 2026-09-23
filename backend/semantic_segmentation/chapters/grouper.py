@@ -1,4 +1,4 @@
-"""Groups a video's semantic memories into higher-level chapters with `gpt-5.6-sol`.
+"""Groups a video's semantic memories into higher-level chapters with `gpt-6-sol`.
 
 This is the stage that runs after memory segmentation. It hands the model the memories as
 one line each — an ID, a timecode and the summary the previous stage wrote, and none of the
@@ -24,7 +24,7 @@ from .memory_ids import MemoryIndex
 from .prompt import chapter_grouping_prompt
 from .validation import ChapterGroupingError, validate_boundaries
 
-MODEL = "gpt-5.6-sol"
+MODEL = "gpt-6-sol"
 
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 

@@ -1,4 +1,4 @@
-"""Divides a normalized transcript into semantic memories with `gpt-5.6-sol`.
+"""Divides a normalized transcript into semantic memories with `gpt-6-sol`.
 
 This is the stage that runs after transcription. It hands the model the transcript with a
 numbered ID on every line, asks only where one idea ends and the next begins, and builds
@@ -23,7 +23,7 @@ from .prompt import memory_segmentation_prompt
 from .segment_ids import SegmentIndex
 from .validation import MemorySegmentationError, validate_boundaries
 
-MODEL = "gpt-5.6-sol"
+MODEL = "gpt-6-sol"
 
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 

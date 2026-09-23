@@ -74,7 +74,7 @@ def test_generation_uses_the_required_model_and_structured_output_type() -> None
 
     assert result == VALID
     call = client.responses.calls[0]
-    assert call["model"] == MODEL == "gpt-5.6-terra"
+    assert call["model"] == MODEL == "gpt-6-luna"
     assert call["text_format"] is GeneratedVideoInsights
     assert "overall summary" in call["instructions"]
 

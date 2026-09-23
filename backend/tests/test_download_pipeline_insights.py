@@ -69,7 +69,7 @@ def test_validated_output_is_built_from_stored_summaries_and_upserted() -> None:
             summary=generated.summary,
             takeaways=generated.takeaways,
             suggested_questions=generated.suggested_questions,
-            model="gpt-5.6-terra",
+            model="gpt-6-luna",
         )
     )
 
