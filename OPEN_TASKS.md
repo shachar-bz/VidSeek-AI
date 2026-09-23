@@ -120,26 +120,4 @@ an actionable message rather than shipping a silent video.
 
 ---
 
-## 6. Chapters, memories and embeddings — closed
 
-**Status:** closed. Kept here because this entry was the longest-standing gap in the
-project and its absence would read as an oversight.
-
-`backend/download_pipeline/` now runs all four stages of a job in order — acquire, store,
-segment, embed — so every finished video is divided into memories, grouped into chapters
-and embedded without anything else being asked to trigger it:
-
-- `segmentation.py` calls `segment_transcript` and `group_memories`, and writes both
-  through `PostgresMemories.replace` and `PostgresChapters.replace`.
-- `embedding.py` calls `embed_memories_for_video` and `embed_chapters_for_video`.
-- Both are reported as problem codes rather than raising, so a model that will not answer
-  costs a video its chapters and not its download.
-
-`0012_chapters_memories_written.sql` corrected what those two tables say about themselves,
-and `0021_embedding_ann_indexes.sql` added the hnsw index on both `vector(384)` embedding
-columns that 0007, 0010 and 0011 each deferred while nothing was writing them.
-
-**What is still not produced anywhere:** a video's generated summary, key takeaways and
-suggested questions. `0020_video_insights.sql` creates the table they belong in;
-§12.4 of `frontend/WEBSITE_FUNCTIONALITY.md` is what has to fill it, as a fifth pipeline
-stage after embedding. Until it does, no video reaches the website's `ready` stage.
