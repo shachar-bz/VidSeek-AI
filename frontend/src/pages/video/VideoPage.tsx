@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import { allowsBrowsing, type VideoDetail, type VideoOutlineResponse, type VideoTranscript } from "../../api/types";
 import { getVideo, getVideoOutline, getVideoTranscript } from "../../api/video";
 import { ErrorState, LoadingState, StatusBadge, type StatusTone } from "../../components/ui";
-import { ROUTES } from "../../routes";
 import { featureFailureMessage } from "../shared";
 import { ConversationWorkspace } from "./ConversationWorkspace";
 import { VideoDetailsTabs } from "./OutlineInsights";
@@ -97,9 +96,8 @@ export function VideoPage() {
     <div className="feature-page video-page">
       <header className="feature-page__heading video-page__heading">
         <div>
-          <p className="eyebrow"><Link to={ROUTES.library}>Library</Link> / {video.source_site}</p>
           <h1>{video.title}</h1>
-          <div className="video-page__metadata"><StatusBadge tone={stageTone(video.stage)}>{stageLabel(video.stage)}</StatusBadge>{video.duration_seconds !== null ? <span>{Math.round(video.duration_seconds / 60)} min</span> : null}{video.transcript_language ? <span>{video.transcript_language}</span> : null}</div>
+          <div className="video-page__metadata">{video.stage !== "ready" ? <StatusBadge tone={stageTone(video.stage)}>{stageLabel(video.stage)}</StatusBadge> : null}{video.duration_seconds !== null ? <span>{Math.round(video.duration_seconds / 60)} min</span> : null}{video.transcript_language ? <span>{video.transcript_language}</span> : null}</div>
         </div>
       </header>
       {approximate ? <div className="inline-notice" role="status"><strong>Partial transcript:</strong> timestamps, seeking, and timestamp-like references in answers may be unreliable. All video features remain available.</div> : null}
