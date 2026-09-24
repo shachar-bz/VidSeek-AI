@@ -15,10 +15,10 @@ is a hit whatever its z-score.
 There is no similarity floor under the z-score, and that is on purpose. SigLIP scores within one
 video are tightly bunched (a standard deviation around 0.005), so in a video where nothing
 matches, some frames still stand out by chance: on a padel match, "a dog" found a frame at z 4.3
-with a similarity of 0.03, where a real match scores 0.12 or more. That is still true. A floor
-dropped those, but also every real match that happens to score low (Hebrew queries score lower
-than English ones for the same picture). The sub-agent looks at the frames it is handed, and that
-look is the acceptance step; the search favours finding a match over precision.
+with a similarity of 0.03, where a real match scores 0.12 or more. That is still true, and a floor
+(0.08) once dropped those. It was removed on purpose: the sub-agent looks at every moment it is
+handed, and that look is the acceptance step, so the search favours catching a match over
+precision.
 
 Keyframe texts are few -- often a handful in a whole video -- and a z-score over so few scores
 means little. Below a minimum count, the closest texts are taken with no z filter.

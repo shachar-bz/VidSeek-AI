@@ -1,15 +1,12 @@
 # Visual Understanding Layer — Plan
 
 Status: ingestion, storage and the query-time services are implemented (branch
-`feat/visual-index-ingestion-and-search`), and keyframe OCR with Surya (§3.2 step 5, branch
-`feat/visual-keyframe-ocr`), not yet run on real footage. The insights re-run that depends on OCR
-(step 6), the visual sub-agent, its tools and `investigate_visual` are not implemented yet. §12
-lists where the implementation departs from this design and why.
-
-The search (§5) was redesigned on 2026-09-24 and is being implemented on branch
-`feat/visual-search-tools`, following `VISUAL_SEARCH_TOOLS_TASK.md`. Until that lands, the code
-still runs the previous design (four lists fused by rank), and the §12 notes about fusion,
-trigram and floors describe that code.
+`feat/visual-index-ingestion-and-search`), keyframe OCR with Surya (§3.2 step 5, branch
+`feat/visual-keyframe-ocr`), and the two search services of §5 (branch
+`feat/visual-search-tools`), none of it run on real footage yet. The insights re-run that depends
+on OCR (step 6), the visual sub-agent, its tools (including the wrappers around the two searches)
+and `investigate_visual` are not implemented yet. §12 lists where the implementation departs from
+this design and why.
 
 ## 1. Goal
 
@@ -468,19 +465,20 @@ machine (GTX 1650).
   transcript stages, so the chapters usually do not exist when segments are written, and a
   chapter's times change when the transcript is re-segmented. The chapter is read by time
   instead (`services/visual_search/video_map.py`).
-* **OCR columns arrive in 0024, pg_trgm in 0023** (§7). `video_keyframes` gains `ocr_text`,
-  `ocr_language`, `ocr_confidence`, `ocr_embedding`, `ocr_engine` and a GIN trigram index;
-  `services/visual_search/search.py` fuses two more lists, `ocr_words` (trigram) and
-  `ocr_meaning` (e5). A keyframe's text stands for the stretch from it to the next keyframe of
-  its segment, or the segment's end.
+* **OCR columns arrive in 0024** (§7). `video_keyframes` gains `ocr_text`, `ocr_language`,
+  `ocr_confidence`, `ocr_embedding` and `ocr_engine`. An earlier design of the word search used
+  pg_trgm (0023) and a GIN trigram index on `ocr_text` (0024); `search_visual_text` matches
+  character sequences in Python over a video's few hundred keyframes instead, so 0026 drops the
+  index and the extension. 0023 still runs on a new database, so `pg_trgm` must stay allowed in
+  `azure.extensions` for that.
 * **The OCR engine is recorded per keyframe, not in `visual_index_version`** (§3.3). The frame
   vectors do not depend on it, so turning OCR on or off, or changing engine, must not make an
   index unsearchable. `ocr_engine` null means unread; set with `ocr_text` null, read and blank.
 * **OCR runs after the index is `ready`,** not before, and stores each batch as it is read.
   Readings the engine was less than 0.5 sure of are dropped block by block, and the language is
-  decided by script (`he`, `en`, `mixed`, `other`). The e5 floor and margin for on-screen text
-  start at 0.8 and 0.05 (see the e5 note below), and the trigram floor at 0.5; the eval tunes
-  them.
+  decided by script (`he`, `en`, `mixed`, `other`). A keyframe with no `ocr_engine` is unread, and
+  that is how both searches tell OCR is still reading (§5.6). On a machine where OCR is not set
+  up, keyframes stay unread, and the searches keep saying so.
 * **Surya's worker is tuned for the 4 GB card:** llama.cpp rather than vLLM (which needs Docker
   and claims most of the GPU), two parallel slots, the text detector on the CPU. Starting it the
   first time downloads the models; after that one worker serves every video of the process.
@@ -493,19 +491,30 @@ machine (GTX 1650).
   the reference and the keyframe. On a synthetic clip (moving pattern, two slides, a 4 s shot,
   a moving scene) this finds every cut and slide change exactly; on an 8.5-minute fixed-camera
   padel match it keeps one segment.
-* **Two absolute levels beside the z-score** (§5). SigLIP scores within a video are tightly
-  bunched (std ~0.005), so chance standouts appear in any video: "a dog" on the padel match
-  stood out at z 4.3 with a similarity of 0.03, where real matches score 0.12+. A floor
-  (0.08) drops those. Something on screen the whole time ("a padel court", 0.18 in every frame)
-  stands out nowhere, so a frame at or above 0.15 is a hit whatever its z-score. Hebrew queries
-  score lower than English ones (the same court: 0.11); the eval should tune both levels.
-* **On-screen text by meaning is matched against the best one, not only a floor.** e5-small's
+* **One absolute level beside the z-score, and no floor** (§5.1). SigLIP scores within a video
+  are tightly bunched (std ~0.005), so chance standouts appear in any video: "a dog" on the
+  padel match stood out at z 4.3 with a similarity of 0.03, where real matches score 0.12+. An
+  earlier design dropped those with a floor (0.08). It was removed on purpose: the sub-agent
+  looks at every moment it is handed, and that look is the acceptance step, so the search
+  favours catching a match over precision. Something on screen the whole time ("a padel court",
+  0.18 in every frame) stands out nowhere, so a frame at or above 0.15 is a hit whatever its
+  z-score. Hebrew queries score lower than English ones (the same court: 0.11); the eval should
+  tune the level and the z threshold.
+* **On-screen text by meaning is judged by its z-score, not by a floor** (§5.1). e5-small's
   scores bunch up: for the same queries, right short descriptions of frames scored 0.81-0.94
-  and wrong ones up to 0.815, so text must clear 0.8 *and* be within 0.05 of the query's best
-  match. A Hebrew question against English text scores low (0.75 for "איפה הכוס" against an
-  English description of the cup), which is worth checking in the eval.
-* **Fusion is per segment.** Frames, on-screen text and memories have different granularities, so
-  each list ranks segments; a moment is one segment with the precise ranges that matched in it.
+  and wrong ones up to 0.815, so no fixed number separates them. A text must stand out from the
+  video's other keyframe texts instead. With fewer than 20 of them, every text is a candidate
+  and the list keeps its 5 closest moments; that cut is made after the window, so the 5 are the
+  closest inside it. A Hebrew question against English text scores low (0.75 for "איפה הכוס"
+  against an English description of the cup), which is worth checking in the eval.
+* **The window is applied to picture frames, not to ranges** (§5.5). Frames are judged against
+  the whole video, then those outside the window are dropped before consecutive hits merge. A
+  range crossing the window's edge therefore starts or ends on the first or last frame seen inside
+  it rather than exactly on the edge, and its peak z-score is one seen inside it. A keyframe's
+  text stretch is clipped to the edge exactly.
+* **The transcript is context, not a search list** (§5.4). An earlier design ranked memories by
+  MiniLM as a fourth list and fused all the lists per segment by rank. Now a moment only carries
+  the transcript segments that overlap it, read by time.
 * **SigLIP runs in fp32, not fp16.** On the GTX 1650 fp16 measured 2.6x slower (32 frames in
   4.8 s vs 1.8 s). Peak VRAM at batch 32 is ~1.8 GB. Indexing an hour of 1080p video costs
   ~85 s of decode and ~105 s of embedding, about 3 minutes.
