@@ -45,6 +45,7 @@ from .visual_index import (
     NewFrameEmbedding,
     NewVisualSegment,
     PostgresVisualIndex,
+    StoredKeyframeText,
     StoredVisualSegment,
     VisualIndexState,
 )
@@ -96,6 +97,7 @@ __all__ = [
     "StoredPinnedAnswer",
     "StoredSession",
     "StoredUser",
+    "StoredKeyframeText",
     "StoredUserVideo",
     "StoredVideoInsights",
     "StoredVideoJob",

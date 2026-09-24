@@ -129,3 +129,15 @@ def test_the_video_id_is_bound_as_a_uuid_rather_than_as_text() -> None:
 
     assert "%s::uuid" in pool.statements[0]
     assert "%s::uuid" in pool.statements[-1]
+
+
+def test_speech_is_read_by_time_as_the_segments_overlapping_the_window() -> None:
+    segments, pool = _segments(_rows(2))
+    loaded = segments.overlapping(VIDEO_ID, 12.0, 30.0)
+
+    assert [segment.index for segment in loaded] == [0, 1]
+    statement = pool.statements[0]
+    assert "start_seconds < %s and end_seconds > %s" in statement
+    assert "order by segment_index" in statement
+    # The window's end bounds the segment's start, and its start the segment's end.
+    assert pool.recorded[0].parameters == (VIDEO_ID, 30.0, 12.0)

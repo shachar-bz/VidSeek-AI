@@ -40,6 +40,14 @@ on conflict (video_id, segment_index) do update set
     text = excluded.text
 """
 
+# The segments of one video that overlap a window, in the order they were spoken. A segment
+# that only touches the window at one end is not in it.
+OVERLAPPING_SQL = f"""
+select * from public.{TABLE_NAME}
+where video_id = %s::uuid and start_seconds < %s and end_seconds > %s
+order by segment_index
+"""
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,6 +98,16 @@ class PostgresTranscriptSegments:
                 f"select * from public.{TABLE_NAME} "
                 "where video_id = %s::uuid order by segment_index",
                 (video_id,),
+            ).fetchall()
+        return [_from_row(row) for row in rows]
+
+    def overlapping(
+        self, video_id: str, start_seconds: float, end_seconds: float
+    ) -> list[TranscriptSegment]:
+        """What was said between these two times: the segments overlapping them, in order."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                OVERLAPPING_SQL, (video_id, end_seconds, start_seconds)
             ).fetchall()
         return [_from_row(row) for row in rows]
 

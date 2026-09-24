@@ -303,7 +303,7 @@ def _on_screen_text_matches(video_id, query, settings, pool, encoder):
         from backend.services.embeddings.multilingual_text_embedding import embed_query
 
         encoder = embed_query
-    by_meaning = store.keyframe_text_similarities(video_id, encoder(query), settings.ocr_candidates)
+    by_meaning = store.keyframe_text_similarities(video_id, encoder(query))[: settings.ocr_candidates]
     if not by_meaning:
         return words, []
     cutoff = max(
