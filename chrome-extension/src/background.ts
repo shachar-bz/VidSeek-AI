@@ -13,6 +13,7 @@ import {
   isLicenseTraffic,
   readEmeMonitor,
 } from "./discovery";
+import { recordScannedVideoId } from "./scanned-video";
 import type {
   BrowserCookie,
   CaptionCandidate,
@@ -172,6 +173,8 @@ async function pollTrackedJob(): Promise<void> {
   }
   try {
     const job = await getJob(tracker.token, tracker.jobId);
+    // Kept even while the panel is closed, so its chat can open whenever it is next shown.
+    if (job.video_id) await recordScannedVideoId(job.job_id, job.video_id);
     if (TERMINAL.has(job.status)) {
       await cleanupTracker(tracker);
       return;

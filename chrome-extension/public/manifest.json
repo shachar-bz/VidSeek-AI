@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "VidSeek Authenticated Video Download",
-  "description": "Save the non-DRM video open in the active tab and create its transcript.",
+  "name": "VidSeek AI",
+  "description": "Scan the video open in your tab, then chat with AI about what it says and shows.",
   "version": "1.0.0",
   "minimum_chrome_version": "125",
   "icons": {
@@ -11,7 +11,7 @@
     "128": "icon-128.png"
   },
   "action": {
-    "default_title": "Open VidSeek",
+    "default_title": "Open VidSeek AI",
     "default_icon": {
       "16": "icon-16.png",
       "32": "icon-32.png",

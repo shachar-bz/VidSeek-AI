@@ -1,11 +1,14 @@
-// Coordinate inspection, playback verification, and authenticated downloads.
+// Coordinate sign-in, inspection, playback verification, scans, and the chat that follows.
 import { hydrateCaptionBodies } from "./caption-fetch";
+import { closeChat, openChat } from "./chat";
 import { inspectFrames } from "./frame-discovery";
 import {
+  cancelJob,
   createJob,
   createSession,
   fetchCurrentUser,
   getJob,
+  getVideo,
   logIn,
   logOut,
   signUp,
@@ -20,13 +23,21 @@ import {
   resolveSelectedGroup,
 } from "./discovery";
 import type { FrameDiscoveryResult, VideoGroup } from "./discovery";
+import {
+  clearScannedVideo,
+  readScannedVideo,
+  recordScannedVideoId,
+  writeScannedVideo,
+} from "./scanned-video";
 import { textureBlock } from "./texture";
+import { allowsChat } from "./types";
 import type {
   AuthSession,
   BrowserContext,
   DiscoveryResult,
   ExtensionMessage,
   MediaCandidate,
+  ScannedVideo,
   StopCaptureResult,
   TrackedJob,
   VideoJob,
@@ -47,13 +58,38 @@ const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
 const stopCaptureButton =
   document.querySelector<HTMLButtonElement>("#stop-capture")!;
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel")!;
+const cancelVerifyButton =
+  document.querySelector<HTMLButtonElement>("#cancel-verify")!;
+const scanAnotherButton =
+  document.querySelector<HTMLButtonElement>("#scan-another")!;
+const chatScanAnotherButton =
+  document.querySelector<HTMLButtonElement>("#chat-scan-another")!;
+
+const inspectViewElement = document.querySelector<HTMLElement>("#inspect-view")!;
+const processingViewElement =
+  document.querySelector<HTMLElement>("#processing-view")!;
+const chatViewElement = document.querySelector<HTMLElement>("#chat-view")!;
+const processingHeadingElement =
+  document.querySelector<HTMLHeadingElement>("#processing-heading")!;
+const processingTitleElement =
+  document.querySelector<HTMLParagraphElement>("#processing-title")!;
+const processingStatusElement =
+  document.querySelector<HTMLParagraphElement>("#processing-status")!;
+const processingDetailsElement =
+  document.querySelector<HTMLDivElement>("#processing-details")!;
+const processingNoteElement =
+  document.querySelector<HTMLParagraphElement>("#processing-note")!;
+const scanLoaderElement = document.querySelector<HTMLDivElement>("#scan-loader")!;
+const scanStepElements = [
+  ...document.querySelectorAll<HTMLLIElement>("#scan-steps li"),
+];
 
 const appElement = document.querySelector<HTMLElement>("#app")!;
+const appTextureContainer =
+  document.querySelector<HTMLDivElement>("#app-texture")!;
 const authScreenElement = document.querySelector<HTMLElement>("#auth")!;
 const authTextureContainer =
   document.querySelector<HTMLDivElement>("#auth-texture")!;
-const authTextureElement =
-  document.querySelector<HTMLPreElement>("#auth-texture-art")!;
 const authWelcomeElement =
   document.querySelector<HTMLDivElement>("#auth-welcome")!;
 const authStatusElement =
@@ -82,27 +118,47 @@ let discovery: DiscoveryResult | undefined;
 let activeTabId: number | undefined;
 let pollingTimer: number | undefined;
 
+/** The three screens a signed-in user moves through: find a video, wait for it, chat. */
+type AppView = "inspect" | "processing" | "chat";
+let currentView: AppView | undefined;
+
+function showView(view: AppView | undefined): void {
+  if (currentView === "chat" && view !== "chat") closeChat();
+  currentView = view;
+  inspectViewElement.hidden = view !== "inspect";
+  processingViewElement.hidden = view !== "processing";
+  chatViewElement.hidden = view !== "chat";
+  appElement.dataset.view = view ?? "";
+  if (view && view !== "chat") renderTexture(appTextureContainer);
+}
+
+/** Writes to the status block of whichever screen is showing. */
 function setStatus(message: string, details = ""): void {
-  statusElement.textContent = message;
-  detailsElement.textContent = details;
+  const processing = currentView === "processing";
+  (processing ? processingStatusElement : statusElement).textContent = message;
+  (processing ? processingDetailsElement : detailsElement).textContent = details;
 }
 
 const AUTH_STORAGE_KEY = "vidseekAuth";
 
 // The panel is user-resizable (Chrome side panel, not a fixed popup), so the backdrop is
 // sized in JS from the container's actual box rather than a fixed column/row count baked
-// into the stylesheet — it has to fill whatever width/height Chrome gives it.
-let authTextureCharSize: { width: number; height: number } | undefined;
+// into the stylesheet — it has to fill whatever width/height Chrome gives it. The sign-in
+// screen and the signed-in app draw the same field, in the same font, behind their content.
+let textureCharSize: { width: number; height: number } | undefined;
 
 /** Renders one probe character offscreen, in the backdrop's own font, to size a grid cell. */
-function measureAuthTextureCharSize(): { width: number; height: number } {
+function measureTextureCharSize(art: HTMLPreElement): {
+  width: number;
+  height: number;
+} {
   const probeLength = 20;
   const probe = document.createElement("span");
   probe.textContent = "#".repeat(probeLength);
   probe.style.position = "fixed";
   probe.style.visibility = "hidden";
   probe.style.whiteSpace = "pre";
-  const style = getComputedStyle(authTextureElement);
+  const style = getComputedStyle(art);
   probe.style.font = style.font;
   probe.style.letterSpacing = style.letterSpacing;
   document.body.appendChild(probe);
@@ -112,15 +168,16 @@ function measureAuthTextureCharSize(): { width: number; height: number } {
   return { width, height };
 }
 
-/** Redraws the backdrop to exactly cover the current size of its container. */
-function renderAuthTexture(): void {
+/** Redraws a backdrop to exactly cover the current size of its container. */
+function renderTexture(container: HTMLElement): void {
+  const art = container.querySelector("pre")!;
   const { width: containerWidth, height: containerHeight } =
-    authTextureContainer.getBoundingClientRect();
+    container.getBoundingClientRect();
   if (containerWidth === 0 || containerHeight === 0) return;
-  authTextureCharSize ??= measureAuthTextureCharSize();
-  const columns = Math.ceil(containerWidth / authTextureCharSize.width);
-  const rows = Math.ceil(containerHeight / authTextureCharSize.height);
-  authTextureElement.textContent = textureBlock({ columns, rows });
+  textureCharSize ??= measureTextureCharSize(art);
+  const columns = Math.ceil(containerWidth / textureCharSize.width);
+  const rows = Math.ceil(containerHeight / textureCharSize.height);
+  art.textContent = textureBlock({ columns, rows });
 }
 
 let authSession: AuthSession | undefined;
@@ -144,9 +201,11 @@ function renderAuth(): void {
   const signedIn = Boolean(authSession);
   authScreenElement.hidden = signedIn;
   appElement.hidden = !signedIn;
-  if (!signedIn) renderAuthTexture();
+  if (!signedIn) renderTexture(authTextureContainer);
   if (authSession) {
-    authStatusElement.textContent = `Signed in as ${authSession.user.display_name || authSession.user.email}`;
+    const name = authSession.user.display_name || authSession.user.email;
+    authStatusElement.textContent = name;
+    authStatusElement.title = `Signed in as ${name}`;
     return;
   }
   const onForm = authView === "form";
@@ -186,6 +245,7 @@ async function handleAuthSubmit(event: SubmitEvent): Promise<void> {
     await writeStoredAuth(session);
     authFormElement.reset();
     renderAuth();
+    void enterSignedInApp();
   } catch (error) {
     authErrorElement.textContent =
       error instanceof Error ? error.message : String(error);
@@ -194,8 +254,15 @@ async function handleAuthSubmit(event: SubmitEvent): Promise<void> {
   }
 }
 
+/**
+ * Signing out only lets go of this panel's view of the scan. The job keeps running in the
+ * companion, the background worker keeps tracking it, and the scan stays recorded under
+ * this user, so signing back in returns to the processing screen or straight to the chat.
+ */
 async function handleAuthLogout(): Promise<void> {
   authLogoutButton.disabled = true;
+  stopPolling();
+  showView(undefined);
   try {
     if (authSession) await logOut(authSession.token).catch(() => undefined);
   } finally {
@@ -231,6 +298,15 @@ async function restoreAuthState(): Promise<void> {
     await writeStoredAuth(undefined);
   }
   renderAuth();
+  if (authSession) await enterSignedInApp();
+}
+
+/** Opens whichever screen the signed-in user left off on. */
+async function enterSignedInApp(): Promise<void> {
+  await restoreSignedInView().catch((error: unknown) => {
+    showView("inspect");
+    setStatus("Could not read the active scan", String(error));
+  });
 }
 
 function message<T = Record<string, unknown>>(
@@ -252,10 +328,13 @@ function reportDrmBlocked(reason: string): void {
   stopVerifyButton.hidden = true;
   captureButton.hidden = true;
   cancelButton.hidden = true;
+  cancelVerifyButton.hidden = true;
   void clearVerifyState();
   void chrome.action.setBadgeBackgroundColor({ color: "#c62828" });
   void chrome.action.setBadgeText({ text: "DRM" });
-  setStatus("DRM detected — download stopped", reason);
+  // A capture retry runs on the processing screen, and its job is already cancelled.
+  if (currentView === "processing") showScanEnded("DRM detected", reason);
+  else setStatus("DRM detected — scan stopped", reason);
 }
 
 /**
@@ -297,9 +376,10 @@ function presentDiscovery(discoveryValue: DiscoveryResult): void {
     );
   } else {
     verifyButton.hidden = true;
+    downloadButton.textContent = "Grant access and scan";
     downloadButton.hidden = false;
     setStatus(
-      "Video discovered.",
+      "Video found.",
       `${discoveryValue.media_candidates.length} media source(s), ${discoveryValue.caption_candidates.length} caption/transcript source(s)`,
     );
   }
@@ -330,7 +410,7 @@ function renderVideoPicker(
   videoPickerElement.hidden = false;
   setStatus(
     `Found ${groups.length} videos on this page.`,
-    "Choose which one to download below.",
+    "Choose which one to scan below.",
   );
 }
 
@@ -361,10 +441,11 @@ async function inspectTab(): Promise<void> {
         caption_candidates: [],
       };
       setStatus(
-        "YouTube video.",
+        "YouTube video found.",
         "Captions and comments are fetched by the YouTube pipeline.",
       );
       verifyButton.hidden = true;
+      downloadButton.textContent = "Scan video";
       downloadButton.hidden = false;
       return;
     }
@@ -503,12 +584,22 @@ async function startDownload(): Promise<void> {
     } else {
       await message({ type: "TRACK_JOB", tracker });
     }
+    const scan: ScannedVideo = {
+      userId: authSession.user.id,
+      jobId: job.job_id,
+      jobToken: token,
+      title: discovery.page_title,
+      pageUrl: discovery.page_url,
+      videoId: job.video_id,
+    };
+    await writeScannedVideo(scan);
     downloadButton.hidden = true;
     verifyButton.hidden = true;
-    inspectButton.hidden = true;
-    cancelButton.hidden = false;
+    resetVideoPicker();
+    showScanInProgress(scan);
     renderJob(job);
-    startPolling(tracker);
+    // A video already in the system finishes its job at once, and renderJob has settled it.
+    if (!isScanFinished(job)) startPolling(tracker);
   } catch (error) {
     if (grantedOrigins.length) {
       await chrome.permissions
@@ -518,7 +609,8 @@ async function startDownload(): Promise<void> {
         .remove({ permissions: ["cookies"] })
         .catch(() => false);
     }
-    setStatus("Could not start download", String(error));
+    setStatus("Could not start the scan", String(error));
+  } finally {
     downloadButton.disabled = false;
   }
 }
@@ -570,7 +662,7 @@ async function startVerification(): Promise<void> {
     verifyButton.hidden = true;
     downloadButton.hidden = true;
     stopVerifyButton.hidden = false;
-    cancelButton.hidden = false;
+    cancelVerifyButton.hidden = false;
     setStatus(
       "Verification active.",
       "Reload the page and press Play, then reopen this popup and click 'Finish verification'.",
@@ -603,7 +695,7 @@ async function finishVerification(): Promise<void> {
     if (!response.ok) throw new Error(response.error);
     await clearVerifyState();
     stopVerifyButton.hidden = true;
-    cancelButton.hidden = true;
+    cancelVerifyButton.hidden = true;
     if (response.drm_detected) {
       if (verifyState?.grantedOrigins.length) {
         await chrome.permissions
@@ -697,7 +789,7 @@ async function finishVerification(): Promise<void> {
     }
     setStatus(
       "No DRM detected.",
-      `${response.candidates.length} media request(s) confirmed during playback. Starting download...`,
+      `${response.candidates.length} media request(s) confirmed during playback. Starting the scan...`,
     );
     await startDownload();
   } catch (error) {
@@ -706,7 +798,7 @@ async function finishVerification(): Promise<void> {
     // a "Finish verification" button that would now do nothing.
     await clearVerifyState().catch(() => undefined);
     stopVerifyButton.hidden = true;
-    cancelButton.hidden = true;
+    cancelVerifyButton.hidden = true;
     inspectButton.hidden = false;
     setStatus("Verification did not find a video", String(error));
   } finally {
@@ -715,31 +807,183 @@ async function finishVerification(): Promise<void> {
 }
 
 let capturing = false;
+// The job a finished scan was settled for, so a poll still in flight when polling stopped
+// cannot settle it a second time.
+let settledJobId: string | undefined;
+
+/** A job that will not change again: nothing left to poll, and nothing left to retry. */
+function isScanFinished(job: VideoJob): boolean {
+  return (
+    ["complete", "partial_success", "cancelled"].includes(job.status) ||
+    (job.status === "failed" && !job.can_capture)
+  );
+}
+
+// Where each job phase falls among the four steps the processing screen shows.
+const STEP_BY_PHASE: Record<string, number> = {
+  download: 0,
+  transcript_lookup: 1,
+  transcription: 1,
+  upload: 1,
+  segmentation: 2,
+  embedding: 2,
+  insights: 2,
+  complete: 3,
+};
+
+function renderScanSteps(activeStep: number, stalled: boolean): void {
+  for (const [index, step] of scanStepElements.entries()) {
+    step.dataset.state =
+      index < activeStep
+        ? "done"
+        : index > activeStep
+          ? "pending"
+          : stalled
+            ? "stalled"
+            : "active";
+  }
+}
+
+/** The inspect screen, reset to its first step. */
+function showInspectView(): void {
+  showView("inspect");
+  discovery = undefined;
+  resetVideoPicker();
+  inspectButton.hidden = false;
+  downloadButton.hidden = true;
+  verifyButton.hidden = true;
+  stopVerifyButton.hidden = true;
+  cancelVerifyButton.hidden = true;
+  setStatus("Open the page with your video, then inspect it.");
+}
+
+/** The processing screen, set up for a scan that is still running. */
+function showScanInProgress(scan: ScannedVideo): void {
+  settledJobId = undefined;
+  showView("processing");
+  processingHeadingElement.textContent = "Scanning video";
+  processingTitleElement.textContent = scan.title;
+  scanLoaderElement.hidden = false;
+  processingNoteElement.hidden = false;
+  progressElement.hidden = false;
+  progressElement.value = 0;
+  scanAnotherButton.hidden = true;
+  captureButton.hidden = true;
+  stopCaptureButton.hidden = !capturing;
+  cancelButton.hidden = false;
+  renderScanSteps(0, false);
+  setStatus("Starting the scan…");
+}
+
+/** The processing screen, stopped: the scan ended without a chat to open. */
+function showScanEnded(heading: string, reason: string): void {
+  stopPolling();
+  showView("processing");
+  processingHeadingElement.textContent = heading;
+  scanLoaderElement.hidden = true;
+  processingNoteElement.hidden = true;
+  progressElement.hidden = true;
+  captureButton.hidden = true;
+  stopCaptureButton.hidden = true;
+  cancelButton.hidden = true;
+  scanAnotherButton.hidden = false;
+  for (const step of scanStepElements)
+    if (step.dataset.state === "active") step.dataset.state = "stalled";
+  setStatus(reason);
+}
 
 function renderJob(job: VideoJob): void {
   progressElement.value = job.progress;
-  const artifacts = [
-    job.video_path,
-    job.transcript_text_path,
-    job.video_storage_key && `Stored: ${job.video_storage_key}`,
-  ];
-  setStatus(job.message, artifacts.filter(Boolean).join("\n"));
-  // While capturing, the capture buttons are driven by the capture flow, not by the
-  // job status, which stays "failed" until the captured request is submitted.
-  if (!capturing) captureButton.hidden = !job.can_capture;
+  renderScanSteps(
+    STEP_BY_PHASE[job.phase] ?? 0,
+    job.status === "failed" || job.status === "cancelled",
+  );
+  // While capturing, the capture flow's instructions stay on screen and its buttons are
+  // driven by it, not by the job, which stays "failed" until the capture is submitted.
+  if (!capturing) {
+    setStatus(
+      job.message,
+      job.status === "failed" && job.can_capture
+        ? "This player may need a capture: start it, reload or replay the video, then stop capture to retry."
+        : "",
+    );
+    captureButton.hidden = !job.can_capture;
+  }
+  if (job.video_id) void recordScannedVideoId(job.job_id, job.video_id);
   cancelButton.hidden = [
     "complete",
     "partial_success",
     "failed",
     "cancelled",
   ].includes(job.status);
-  if (["complete", "partial_success", "cancelled"].includes(job.status))
+  if (isScanFinished(job)) {
     stopPolling();
-  if (job.status === "failed" && !job.can_capture) {
-    // Nothing left to retry, so give the user a way out instead of a dead popup.
-    stopPolling();
-    inspectButton.hidden = false;
+    void settleFinishedJob(job);
   }
+}
+
+async function settleFinishedJob(job: VideoJob): Promise<void> {
+  if (settledJobId === job.job_id || !authSession) return;
+  settledJobId = job.job_id;
+  const scan = await readScannedVideo(authSession.user.id);
+  if (scan?.jobId === job.job_id) await settleScan(scan, job);
+}
+
+/**
+ * Opens the chat for a finished scan, or says why there is none. The video decides, not the
+ * job: a job that failed a late, optional step can still leave a video ready to chat about.
+ */
+async function settleScan(
+  scan: ScannedVideo,
+  job: VideoJob | undefined,
+  lastError?: string,
+): Promise<void> {
+  const session = authSession;
+  if (!session) return;
+  const videoId = job?.video_id ?? scan.videoId;
+  if (!videoId || job?.status === "cancelled") {
+    showScanEnded(
+      job?.status === "cancelled" ? "Scan cancelled" : "Scan failed",
+      lastError ||
+        job?.message ||
+        "The companion no longer has this scan. Inspect the video again.",
+    );
+    return;
+  }
+  try {
+    const video = await getVideo(session.token, videoId);
+    if (authSession !== session) return;
+    if (allowsChat(video.stage)) {
+      showView("chat");
+      await openChat(session.token, video);
+      return;
+    }
+    showScanEnded(
+      video.stage === "failed" ? "Scan failed" : "Chat isn't available",
+      job?.message ||
+        "Processing stopped before this video could be understood.",
+    );
+  } catch (error) {
+    if (authSession === session)
+      showScanEnded("Could not open the chat", String(error));
+  }
+}
+
+/** Returns to a scan after the panel reopens or the user signs back in. */
+async function resumeScan(
+  scan: ScannedVideo,
+  lastError?: string,
+): Promise<void> {
+  showScanInProgress(scan);
+  const job = await getJob(scan.jobToken, scan.jobId).catch(() => undefined);
+  if (job && !isScanFinished(job)) {
+    renderJob(job);
+    startPolling({ jobId: scan.jobId, token: scan.jobToken, grantedOrigins: [] });
+    return;
+  }
+  if (job?.video_id) await recordScannedVideoId(scan.jobId, job.video_id);
+  settledJobId = scan.jobId;
+  await settleScan(scan, job, lastError);
 }
 
 function startPolling(tracker: TrackedJob): void {
@@ -760,71 +1004,100 @@ function stopPolling(): void {
   pollingTimer = undefined;
 }
 
-async function restoreTrackedJob(): Promise<void> {
-  const response = await message<{
-    ok: boolean;
-    tracker?: TrackedJob;
-    capturing?: boolean;
-    verifying?: boolean;
-    lastError?: string;
-  }>({
+interface TrackedJobResponse {
+  ok: boolean;
+  tracker?: TrackedJob;
+  capturing?: boolean;
+  verifying?: boolean;
+  lastError?: string;
+}
+
+/** Picks the screen to show: a verification in progress, this user's scan, or inspect. */
+async function restoreSignedInView(): Promise<void> {
+  if (!authSession) return;
+  const response = await message<TrackedJobResponse>({
     type: "GET_TRACKED_JOB",
   });
+  const scan = await readScannedVideo(authSession.user.id);
   if (response.verifying) {
+    showInspectView();
     inspectButton.hidden = true;
-    downloadButton.hidden = true;
-    verifyButton.hidden = true;
     stopVerifyButton.hidden = false;
-    cancelButton.hidden = false;
+    cancelVerifyButton.hidden = false;
     setStatus(
       "Verification active.",
-      "Reopen this popup after pressing Play in the page, then click 'Finish verification'.",
+      "Reopen this panel after pressing Play in the page, then click 'Finish verification'.",
     );
     return;
   }
-  if (!response.tracker) {
-    // The job that hit this error is already gone; surface it once so the user knows why,
+  if (scan) {
+    capturing =
+      Boolean(response.capturing) && response.tracker?.jobId === scan.jobId;
+    // The job that hit this error is already gone; surface it so the user knows why,
     // rather than leaving the badge as the only trace.
-    if (response.lastError)
-      setStatus("Chrome download was rejected", response.lastError);
+    await resumeScan(scan, response.tracker ? undefined : response.lastError);
     return;
   }
-  capturing = Boolean(response.capturing);
-  inspectButton.hidden = true;
-  downloadButton.hidden = true;
-  verifyButton.hidden = true;
-  cancelButton.hidden = false;
-  // Left to renderJob's can_capture check unless a capture is already running; the
-  // companion rejects a capture retry for any job that is not eligible.
-  captureButton.hidden = true;
-  stopCaptureButton.hidden = !capturing;
-  startPolling(response.tracker);
+  showInspectView();
+  if (!response.tracker && response.lastError)
+    setStatus("Chrome download was rejected", response.lastError);
+}
+
+/** Cancels whatever is running — a verification or this user's scan — and starts over. */
+async function cancelActiveWork(): Promise<void> {
+  const verifyState = await readVerifyState();
+  const scan = authSession && (await readScannedVideo(authSession.user.id));
+  const tracked = await message<TrackedJobResponse>({
+    type: "GET_TRACKED_JOB",
+  });
+  // The background worker tracks one job, which may be another account's scan.
+  if (!scan || !tracked.tracker || tracked.tracker.jobId === scan.jobId)
+    await message({ type: "CANCEL_TRACKED_JOB" });
+  stopPolling();
+  if (verifyState?.grantedOrigins.length) {
+    await chrome.permissions
+      .remove({ origins: verifyState.grantedOrigins })
+      .catch(() => false);
+    await chrome.permissions
+      .remove({ permissions: ["cookies"] })
+      .catch(() => false);
+  }
+  await clearVerifyState();
+  if (scan) {
+    // Covers a job the background worker lost track of, such as after a browser restart.
+    await cancelJob(scan.jobToken, scan.jobId).catch(() => undefined);
+    await clearScannedVideo(scan.userId);
+  }
+  capturing = false;
+  showInspectView();
+  setStatus("Cancelled.");
+}
+
+/** Leaves a finished scan or its chat for a new one. The chat stays on the website. */
+async function scanAnotherVideo(): Promise<void> {
+  if (authSession) await clearScannedVideo(authSession.user.id);
+  stopPolling();
+  capturing = false;
+  showInspectView();
 }
 
 inspectButton.addEventListener("click", () => void inspectTab());
 downloadButton.addEventListener("click", () => void startDownload());
 verifyButton.addEventListener("click", () => void startVerification());
 stopVerifyButton.addEventListener("click", () => void finishVerification());
-cancelButton.addEventListener("click", () => {
-  void (async () => {
-    const verifyState = await readVerifyState();
-    await message({ type: "CANCEL_TRACKED_JOB" });
-    stopPolling();
-    if (verifyState?.grantedOrigins.length) {
-      await chrome.permissions
-        .remove({ origins: verifyState.grantedOrigins })
-        .catch(() => false);
-      await chrome.permissions
-        .remove({ permissions: ["cookies"] })
-        .catch(() => false);
-    }
-    await clearVerifyState();
-    setStatus("Cancelled");
-    cancelButton.hidden = true;
-    stopVerifyButton.hidden = true;
-    inspectButton.hidden = false;
-  })().catch((error: unknown) => setStatus("Could not cancel", String(error)));
-});
+for (const button of [cancelButton, cancelVerifyButton]) {
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void cancelActiveWork()
+      .catch((error: unknown) => setStatus("Could not cancel", String(error)))
+      .finally(() => {
+        button.disabled = false;
+      });
+  });
+}
+for (const button of [scanAnotherButton, chatScanAnotherButton]) {
+  button.addEventListener("click", () => void scanAnotherVideo());
+}
 captureButton.addEventListener("click", () => {
   void (async () => {
     const tracked = await message<{ tracker?: TrackedJob }>({
@@ -849,7 +1122,7 @@ captureButton.addEventListener("click", () => {
     stopCaptureButton.hidden = false;
     setStatus(
       "Capture active",
-      "Reload or replay the video, then reopen this popup and stop capture.",
+      "Reload or replay the video, then reopen this panel and stop capture.",
     );
   })().catch((error) => setStatus("Could not start capture", String(error)));
 });
@@ -873,14 +1146,12 @@ stopCaptureButton.addEventListener("click", () => {
     })
     .catch((error: unknown) => {
       capturing = false;
-      stopCaptureButton.disabled = false;
       setStatus("Capture did not find a video", String(error));
+    })
+    .finally(() => {
+      stopCaptureButton.disabled = false;
     });
 });
-
-void restoreTrackedJob().catch((error: unknown) =>
-  setStatus("Could not read the active job", String(error)),
-);
 
 authShowLoginButton.addEventListener("click", () => openAuthForm("login"));
 authShowSignupButton.addEventListener("click", () => openAuthForm("signup"));
@@ -898,12 +1169,14 @@ authLogoutButton.addEventListener("click", () => void handleAuthLogout());
 
 // Chrome lets the side panel be resized while it's open, so the backdrop is redrawn
 // whenever the panel's own box changes rather than only once at load.
-let authTextureResizeFrame: number | undefined;
+let textureResizeFrame: number | undefined;
 new ResizeObserver(() => {
-  if (authScreenElement.hidden) return;
-  if (authTextureResizeFrame !== undefined)
-    cancelAnimationFrame(authTextureResizeFrame);
-  authTextureResizeFrame = requestAnimationFrame(renderAuthTexture);
-}).observe(authScreenElement);
+  if (textureResizeFrame !== undefined) cancelAnimationFrame(textureResizeFrame);
+  textureResizeFrame = requestAnimationFrame(() => {
+    if (!authScreenElement.hidden) renderTexture(authTextureContainer);
+    else if (currentView && currentView !== "chat")
+      renderTexture(appTextureContainer);
+  });
+}).observe(document.body);
 
 void restoreAuthState();

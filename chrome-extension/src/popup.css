@@ -1,7 +1,31 @@
+/* One palette, type scale and set of shapes for the whole panel: the sign-in screen set
+   them first, and the signed-in screens (inspect, scanning, chat) reuse them. */
 :root {
-  color: #18212f;
-  background: #f7f9fc;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --ink: #1c1c1b;
+  --paper: #f4f4f2;
+  --muted: #5e5e58;
+  --faint: #9a9a94;
+  --line: #dededa;
+  --surface: rgba(255, 255, 255, 0.72);
+  --pill-light: #e4e4e0;
+  --pill-light-hover: #dadad5;
+  --pill-dark: #2b2b28;
+  --pill-dark-hover: #3b3b37;
+  --on-dark: #fbfbfa;
+  --texture: #e3e3dd;
+  --danger: #b3392b;
+  --display-font: "Segoe WPC", "Segoe UI", sans-serif;
+
+  color: var(--ink);
+  background: var(--paper);
+  /* OpenAI Sans is not redistributable, so it is not bundled here: this picks it up on a
+     machine that has it installed and falls back to a system stack otherwise. */
+  font-family: "OpenAI Sans", "OpenAI Sans Text", Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Many elements below set their own `display`, which would otherwise beat the attribute. */
+[hidden] {
+  display: none !important;
 }
 
 /* The extension runs as a Chrome side panel, not a fixed-size popup: fill whatever
@@ -13,125 +37,26 @@ body {
 
 body {
   margin: 0;
+  background: var(--paper);
 }
 
-main {
-  box-sizing: border-box;
-  height: 100%;
-  padding: 18px;
-  overflow-y: auto;
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
 }
 
-h1 {
-  margin: 0 0 10px;
-  font-size: 21px;
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
-p,
-#details {
-  line-height: 1.45;
-}
+/* --- Shared pieces ------------------------------------------------------- */
 
-#details {
-  margin: 10px 0;
-  color: #4d5b70;
-  font-size: 12px;
-  white-space: pre-wrap;
-}
-
-progress {
-  width: 100%;
-  height: 8px;
-}
-
-#video-picker {
-  margin: 10px 0;
-  padding: 8px 10px;
-  border: 1px solid #dbe2ee;
-  border-radius: 8px;
-}
-
-#video-picker legend {
-  padding: 0 4px;
-  font-size: 12px;
-  font-weight: 650;
-  color: #4d5b70;
-}
-
-#video-picker label {
-  display: block;
-  padding: 6px 2px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-#video-picker input {
-  margin-inline-end: 6px;
-}
-
-button {
-  width: 100%;
-  margin-top: 10px;
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: white;
-  background: #2457d6;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-button.secondary {
-  color: #24344e;
-  background: #e7ecf5;
-}
-
-button:disabled {
-  cursor: wait;
-  opacity: 0.6;
-}
-
-#auth-signed-in {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-#auth-status {
-  margin: 0;
-  font-size: 12px;
-  color: #4d5b70;
-}
-
-#auth-signed-in #auth-logout {
-  width: auto;
-  flex: none;
-  margin: 0;
-  border-radius: 999px;
-  padding: 5px 11px;
-  font-size: 11px;
-}
-
-/* --- Login / sign up screen ---------------------------------------------- */
-/* Its own world: a full-height panel with the ASCII field behind it, sharing none of
-   the palette, type or button shapes the signed-in popup above uses. */
-
-#auth {
-  position: relative;
-  overflow: hidden;
-  box-sizing: border-box;
-  height: 100%;
-  color: #1c1c1b;
-  background: #f4f4f2;
-  /* OpenAI Sans is not redistributable, so it is not bundled here: this picks it up on a
-     machine that has it installed and falls back to the popup's own stack otherwise. */
-  font-family: "OpenAI Sans", "OpenAI Sans Text", Inter, ui-sans-serif, system-ui, sans-serif;
-}
-
-/* Inset past every edge, so the drift below never pulls a bare margin into view. */
-#auth-texture {
+/* The faint ASCII field behind the sign-in screen and the signed-in screens. Inset past
+   every edge, so the drift below never pulls a bare margin into view. */
+.texture {
   position: absolute;
   inset: -18px;
   overflow: hidden;
@@ -139,19 +64,19 @@ button:disabled {
   user-select: none;
 }
 
-#auth-texture pre {
+.texture pre {
   margin: 0;
-  color: #e3e3dd;
+  color: var(--texture);
   font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
   font-size: 6px;
   line-height: 8.5px;
   letter-spacing: 0.6px;
   white-space: pre;
   will-change: transform;
-  animation: auth-texture-drift 26s ease-in-out infinite;
+  animation: texture-drift 26s ease-in-out infinite;
 }
 
-@keyframes auth-texture-drift {
+@keyframes texture-drift {
   0%,
   100% {
     transform: translate3d(0, 0, 0);
@@ -161,10 +86,69 @@ button:disabled {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #auth-texture pre {
-    animation: none;
-  }
+.pill {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 236px;
+  height: 38px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: var(--display-font);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.pill--light {
+  color: var(--ink);
+  background: var(--pill-light);
+}
+
+.pill--light:hover:not(:disabled) {
+  background: var(--pill-light-hover);
+}
+
+.pill--dark {
+  color: var(--on-dark);
+  background: var(--pill-dark);
+}
+
+.pill--dark:hover:not(:disabled) {
+  background: var(--pill-dark-hover);
+}
+
+.pill:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.text-link {
+  width: auto;
+  margin: 2px auto 0;
+  padding: 4px;
+  border: 0;
+  color: #6c6c66;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.text-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* --- Login / sign up screen ---------------------------------------------- */
+
+#auth {
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  height: 100%;
 }
 
 .auth-panel {
@@ -176,11 +160,6 @@ button:disabled {
   align-items: center;
   height: 100%;
   padding: 32px 14px;
-}
-
-/* `display` above would otherwise beat the hidden attribute, and both panels would show. */
-.auth-panel[hidden] {
-  display: none;
 }
 
 .auth-brand {
@@ -196,7 +175,7 @@ button:disabled {
 
 .auth-title {
   margin: 0;
-  font-family: "Segoe WPC", "Segoe UI", sans-serif;
+  font-family: var(--display-font);
   font-size: 48px;
   line-height: 60px;
   font-weight: 500;
@@ -208,7 +187,7 @@ button:disabled {
    two-line shape the design calls for rather than a three-line one. */
 .auth-tagline {
   margin: 11px auto 0;
-  color: #5e5e58;
+  color: var(--muted);
   font-size: 9.5px;
   line-height: 1.5;
 }
@@ -221,38 +200,14 @@ button:disabled {
   width: 148px;
 }
 
+.auth-actions .pill {
+  width: 148px;
+  height: 36px;
+}
+
 #auth-welcome .auth-actions {
   margin-top: auto;
   margin-bottom: 40px;
-}
-
-#auth .auth-pill {
-  box-sizing: border-box;
-  width: 148px;
-  height: 36px;
-  margin: 0;
-  border: 0;
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-family: "Segoe WPC", "Segoe UI", sans-serif;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-#auth .auth-pill--light {
-  color: #1c1c1b;
-  background: #e4e4e0;
-}
-
-#auth .auth-pill--dark {
-  color: #fbfbfa;
-  background: #2b2b28;
-}
-
-#auth .auth-pill:disabled {
-  cursor: wait;
-  opacity: 0.6;
 }
 
 #auth .auth-link {
@@ -262,7 +217,6 @@ button:disabled {
   border: 0;
   color: #6c6c66;
   background: transparent;
-  font-family: inherit;
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -292,28 +246,27 @@ button:disabled {
 #auth .auth-fields input {
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid #dededa;
+  border: 1px solid var(--line);
   border-radius: 999px;
   padding: 10px 16px;
-  color: #1c1c1b;
-  background: rgba(255, 255, 255, 0.72);
-  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
   font-size: 12.5px;
 }
 
 #auth .auth-fields input::placeholder {
-  color: #9a9a94;
+  color: var(--faint);
 }
 
 #auth .auth-fields input:focus {
   outline: none;
-  border-color: #2b2b28;
+  border-color: var(--pill-dark);
   background: #fff;
 }
 
 #auth-error {
   margin: 2px 4px 0;
-  color: #b3392b;
+  color: var(--danger);
   font-size: 11px;
   line-height: 1.4;
   text-align: center;
@@ -323,3 +276,671 @@ button:disabled {
   display: none;
 }
 
+/* --- Signed-in app: the bar and the screens under it --------------------- */
+
+#app {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The chat is dense reading; the field stays behind the calmer screens only. */
+#app[data-view="chat"] #app-texture {
+  display: none;
+}
+
+.app-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 244, 242, 0.86);
+  backdrop-filter: blur(6px);
+}
+
+.app-bar__brand {
+  font-family: var(--display-font);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app-bar__account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+#auth-status {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.app-bar__logout {
+  flex: none;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 11px;
+  color: var(--ink);
+  background: var(--pill-light);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-bar__logout:hover:not(:disabled) {
+  background: var(--pill-light-hover);
+}
+
+.view {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  padding: 28px 16px 24px;
+  overflow-y: auto;
+}
+
+.view-hero {
+  margin-top: 6vh;
+  text-align: center;
+}
+
+.view-title {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 500;
+}
+
+.view-tagline {
+  max-width: 250px;
+  margin: 8px auto 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.view-tagline--title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.status-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  text-align: center;
+}
+
+#status,
+#processing-status {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+#details,
+#processing-details {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#details:empty,
+#processing-details:empty {
+  display: none;
+}
+
+#video-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 280px;
+  margin: 12px 0 0;
+  border: 0;
+  padding: 0;
+}
+
+#video-picker legend {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+#video-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+#video-picker label:has(input:checked) {
+  border-color: var(--ink);
+  background: #fff;
+}
+
+#video-picker input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.view-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 22px;
+}
+
+.view-note {
+  max-width: 250px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* --- Scanning screen ----------------------------------------------------- */
+
+.scan-loader {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 18px;
+  border: 3px solid var(--pill-light);
+  border-top-color: var(--pill-dark);
+  border-radius: 50%;
+  animation: scan-spin 0.9s linear infinite;
+}
+
+@keyframes scan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.scan-steps {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 280px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-steps li {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.scan-steps li::before {
+  content: "";
+  position: relative;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pill-light);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* The track between one step's dot and the previous one's. */
+.scan-steps li + li::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--pill-light);
+  transition: background-color 0.3s ease;
+}
+
+.scan-steps li[data-state="done"] {
+  color: var(--muted);
+}
+
+.scan-steps li[data-state="done"]::before,
+.scan-steps li[data-state="done"]::after,
+.scan-steps li[data-state="active"]::before,
+.scan-steps li[data-state="active"]::after,
+.scan-steps li[data-state="stalled"]::after {
+  background: var(--pill-dark);
+}
+
+.scan-steps li[data-state="active"] {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.scan-steps li[data-state="active"]::before {
+  box-shadow: 0 0 0 4px rgba(43, 43, 40, 0.12);
+  animation: step-pulse 1.6s ease-in-out infinite;
+}
+
+.scan-steps li[data-state="stalled"] {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.scan-steps li[data-state="stalled"]::before {
+  background: var(--danger);
+}
+
+@keyframes step-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(43, 43, 40, 0.06);
+  }
+}
+
+#progress {
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 280px;
+  height: 4px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--pill-light);
+}
+
+#progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--pill-light);
+}
+
+#progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--pill-dark);
+  transition: width 0.4s ease;
+}
+
+/* --- Chat screen --------------------------------------------------------- */
+
+#chat-view {
+  align-items: stretch;
+  padding: 0 0 4px;
+  overflow: hidden;
+}
+
+.chat-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-header__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-header__title {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--display-font);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-header__source {
+  margin: 2px 0 0;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.chat-header__action {
+  flex: none;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-header__action:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.chat-header__action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.chat-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 14px;
+  overflow-y: auto;
+}
+
+.chat-loading {
+  margin: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-intro {
+  margin: auto 0;
+  padding: 8px 4px;
+  text-align: center;
+}
+
+.chat-intro__eyebrow {
+  margin: 0;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-intro__summary {
+  display: -webkit-box;
+  max-width: 300px;
+  margin: 10px auto 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+}
+
+.chat-starters {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.chat-starter {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 9px 14px;
+  background: #fff;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.chat-starter:hover {
+  border-color: var(--ink);
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 88%;
+}
+
+.chat-message--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.chat-message--assistant {
+  align-self: flex-start;
+}
+
+.chat-message__bubble {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-message--user .chat-message__bubble {
+  border-radius: 18px 18px 6px 18px;
+  color: var(--on-dark);
+  background: var(--pill-dark);
+}
+
+.chat-message--assistant .chat-message__bubble {
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 18px 6px;
+  background: #fff;
+}
+
+.chat-message__bubble--empty {
+  color: var(--faint);
+  font-style: italic;
+}
+
+.chat-message__activity {
+  margin: 5px 0 0 8px;
+  color: var(--muted);
+  font-size: 10.5px;
+  animation: activity-fade 1.6s ease-in-out infinite;
+}
+
+@keyframes activity-fade {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Three dots that appear one at a time, drawn as a repeating background. */
+.chat-typing {
+  display: inline-block;
+  width: 24px;
+  height: 8px;
+  vertical-align: middle;
+  background: radial-gradient(circle, var(--muted) 2.5px, transparent 3px) 0 50% / 8px 8px
+    repeat-x;
+  animation: typing-dots 1.2s steps(4, jump-none) infinite;
+}
+
+@keyframes typing-dots {
+  from {
+    width: 0;
+  }
+  to {
+    width: 24px;
+  }
+}
+
+.chat-citation {
+  margin: 0 1px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 5px;
+  color: var(--ink);
+  background: var(--pill-light);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-citation:hover {
+  color: var(--on-dark);
+  background: var(--pill-dark);
+}
+
+.chat-citation--approximate {
+  border: 1px dashed var(--faint);
+  background: transparent;
+}
+
+.chat-notice {
+  flex: none;
+  margin: 0 16px 6px;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.chat-notice[data-tone="hint"] {
+  color: var(--muted);
+}
+
+.chat-notice:empty {
+  display: none;
+}
+
+.chat-composer {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 5px 5px 5px 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease;
+}
+
+.chat-composer:focus-within {
+  border-color: var(--ink);
+}
+
+.chat-composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 132px;
+  border: 0;
+  padding: 7px 0;
+  background: transparent;
+  font-size: 12.5px;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+}
+
+.chat-composer textarea::placeholder {
+  color: var(--faint);
+}
+
+.chat-composer__button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--on-dark);
+  background: var(--pill-dark);
+  cursor: pointer;
+}
+
+.chat-composer__button:hover:not(:disabled) {
+  background: var(--pill-dark-hover);
+}
+
+.chat-composer__button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.chat-composer__button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#chat-stop svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+#chat-scan-another {
+  flex: none;
+  margin: 6px auto 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .texture pre,
+  .chat-message__activity,
+  .scan-steps li[data-state="active"]::before {
+    animation: none;
+  }
+
+  .scan-loader {
+    animation-duration: 2.4s;
+  }
+}
