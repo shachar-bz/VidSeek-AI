@@ -21,8 +21,9 @@ MAX_TOOL_CALLS = 8
 MAX_IMAGES = 6
 
 # Calls past the soft cap that are still answered (with "budget spent") before the run is
-# stopped outright, and model requests allowed: one per round of tool calls, one for the
-# answer, and one more for an answer sent back by the findings check.
+# stopped outright, and model requests allowed: one per round of tool calls, the rounds past
+# the cap included, one for the answer, and one more for an answer sent back by the findings
+# check.
 TOOL_CALLS_PAST_BUDGET = 2
 USAGE_LIMITS = UsageLimits(
     tool_calls_limit=MAX_TOOL_CALLS + TOOL_CALLS_PAST_BUDGET,
