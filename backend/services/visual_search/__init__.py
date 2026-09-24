@@ -17,6 +17,7 @@ from .moments import (
     TimeWindow,
     VisualMoment,
     VisualSearchResult,
+    ready_video_map,
 )
 from .scoring import (
     HitRange,
@@ -52,6 +53,7 @@ __all__ = [
     "load_video_map",
     "merge_into_ranges",
     "normalized",
+    "ready_video_map",
     "search_visual_moments",
     "search_visual_text",
     "standout_frames",

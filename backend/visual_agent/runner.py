@@ -5,8 +5,8 @@ viewer's position and the optional time range, and run to a `VisualInvestigation
 context lives in the main agent's history, not here.
 
 Two models take part. The planner (`MODEL_NAME`) chooses which tools to call and writes the
-answer; it never receives an image. `view_frames` sends frames to the image model
-(`image_analysis.py`) and hands the planner its words.
+answer; it never receives an image. `view_frames` and `view_sequence` send frames to the image
+model (`image_analysis.py`) and hand the planner its words.
 
 The answer's findings are checked before they leave (`result.py`): a finding whose times no
 tool returned is sent back once, and dropped if the second answer still carries it, so an
@@ -34,6 +34,7 @@ from .tools.read_frame_text import read_frame_text
 from .tools.search_visual_moments import search_visual_moments
 from .tools.search_visual_text import search_visual_text
 from .tools.view_frames import view_frames
+from .tools.view_sequence import view_sequence
 
 # The same key every other OpenAI call site in the backend reads (see `video_agent/runner.py`).
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
@@ -42,6 +43,7 @@ TOOLS = (
     search_visual_moments,
     search_visual_text,
     view_frames,
+    view_sequence,
     read_frame_text,
     get_transcript_window,
 )
