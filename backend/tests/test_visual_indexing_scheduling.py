@@ -22,7 +22,6 @@ from backend.download_pipeline.segmentation import SegmentedVideo
 from backend.download_pipeline.video_storage import StorageOutcome
 from backend.schemas.browser import BrowserContext, MediaCandidate, MediaKind
 from backend.schemas.video_jobs import BrowserDownloadCompleteRequest, CreateVideoJobRequest
-from backend.services import frame_captions
 from backend.services.transcripts import NormalizedTranscript, TimingFidelity, TranscriptSegment
 from backend.services.video_download.jobs import JobManager
 from backend.services.video_download.web.pipeline import PipelineResult
@@ -214,33 +213,3 @@ def test_the_index_version_names_the_model_the_encoder_loads() -> None:
 
     assert IMAGE_MODEL_NAME == MODEL_NAME
     assert CURRENT_VISUAL_INDEX_VERSION == "siglip2-base-patch16-256@0.5fps"
-
-
-def test_saved_captions_are_embedded_as_passages_and_blank_ones_dropped() -> None:
-    pool = FakePool()
-    with patch(
-        "backend.services.embeddings.multilingual_text_embedding.embed_passages",
-        return_value=[[0.1, 0.2]],
-    ) as embed:
-        kept = frame_captions.save_frame_captions(
-            VIDEO_ID,
-            [
-                frame_captions.CaptionToSave(12.0, "  A whiteboard with three boxes  "),
-                frame_captions.CaptionToSave(20.0, "   "),
-            ],
-            model="gpt-vision",
-            pool=pool,
-        )
-
-    assert kept == 1
-    assert embed.call_args.args[0] == ["A whiteboard with three boxes"]
-    assert pool.recorded[0].parameters == [
-        (VIDEO_ID, 12.0, None, "A whiteboard with three boxes", [0.1, 0.2], "gpt-vision")
-    ]
-
-
-def test_no_captions_to_save_loads_no_model() -> None:
-    with patch("backend.services.embeddings.multilingual_text_embedding.embed_passages") as embed:
-        assert frame_captions.save_frame_captions(VIDEO_ID, [], model="gpt-vision") == 0
-
-    assert not embed.called

@@ -255,8 +255,7 @@ class PostgresVisualIndex:
         A delete followed by inserts, all in one transaction: unlike a transcript, an index
         from another model is not partly reusable, so there is nothing to upsert in place,
         and the transaction is what keeps a reader from ever seeing the gap. Deleting the
-        segments takes their keyframes with them. Saved frame captions are not touched; they
-        are keyed by time and outlive a re-index.
+        segments takes their keyframes with them.
         """
         frame_rows = [
             (video_id, frame.time_seconds, list(frame.embedding)) for frame in frames

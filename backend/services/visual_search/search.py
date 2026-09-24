@@ -1,10 +1,9 @@
 """Finds the moments of one video that match a text query, from everything the index knows.
 
-Five ranked lists are read and fused by rank (`fusion.py`):
+Four ranked lists are read and fused by rank (`fusion.py`):
 
 * `image` -- every sampled frame scored against the query with SigLIP 2's text encoder, kept
   only where it stands out from the rest of the video (`scoring.py`), merged into ranges;
-* `caption` -- the captions the visual sub-agent saved on earlier questions, by e5 meaning;
 * `ocr_words` -- keyframes whose on-screen text contains the query's words, by trigram;
 * `ocr_meaning` -- keyframes whose on-screen text means what the query does, by e5;
 * `transcript` -- the memories whose speech is closest to the query, by MiniLM.
@@ -14,8 +13,8 @@ in its segment, or to the segment's end. The two OCR lists are empty, and cost n
 for a video whose keyframes have not been read.
 
 The fusion is per visual segment. The lists do not share a granularity -- a frame is an
-instant, a caption an instant or a window, a memory can run for minutes -- but every one of
-them falls in some segment, and a segment is what the sub-agent navigates by. Each moment
+instant, a keyframe's text a stretch, a memory can run for minutes -- but every one of them
+falls in some segment, and a segment is what the sub-agent navigates by. Each moment
 returned is one segment: the precise ranges that matched inside it, which lists found it, and
 the chapter it falls in. A range found only by the transcript is as precise as the memory,
 clipped to the segment.
@@ -34,7 +33,6 @@ from backend.services.visual_indexing import (
     SAMPLE_INTERVAL_SECONDS,
 )
 from backend.storage.postgres import (
-    PostgresFrameCaptions,
     PostgresMemoryEmbeddings,
     PostgresVisualIndex,
     StoredChapterOutline,
@@ -48,15 +46,14 @@ from .video_map import VideoVisualMap, load_video_map
 
 # The names the lists are fused under, in the order a moment reports them.
 IMAGE = "image"
-CAPTION = "caption"
 OCR_WORDS = "ocr_words"
 OCR_MEANING = "ocr_meaning"
 TRANSCRIPT = "transcript"
-SOURCES = (IMAGE, CAPTION, OCR_WORDS, OCR_MEANING, TRANSCRIPT)
+SOURCES = (IMAGE, OCR_WORDS, OCR_MEANING, TRANSCRIPT)
 
 # The lists whose ranges say precisely where in a segment the match is. A memory can run for
 # minutes, so a range the transcript alone found is only as precise as the segment.
-PRECISE_SOURCES = (IMAGE, CAPTION, OCR_WORDS, OCR_MEANING)
+PRECISE_SOURCES = (IMAGE, OCR_WORDS, OCR_MEANING)
 
 # Whether the index could be searched at all.
 INDEX_READY = "ready"
@@ -82,17 +79,13 @@ class SearchSettings:
     # Raw cosine at which a frame is a hit even if it does not stand out, because the thing is
     # on screen for most of the video. English queries score higher than Hebrew ones.
     image_present_similarity: float = 0.15
-    # e5 cosine under which a saved caption is not a match. e5's scores bunch up high --
-    # right captions scored 0.81-0.94 and wrong ones up to 0.815 for the same queries -- so a
-    # floor alone cannot separate them, and a caption must also be within
-    # `caption_margin_from_best` of the query's best caption.
-    caption_similarity_floor: float = 0.8
-    caption_margin_from_best: float = 0.05
-    caption_candidates: int = 10
     # pg_trgm `word_similarity` under which a keyframe's text does not contain the query's
     # words. 0.6 is pg_trgm's own default for "a match"; lower keeps a misread letter or two.
     ocr_word_similarity_floor: float = 0.5
-    # e5 cosine for on-screen text, read the way saved captions are and for the same reason.
+    # e5 cosine under which a keyframe's text does not mean what the query does. e5's scores
+    # bunch up high -- short descriptions of frames scored 0.81-0.94 when right and up to 0.815
+    # when wrong for the same queries -- so a floor alone cannot separate them, and the text
+    # must also be within `ocr_meaning_margin_from_best` of the query's best match.
     ocr_meaning_similarity_floor: float = 0.8
     ocr_meaning_margin_from_best: float = 0.05
     ocr_candidates: int = 10
@@ -119,8 +112,9 @@ class VisualMoment:
     """One segment of the video that matched the query, and how.
 
     `start_seconds` and `end_seconds` span `matched_ranges`, which hold the precise places
-    inside the segment that matched: frame ranges and caption times when the picture or a
-    caption matched, the memory's overlap with the segment when only the transcript did.
+    inside the segment that matched: frame ranges when the picture matched, the stretch a
+    keyframe's text was on screen when that text matched, the memory's overlap with the
+    segment when only the transcript did.
     """
 
     start_seconds: float
@@ -132,8 +126,6 @@ class VisualMoment:
     chapter: StoredChapterOutline | None
     # How far the best frame stood out, when the picture matched at all.
     peak_z_score: float | None = None
-    # The saved caption that matched best, when one did.
-    caption: str | None = None
     # The on-screen text of the keyframe that matched best, when one did.
     on_screen_text: str | None = None
 
@@ -146,8 +138,8 @@ class VisualSearchResult:
     still being built, failed, or was skipped, which `visual_status` names -- or `outdated`,
     an index built with other models than the ones this backend embeds queries with.
 
-    `image_match_found` is false when no frame stood out, even if the caption or transcript
-    lists found something: the picture itself gave no evidence.
+    `image_match_found` is false when no frame stood out, even if the on-screen text or
+    transcript lists found something: the picture itself gave no evidence.
     """
 
     index_status: str
@@ -164,7 +156,6 @@ class _Piece:
     rank: int
     range: TimeRange
     peak_z_score: float | None = None
-    caption: str | None = None
     on_screen_text: str | None = None
 
 
@@ -183,7 +174,6 @@ def search_visual_moments(
     settings: SearchSettings = DEFAULT_SETTINGS,
     pool=None,
     image_query_encoder: QueryEncoder | None = None,
-    caption_query_encoder: QueryEncoder | None = None,
     transcript_query_encoder: QueryEncoder | None = None,
     on_screen_text_query_encoder: QueryEncoder | None = None,
 ) -> VisualSearchResult:
@@ -191,8 +181,8 @@ def search_visual_moments(
 
     Frames are scored against the whole video even when a window is given, so a window
     narrows where hits may be but not what counts as standing out. The encoders default to
-    the shared SigLIP 2, MiniLM and multilingual-e5-small models -- e5 for both captions and
-    on-screen text; a test replaces them.
+    the shared SigLIP 2, MiniLM and multilingual-e5-small models -- e5 for on-screen text; a
+    test replaces them.
     """
     state = PostgresVisualIndex(pool=pool).state(video_id)
     if state is None or state.status != READY:
@@ -213,16 +203,6 @@ def search_visual_moments(
             video_map,
             window,
             _Piece(IMAGE, rank, TimeRange(hit.start_seconds, hit.end_seconds), hit.peak_z_score),
-        )
-    for rank, match in enumerate(
-        _caption_matches(video_id, query, settings, pool, caption_query_encoder), start=1
-    ):
-        caption_end = match.end_seconds if match.end_seconds is not None else match.time_seconds
-        _add(
-            evidence,
-            video_map,
-            window,
-            _Piece(CAPTION, rank, TimeRange(match.time_seconds, caption_end), caption=match.caption),
         )
     for rank, match in enumerate(
         _transcript_matches(video_id, query, settings, pool, transcript_query_encoder), start=1
@@ -292,25 +272,6 @@ def _image_ranges(video_id, query, settings, pool, encoder):
     )
     ranges = merge_into_ranges(standouts, interval_seconds=SAMPLE_INTERVAL_SECONDS)
     return sorted(ranges, key=lambda hit: hit.peak_z_score, reverse=True)
-
-
-def _caption_matches(video_id, query, settings, pool, encoder):
-    """Saved captions above the floor, closest first; none without reading a model when there are none."""
-    store = PostgresFrameCaptions(pool=pool)
-    if store.count(video_id) == 0:
-        return []
-    if encoder is None:
-        from backend.services.embeddings.multilingual_text_embedding import embed_query
-
-        encoder = embed_query
-    matches = store.similarities(video_id, encoder(query))
-    if not matches:
-        return []
-    cutoff = max(
-        settings.caption_similarity_floor,
-        max(match.similarity for match in matches) - settings.caption_margin_from_best,
-    )
-    return [match for match in matches if match.similarity >= cutoff][: settings.caption_candidates]
 
 
 def _transcript_matches(video_id, query, settings, pool, encoder):
@@ -383,7 +344,6 @@ def _add(
                 piece.rank,
                 inside,
                 piece.peak_z_score,
-                piece.caption,
                 piece.on_screen_text,
             )
         )
@@ -423,10 +383,6 @@ def _fuse(evidence: dict[int, _SegmentEvidence], video_map: VideoVisualMap) -> l
             )
         )
         image_peaks = [piece.peak_z_score for piece in entry.pieces if piece.peak_z_score is not None]
-        captions = sorted(
-            (piece for piece in entry.pieces if piece.caption is not None),
-            key=lambda piece: piece.rank,
-        )
         on_screen = sorted(
             (piece for piece in entry.pieces if piece.on_screen_text is not None),
             key=lambda piece: piece.rank,
@@ -441,7 +397,6 @@ def _fuse(evidence: dict[int, _SegmentEvidence], video_map: VideoVisualMap) -> l
                 segment=entry.segment,
                 chapter=video_map.chapter_at(ranges[0].start_seconds),
                 peak_z_score=max(image_peaks) if image_peaks else None,
-                caption=captions[0].caption if captions else None,
                 on_screen_text=on_screen[0].on_screen_text if on_screen else None,
             )
         )

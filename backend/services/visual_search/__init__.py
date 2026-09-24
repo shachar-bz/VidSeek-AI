@@ -3,7 +3,6 @@
 from .fusion import FusedItem, reciprocal_rank_fusion
 from .scoring import HitRange, StandoutFrame, merge_into_ranges, standout_frames
 from .search import (
-    CAPTION,
     DEFAULT_SETTINGS,
     IMAGE,
     INDEX_NOT_READY,
@@ -21,7 +20,6 @@ from .search import (
 from .video_map import VideoVisualMap, load_video_map
 
 __all__ = [
-    "CAPTION",
     "DEFAULT_SETTINGS",
     "IMAGE",
     "INDEX_NOT_READY",

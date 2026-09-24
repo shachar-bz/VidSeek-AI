@@ -146,11 +146,11 @@ sentence-transformers>=3.0
 
 # --- visual understanding module ---
 # Remove this block together with backend/services/visual_indexing/, backend/services/visual_search/,
-# backend/services/video_frames/, backend/services/frame_captions.py,
-# backend/services/embeddings/image_embedding/, backend/services/embeddings/multilingual_text_embedding/
-# and backend/download_pipeline/visual_indexing.py if the module is dropped.
+# backend/services/video_frames/, backend/services/embeddings/image_embedding/,
+# backend/services/embeddings/multilingual_text_embedding/ and backend/download_pipeline/visual_indexing.py
+# if the module is dropped.
 # SigLIP 2 base (google/siglip2-base-patch16-256) embeds sampled frames and search queries in one
-# space through transformers; multilingual-e5-small embeds saved frame captions through
+# space through transformers; multilingual-e5-small embeds on-screen text through
 # sentence-transformers (already a dependency above). Both run locally and download their weights
 # to the Hugging Face cache on first use; SigLIP wants the CUDA GPU (torch is already a dependency
 # above) and can be turned off with VIDSEEK_VISUAL_INDEXING=false. Pillow and numpy decode,
