@@ -9,8 +9,7 @@ the user if it is unclear.
 
 * **Work on this branch, in this worktree:** `feat/visual-search-tools`, at
   `.claude/worktrees/visual-search-tools`. Do not create another branch or worktree (CLAUDE.md,
-  rule 3). The branch is based on `refactor/remove-saved-frame-captions`, which is not merged
-  into `main` yet.
+  rule 3). It already holds everything in `main` up to the removal of saved frame captions.
 * Read `CLAUDE.md`, `backend/CLAUDE.md`, `ARCHITECTURE.md`, and `VISUAL_UNDERSTANDING_PLAN.md`
   §3.2 (segments and keyframes), §4 and **§5 in full**.
 * Read the current code you are replacing: `backend/services/visual_search/` (all of it),
