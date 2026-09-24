@@ -24,7 +24,6 @@ from .memory_embeddings import (
     MemoryEmbedding,
     MemoryForEmbedding,
     MemoryMatch,
-    MemorySimilarity,
     PostgresMemoryEmbeddings,
 )
 from .library_views import LibraryViewRow, PostgresLibraryViews
@@ -45,6 +44,7 @@ from .visual_index import (
     NewFrameEmbedding,
     NewVisualSegment,
     PostgresVisualIndex,
+    StoredKeyframeText,
     StoredVisualSegment,
     VisualIndexState,
 )
@@ -60,7 +60,6 @@ __all__ = [
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",
-    "MemorySimilarity",
     "LibraryViewRow",
     "NewChapter",
     "NewFrameEmbedding",
@@ -96,6 +95,7 @@ __all__ = [
     "StoredPinnedAnswer",
     "StoredSession",
     "StoredUser",
+    "StoredKeyframeText",
     "StoredUserVideo",
     "StoredVideoInsights",
     "StoredVideoJob",

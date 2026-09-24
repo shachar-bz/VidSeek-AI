@@ -1,4 +1,4 @@
-"""Tests for the visual index store and the memory similarity read: the SQL they send and what they read back."""
+"""Tests for the visual index store: the SQL it sends and what it reads back."""
 
 import pytest
 
@@ -6,7 +6,6 @@ from backend.storage.postgres import (
     KeyframeText,
     NewFrameEmbedding,
     NewVisualSegment,
-    PostgresMemoryEmbeddings,
     PostgresVisualIndex,
 )
 from backend.tests.fake_postgres import FakePool
@@ -104,19 +103,6 @@ def test_segments_are_read_with_their_keyframes_for_an_open_or_closed_window() -
     assert window[0].segment_id == "seg-1"
 
 
-def test_memory_similarities_carry_the_score_the_search_floors_on() -> None:
-    pool = FakePool(
-        rows=[{"memory_id": "m1", "start_seconds": 30.0, "end_seconds": 55.0, "similarity": 0.42}]
-    )
-
-    matches = PostgresMemoryEmbeddings(pool=pool).memory_similarities(VIDEO_ID, [0.1], 5)
-
-    assert [(m.memory_id, m.start_seconds, m.end_seconds, m.similarity) for m in matches] == [
-        ("m1", 30.0, 55.0, 0.42)
-    ]
-    assert pool.recorded[0].parameters == ([0.1], VIDEO_ID, [0.1], 5)
-
-
 def test_keyframe_text_is_written_onto_the_keyframe_rows_with_the_engine_that_read_it() -> None:
     pool = FakePool()
 
@@ -146,21 +132,56 @@ def test_writing_no_keyframe_text_touches_nothing() -> None:
     assert pool.recorded == []
 
 
-def test_keyframe_text_is_counted_and_searched_by_words_and_by_meaning() -> None:
-    match = {"time_seconds": 40.0, "ocr_text": "Load balancer", "similarity": 0.75}
-    pool = FakePool(responses=[[{"text_count": 3}], [match], [match]])
-    store = PostgresVisualIndex(pool=pool)
+def test_keyframe_text_is_counted() -> None:
+    pool = FakePool(rows=[{"text_count": 3}])
 
-    assert store.keyframe_text_count(VIDEO_ID) == 3
-    by_words = store.keyframe_text_word_matches(VIDEO_ID, "load balancer", 10)
-    by_meaning = store.keyframe_text_similarities(VIDEO_ID, [0.4], 10)
-
-    assert (by_words[0].time_seconds, by_words[0].text, by_words[0].similarity) == (40.0, "Load balancer", 0.75)
-    assert "word_similarity" in pool.statements[1]
-    assert pool.recorded[1].parameters == ("load balancer", VIDEO_ID, 10)
-    assert by_meaning[0].text == "Load balancer"
-    assert pool.recorded[2].parameters == ([0.4], VIDEO_ID, [0.4], 10)
+    assert PostgresVisualIndex(pool=pool).keyframe_text_count(VIDEO_ID) == 3
+    assert "ocr_text is not null" in pool.statements[0]
 
 
 def test_a_video_with_no_keyframe_text_counts_zero() -> None:
     assert PostgresVisualIndex(pool=FakePool()).keyframe_text_count(VIDEO_ID) == 0
+
+
+def test_every_keyframe_text_is_scored_by_meaning_with_no_limit() -> None:
+    pool = FakePool(
+        rows=[
+            {"time_seconds": 40.0, "ocr_text": "Load balancer", "similarity": 0.9},
+            {"time_seconds": 0.0, "ocr_text": "Agenda", "similarity": 0.8},
+        ]
+    )
+
+    scored = PostgresVisualIndex(pool=pool).keyframe_text_similarities(VIDEO_ID, [0.4])
+
+    assert [(match.time_seconds, match.similarity) for match in scored] == [(40.0, 0.9), (0.0, 0.8)]
+    # The z-score is taken over all of them, so none may be cut off.
+    assert "limit" not in pool.statements[0]
+    assert "ocr_embedding is not null" in pool.statements[0]
+
+
+def test_every_keyframe_that_shows_text_is_read_in_time_order() -> None:
+    pool = FakePool(
+        rows=[
+            {"time_seconds": 0.0, "ocr_text": "Agenda"},
+            {"time_seconds": 40.0, "ocr_text": "Kafka\nPartitions"},
+        ]
+    )
+
+    texts = PostgresVisualIndex(pool=pool).keyframe_texts(VIDEO_ID)
+
+    assert [(text.time_seconds, text.text) for text in texts] == [
+        (0.0, "Agenda"),
+        (40.0, "Kafka\nPartitions"),
+    ]
+    assert "ocr_text is not null" in pool.statements[0]
+    assert "order by time_seconds" in pool.statements[0]
+    assert pool.recorded[0].parameters == (VIDEO_ID,)
+
+
+def test_keyframes_ocr_has_not_read_are_those_with_no_engine() -> None:
+    pool = FakePool(rows=[{"unread_count": 4}])
+    store = PostgresVisualIndex(pool=pool)
+
+    assert store.unread_keyframe_count(VIDEO_ID) == 4
+    assert "ocr_engine is null" in pool.statements[0]
+    assert PostgresVisualIndex(pool=FakePool()).unread_keyframe_count(VIDEO_ID) == 0

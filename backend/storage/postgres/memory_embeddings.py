@@ -89,20 +89,6 @@ class MemoryMatch:
     end_seconds: float
 
 
-@dataclass(frozen=True)
-class MemorySimilarity:
-    """One memory's time range and how close its vector is to a query vector.
-
-    What the visual search fuses a transcript hit from: it needs where in the video the
-    memory is and how good a match it was, not what was said.
-    """
-
-    memory_id: str
-    start_seconds: float
-    end_seconds: float
-    similarity: float
-
-
 class PostgresMemoryEmbeddings:
     """The `memory_embeddings` table, as the rest of the backend sees it."""
 
@@ -177,35 +163,6 @@ class PostgresMemoryEmbeddings:
                 chapter_title=row["chapter_title"],
                 start_seconds=float(row["start_seconds"]),
                 end_seconds=float(row["end_seconds"]),
-            )
-            for row in rows
-        ]
-
-    def memory_similarities(
-        self, video_id: str, embedding: Sequence[float], limit: int
-    ) -> list[MemorySimilarity]:
-        """This video's `limit` memories closest to `embedding`, closest first, with their scores.
-
-        The same ordering as `nearest_memories`, plus the cosine similarity each match scored,
-        which is what a caller needs to drop matches below a floor.
-        """
-        vector = list(embedding)
-        with connection(self._pool) as open_connection:
-            rows = open_connection.execute(
-                "select e.memory_id as memory_id, m.start_seconds as start_seconds, "
-                "m.end_seconds as end_seconds, 1 - (e.embedding <=> %s::vector) as similarity "
-                f"from public.{TABLE_NAME} e "
-                "join public.memories m on m.id = e.memory_id "
-                "where e.video_id = %s::uuid "
-                "order by e.embedding <=> %s::vector limit %s",
-                (vector, video_id, vector, limit),
-            ).fetchall()
-        return [
-            MemorySimilarity(
-                memory_id=str(row["memory_id"]),
-                start_seconds=float(row["start_seconds"]),
-                end_seconds=float(row["end_seconds"]),
-                similarity=float(row["similarity"]),
             )
             for row in rows
         ]

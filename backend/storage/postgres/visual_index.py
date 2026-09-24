@@ -117,24 +117,31 @@ from public.video_keyframes
 where video_id = %s::uuid and ocr_text is not null
 """
 
-# How well the query's words appear somewhere in each keyframe's text: `word_similarity` scores
-# the best-matching stretch of the text, so a two-word query is not diluted by a slide full of
-# other words, and a misread letter or two still leaves most trigrams in common.
-KEYFRAME_TEXT_WORD_MATCHES_SQL = """
-select time_seconds, ocr_text, word_similarity(%s, ocr_text) as similarity
-from public.video_keyframes
-where video_id = %s::uuid and ocr_text is not null
-order by similarity desc, time_seconds
-limit %s
-"""
-
-# Every keyframe's text scored by meaning against a query vector, closest first.
+# Every keyframe's text scored by meaning against a query vector, closest first. No limit: a
+# hit is a text that stands out from all of its video's scores, which the nearest few cannot
+# show.
 KEYFRAME_TEXT_SIMILARITIES_SQL = """
 select time_seconds, ocr_text, 1 - (ocr_embedding <=> %s::vector) as similarity
 from public.video_keyframes
 where video_id = %s::uuid and ocr_embedding is not null
 order by ocr_embedding <=> %s::vector, time_seconds
-limit %s
+"""
+
+# Every keyframe that shows text, in time order. The search for words on screen reads them all
+# and matches in Python: a video has a few hundred keyframes at most.
+KEYFRAME_TEXTS_SQL = """
+select time_seconds, ocr_text
+from public.video_keyframes
+where video_id = %s::uuid and ocr_text is not null
+order by time_seconds
+"""
+
+# Keyframes OCR has not read yet: `ocr_engine` is set on every keyframe that was read, with or
+# without text (migration 0024).
+UNREAD_KEYFRAME_COUNT_SQL = """
+select count(*) as unread_count
+from public.video_keyframes
+where video_id = %s::uuid and ocr_engine is null
 """
 
 logger = logging.getLogger(__name__)
@@ -202,6 +209,14 @@ class KeyframeText:
     confidence: float | None = None
     # multilingual-e5-small of `text`; None exactly when `text` is.
     embedding: Sequence[float] | None = None
+
+
+@dataclass(frozen=True)
+class StoredKeyframeText:
+    """The on-screen text one keyframe was read to show."""
+
+    time_seconds: float
+    text: str
 
 
 @dataclass(frozen=True)
@@ -375,26 +390,31 @@ class PostgresVisualIndex:
             row = open_connection.execute(KEYFRAME_TEXT_COUNT_SQL, (video_id,)).fetchone()
         return int(row["text_count"]) if row else 0
 
-    def keyframe_text_word_matches(
-        self, video_id: str, query: str, limit: int
-    ) -> list[KeyframeTextMatch]:
-        """The keyframes whose text contains the query's words most closely, best first."""
+    def keyframe_texts(self, video_id: str) -> list[StoredKeyframeText]:
+        """Every keyframe of this video that shows text, in time order."""
         with connection(self._pool) as open_connection:
-            rows = open_connection.execute(
-                KEYFRAME_TEXT_WORD_MATCHES_SQL, (query, video_id, limit)
-            ).fetchall()
-        return [_keyframe_text_match(row) for row in rows]
+            rows = open_connection.execute(KEYFRAME_TEXTS_SQL, (video_id,)).fetchall()
+        return [
+            StoredKeyframeText(time_seconds=float(row["time_seconds"]), text=row["ocr_text"])
+            for row in rows
+        ]
 
     def keyframe_text_similarities(
-        self, video_id: str, embedding: Sequence[float], limit: int
+        self, video_id: str, embedding: Sequence[float]
     ) -> list[KeyframeTextMatch]:
-        """The keyframes whose text is closest in meaning to `embedding`, best first."""
+        """Every keyframe text of this video with its closeness in meaning to `embedding`, best first."""
         vector = list(embedding)
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
-                KEYFRAME_TEXT_SIMILARITIES_SQL, (vector, video_id, vector, limit)
+                KEYFRAME_TEXT_SIMILARITIES_SQL, (vector, video_id, vector)
             ).fetchall()
         return [_keyframe_text_match(row) for row in rows]
+
+    def unread_keyframe_count(self, video_id: str) -> int:
+        """How many of this video's keyframes OCR has not read; zero once every one has been."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(UNREAD_KEYFRAME_COUNT_SQL, (video_id,)).fetchone()
+        return int(row["unread_count"]) if row else 0
 
 
 def _keyframe_text_match(row: dict) -> KeyframeTextMatch:
