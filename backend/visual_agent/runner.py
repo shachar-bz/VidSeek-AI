@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 
 from pydantic_ai import Agent, ModelRetry, RunContext, UsageLimitExceeded
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from backend.core import config
@@ -51,7 +51,9 @@ logger = logging.getLogger(__name__)
 def build_visual_agent(model: str = MODEL_NAME) -> Agent[VisualDeps, VisualInvestigation]:
     """The sub-agent with its three tools and the findings check."""
     agent = Agent(
-        OpenAIChatModel(model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))),
+        # The Responses API rather than Chat Completions: gpt-6-sol refuses function tools on
+        # Chat Completions while it reasons.
+        OpenAIResponsesModel(model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))),
         deps_type=VisualDeps,
         output_type=VisualInvestigation,
         instructions=VISUAL_AGENT_PROMPT,

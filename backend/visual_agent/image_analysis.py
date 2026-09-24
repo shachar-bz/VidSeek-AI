@@ -16,7 +16,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, BinaryContent
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from backend.core import config
@@ -57,7 +57,9 @@ class OpenAIImageAnalyzer:
 
     def __init__(self, model: str = IMAGE_MODEL_NAME):
         self._agent: Agent[None, FrameAnalysis] = Agent(
-            OpenAIChatModel(model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))),
+            # The Responses API rather than Chat Completions: gpt-6-luna refuses function tools
+            # (which carry the structured answer) on Chat Completions while it reasons.
+            OpenAIResponsesModel(model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))),
             output_type=FrameAnalysis,
             instructions=IMAGE_ANALYSIS_PROMPT,
             defer_model_check=True,
