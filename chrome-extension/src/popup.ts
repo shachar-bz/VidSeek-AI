@@ -14,7 +14,6 @@ import {
   signUp,
 } from "./api";
 import {
-  LIKELY_MAIN_VIDEO_DETAIL,
   chooseDirectCandidate,
   describeCapturedSources,
   findVideoGroups,
@@ -470,16 +469,22 @@ function renderVideoPicker(
   });
 
   videoPickerElement.hidden = false;
-  // The first choice is picked for the user, so there is always a next step to take.
-  inputs[0]!.checked = true;
-  presentDiscovery(resolveSelectedGroup(groups[0]!, frames), playbackVerified);
-  // A DRM refusal for the first choice keeps its own message; another choice may be clean.
+  // One choice is always picked for the user, so there is always a next step to take: the
+  // one most likely to be what they are watching, or else the first.
+  const recommendedIndex = groups.findIndex((group) => group.recommended);
+  const preselected = Math.max(recommendedIndex, 0);
+  inputs[preselected]!.checked = true;
+  presentDiscovery(
+    resolveSelectedGroup(groups[preselected]!, frames),
+    playbackVerified,
+  );
+  // A DRM refusal for that choice keeps its own message; another choice may be clean.
   if (!discovery) return;
   setStatus(
     `Found ${groups.length} videos on this page.`,
-    groups.some((group) => group.detail === LIKELY_MAIN_VIDEO_DETAIL)
-      ? "The longest is usually the one you're watching, and it's picked for you. Choose another below if it isn't."
-      : "The first one is picked for you. Choose another below if it isn't the one you want.",
+    recommendedIndex >= 0
+      ? "The one you're most likely watching is picked. Check the notes under each video, and choose another if it's the wrong one."
+      : "The first one is picked. Check the notes under each video, and choose another if it's the wrong one.",
   );
 }
 
@@ -821,10 +826,11 @@ async function finishVerification(): Promise<void> {
       if (response.candidates.length > 1) {
         renderVideoPicker(
           describeCapturedSources(response.candidates).map(
-            ({ candidate, label, detail }) => ({
+            ({ candidate, label, detail, recommended }) => ({
               frameId: 0,
               label,
               detail,
+              recommended,
               result: {
                 ...discovery!,
                 selected_media_id: undefined,

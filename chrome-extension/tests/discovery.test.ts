@@ -344,6 +344,47 @@ describe("findVideoGroups", () => {
     );
     expect(groups?.[1]?.label).toBe("YouTube: How AI helps at work");
   });
+
+  it("numbers untitled videos and marks the playing one, its length and where it lives", () => {
+    const secondOnPage: DiscoveryResult = {
+      ...mainPage,
+      media_candidates: [
+        { kind: "direct", url: "https://cdn.example/second.mp4", mime_type: "video/mp4", source: "video" }
+      ],
+      media_duration_seconds: 754,
+      media_playing: true
+    };
+    const untitledEmbed: DiscoveryResult = {
+      ...vimeoEmbed,
+      frame_url: "https://player.vimeo.com/video/1",
+      page_title: "App"
+    };
+    const groups = findVideoGroups(
+      [
+        { frameId: 0, result: { ...mainPage, videos: [mainPage, secondOnPage] } },
+        { frameId: 9, result: untitledEmbed }
+      ],
+      "App"
+    );
+    expect(groups?.map(({ label, detail, recommended }) => [label, detail, recommended])).toEqual([
+      ["Video 1", "In the page itself", false],
+      ["Video 2", "Playing now · 12:34", true],
+      ["Video 3", "Embedded from player.vimeo.com", false]
+    ]);
+  });
+
+  it("tells apart two videos that carry the same title", () => {
+    const groups = findVideoGroups(
+      [
+        { frameId: 4, result: vimeoEmbed },
+        { frameId: 9, result: { ...vimeoEmbed, media_candidates: [] , caption_candidates: [
+          { url: "https://captions.example/en.vtt", format: "vtt", is_active: true, is_manual: true, is_visible_transcript: false }
+        ] } }
+      ],
+      "App"
+    );
+    expect(groups?.map((group) => group.label)).toEqual(["Vimeo embed (1)", "Vimeo embed (2)"]);
+  });
 });
 
 describe("resolveSelectedGroup", () => {

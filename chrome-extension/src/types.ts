@@ -11,6 +11,8 @@ export interface MediaCandidate {
   duration_seconds?: number;
   /** The tallest rendition a captured master playlist offers, for the same picker. */
   max_height?: number;
+  /** How much of a captured stream the player fetched during the capture, for the picker. */
+  played_seconds?: number;
 }
 
 export interface CaptionCandidate {
@@ -27,6 +29,8 @@ export interface DiscoveryResult {
   frame_url?: string;
   selected_media_id?: string;
   media_duration_seconds?: number;
+  /** The page's own player was playing this video when the page was inspected. */
+  media_playing?: boolean;
   structured_candidates?: string[];
   videos?: DiscoveryResult[];
   page_url: string;

@@ -10,8 +10,16 @@ export interface HlsPlaylistSummary {
   maxHeight?: number;
   /** A media playlist's total running time. */
   durationSeconds?: number;
+  /** A media playlist's segments, each placed on the video's timeline. */
+  segments: PlaylistSegment[];
   /** A media playlist of subtitle cues, not audio or video. */
   subtitlesOnly: boolean;
+}
+
+export interface PlaylistSegment {
+  url: string;
+  startSeconds: number;
+  endSeconds: number;
 }
 
 const SUBTITLE_SEGMENT = /\.(?:vtt|webvtt|srt)(?:[?#]|$)/i;
@@ -54,23 +62,69 @@ export function summarizeHlsPlaylist(
         awaitingStreamUri = false;
       }
     }
-    return { role: "master", renditionUrls, maxHeight, subtitlesOnly: false };
+    return {
+      role: "master",
+      renditionUrls,
+      maxHeight,
+      segments: [],
+      subtitlesOnly: false,
+    };
   }
 
   let durationSeconds = 0;
+  let pendingLength = 0;
+  const segments: PlaylistSegment[] = [];
   for (const line of lines) {
-    const length = Number(/^#EXTINF:([\d.]+)/i.exec(line)?.[1]);
-    if (length) durationSeconds += length;
+    if (!line) continue;
+    const length = /^#EXTINF:([\d.]+)/i.exec(line)?.[1];
+    if (length) {
+      pendingLength = Number(length) || 0;
+      continue;
+    }
+    if (line.startsWith("#")) continue;
+    const url = resolve(line);
+    if (url)
+      segments.push({
+        url,
+        startSeconds: durationSeconds,
+        endSeconds: durationSeconds + pendingLength,
+      });
+    durationSeconds += pendingLength;
+    pendingLength = 0;
   }
-  const segments = lines.filter((line) => line && !line.startsWith("#"));
   return {
     role: "media",
     renditionUrls: [],
     durationSeconds: durationSeconds || undefined,
+    segments,
     subtitlesOnly:
       segments.length > 0 &&
-      segments.every((segment) => SUBTITLE_SEGMENT.test(segment)),
+      segments.every((segment) => SUBTITLE_SEGMENT.test(segment.url)),
   };
+}
+
+/**
+ * How much of a video the player actually fetched while the capture ran, on the video's
+ * own timeline. Renditions of one video share that timeline, so a player that switched
+ * quality halfway, or fetched audio alongside video, still counts each moment once.
+ */
+function playedSeconds(
+  playlists: HlsPlaylistSummary[],
+  requestedKeys: Set<string>,
+): number {
+  const intervals = playlists
+    .flatMap((playlist) => playlist.segments)
+    .filter((segment) => requestedKeys.has(playlistKey(segment.url)))
+    .map((segment): [number, number] => [segment.startSeconds, segment.endSeconds])
+    .sort((left, right) => left[0] - right[0]);
+  let total = 0;
+  let coveredUntil = -Infinity;
+  for (const [start, end] of intervals) {
+    if (end <= coveredUntil) continue;
+    total += end - Math.max(start, coveredUntil);
+    coveredUntil = end;
+  }
+  return total;
 }
 
 /**
@@ -94,13 +148,18 @@ function playlistKey(url: string): string {
  * dropped. What is left carries its length and resolution, so that when a capture really
  * did see several videos (an ad and the talk, say) the picker can tell them apart.
  *
+ * Each also says how much of it was played during the capture, read from which of its
+ * segments were among `requestedUrls`: the video the user watched is the one that played.
+ *
  * `playlistBodies` maps a playlist URL to its text. A playlist whose body the debugger had
  * already evicted cannot be read, and is kept as it is.
  */
 export function collapseHlsRenditions(
   candidates: MediaCandidate[],
   playlistBodies: Map<string, string>,
+  requestedUrls: Iterable<string> = [],
 ): MediaCandidate[] {
+  const requestedKeys = new Set([...requestedUrls].map(playlistKey));
   const summaries = new Map<string, HlsPlaylistSummary>();
   for (const candidate of candidates) {
     const body = playlistBodies.get(candidate.url);
@@ -127,17 +186,26 @@ export function collapseHlsRenditions(
     if (summary.role === "media") {
       if (ownedByMaster.has(playlistKey(candidate.url)) || summary.subtitlesOnly)
         return [];
-      return [{ ...candidate, duration_seconds: summary.durationSeconds }];
+      return [
+        {
+          ...candidate,
+          duration_seconds: summary.durationSeconds,
+          played_seconds: playedSeconds([summary], requestedKeys),
+        },
+      ];
     }
     // A master has no length of its own; any one of its captured renditions has the video's.
-    const duration = summary.renditionUrls
-      .map((rendition) => mediaByKey.get(playlistKey(rendition)))
-      .find((rendition) => rendition?.durationSeconds)?.durationSeconds;
+    const renditions = summary.renditionUrls.flatMap((rendition) => {
+      const media = mediaByKey.get(playlistKey(rendition));
+      return media ? [media] : [];
+    });
     return [
       {
         ...candidate,
-        duration_seconds: duration,
+        duration_seconds: renditions.find((media) => media.durationSeconds)
+          ?.durationSeconds,
         max_height: summary.maxHeight,
+        played_seconds: playedSeconds(renditions, requestedKeys),
       },
     ];
   });

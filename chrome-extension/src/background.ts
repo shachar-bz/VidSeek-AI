@@ -489,7 +489,11 @@ function buildCandidatesFromRequests(requests: Map<string, CapturedRequest>): {
   for (const request of requests.values())
     if (request.body) playlistBodies.set(request.url, request.body);
   return {
-    candidates: collapseHlsRenditions(candidates, playlistBodies),
+    candidates: collapseHlsRenditions(
+      candidates,
+      playlistBodies,
+      [...requests.values()].map((request) => request.url),
+    ),
     cookies: [...capturedCookies.values()],
   };
 }
