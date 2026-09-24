@@ -30,6 +30,10 @@ class VisualDeps:
     # gave no position.
     current_time_seconds: float | None = None
 
+    # Whether the player was paused there: paused, that is the very frame the viewer means;
+    # playing, what they asked about may be a few seconds earlier. None when not known.
+    player_paused: bool | None = None
+
     # The connection pool every store is built on; None outside a test means the shared pool.
     pool: object | None = None
 

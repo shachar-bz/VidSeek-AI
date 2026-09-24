@@ -222,6 +222,7 @@ async def send_message(
         pins=pins,
         timestamps_reliable=_timestamps_reliable(conversation.video_id, video_records),
         current_time_seconds=body.current_time_seconds,
+        player_paused=body.player_paused,
     )
     return StreamingResponse(
         events,
@@ -259,6 +260,7 @@ async def _answer_stream(
     pins: PostgresPinnedAnswers,
     timestamps_reliable: bool,
     current_time_seconds: float | None = None,
+    player_paused: bool | None = None,
 ) -> AsyncIterator[str]:
     content = ""
     trace: list[ToolCallTrace] = []
@@ -272,6 +274,7 @@ async def _answer_stream(
         video_id=conversation.video_id,
         timestamps_reliable=timestamps_reliable,
         current_time_seconds=current_time_seconds,
+        player_paused=player_paused,
         pool=getattr(messages, "_pool", None),
     )
 

@@ -1,8 +1,8 @@
 """The image model that looks at frames for the visual sub-agent and reports what they show.
 
 The sub-agent's own model plans the investigation and never receives an image. When it needs to
-know what frames show, `view_frames` hands them here with the question, and a vision model
-(`IMAGE_MODEL_NAME`) answers in text. Keeping pixels out of the planner's context keeps its
+know what frames show, `view_frames_closeup` hands them here with the question, and a vision
+model (`IMAGE_MODEL_NAME`) answers in text. Keeping pixels out of the planner's context keeps its
 history small and lets the planner and the eye be priced and chosen separately.
 
 Each frame is sent after a label naming its position and time, and the model answers with one

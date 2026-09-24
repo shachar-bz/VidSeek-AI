@@ -7,7 +7,10 @@ Status: ingestion, storage and the query-time services are implemented (branch
 sub-agent with `view_frames`, `read_frame_text` and `get_transcript_window`, and the main agent's
 `investigate_visual`, and the two search tools of step 3 (branch
 `feat/visual-agent-search-tools`): `search_visual_moments` and `search_visual_text`, and
-`view_sequence` (branch `feat/visual-view-sequence`). The search tools and `view_sequence` have
+`view_sequence` (branch `feat/visual-view-sequence`). The prompts and tools were then refined
+around one way of investigating (branch `refine/visual-agent-prompts-and-tools`): `view_frames`
+became `view_frames_closeup`, and the budget, the findings check, `player_paused` and the main
+agent's `context` changed with it (§12). The search tools and `view_sequence` have
 not run on real footage yet. The insights re-run that depends on OCR (step 6), and
 `list_segments` are not implemented yet. §12 lists where the implementation
 departs from this design and why.
@@ -51,8 +54,8 @@ general footage), in English and Hebrew:
                                                └─► OCR (if text) ─► text + e5         visual sub-agent (gpt-6-sol; frames → gpt-6-luna)
                                                                                      list_segments / search_visual_moments /
  after both pipelines finish: re-run insights with OCR text                          search_visual_text / read_frame_text /
-                                                                                     view_frames /
-                                                                                     view_sequence / get_transcript_window
+                                                                                     view_sequence / view_frames_closeup /
+                                                                                     get_transcript_window
                                                                                               │
                                                                                      structured findings (text only)
                                                                                               ▼
@@ -144,9 +147,12 @@ version shows which videos need re-indexing after a model change.
 
 ### 4.1 How the main agent uses it
 
-* The website sends **`current_time_seconds`** with every message. It is added to the
-  conversation request schema and to `ConversationDeps`.
-* The main agent gets **one new tool**, `investigate_visual(question, current_time, time_range?)`.
+* The website sends **`current_time_seconds`** with every message, and **`player_paused`**:
+  whether the player stood still there. Paused, the position is the very frame asked about;
+  playing, what was asked about may be a few seconds earlier. Both are added to the conversation
+  request schema and to `ConversationDeps`.
+* The main agent gets **one new tool**, `investigate_visual(question, time_range?, context?)`;
+  the position and `player_paused` come from its deps, never from the model.
   It calls it **only for visual questions the user asked**:
   * explicit visual questions ("what's on the slide", "when do they show the diagram"),
   * and deictic questions ("what is this?", "here").
@@ -156,6 +162,10 @@ version shows which videos need re-indexing after a model change.
   the video the question is about (the user named a chapter, or "this" points at the current
   moment). When it is not sure, it leaves it out and the whole video is searched. A range that
   is too narrow hides the answer; no range costs nothing but a longer list.
+* **`context` is what the main agent already knows**, from the conversation and its earlier tool
+  results only: what "it" refers to, times where the subject is discussed, earlier visual
+  findings. The sub-agent is stateless, so this is its one way in. It is a hint for where to look,
+  never proof of what is shown, and the main agent never searches just to fill it.
 * The main agent never sees pixels, and has no visual search of its own: searching is the
   sub-agent's work (§5). It receives a short structured result.
 
@@ -165,10 +175,12 @@ version shows which videos need re-indexing after a model change.
 * **Two models.**
   * The planner, **`gpt-6-sol`**, chooses the tools, reads their results and writes the answer.
     It never receives an image.
-  * The image model, **`gpt-6-luna`**, is called by `view_frames`: it gets the frames and the
-    planner's question, and answers in text, one observation per frame plus an answer across them.
+  * The image model, **`gpt-6-luna`**, is called by `view_sequence` and `view_frames_closeup`: it
+    gets the frames and the planner's question, and answers in text, one observation per frame
+    plus an answer across them.
   * DeepSeek is not used.
-* **Stateless per call.** Follow-up context lives in the main agent's history.
+* **Stateless per call.** Follow-up context lives in the main agent's history, and reaches the
+  sub-agent only as `context`.
 * **Tools** (one directory per tool, like `video_agent/tools/`):
 
 | Tool | What it does | Costs an image? |
@@ -177,21 +189,36 @@ version shows which videos need re-indexing after a model change.
 | `search_visual_moments(query, range?)` | Search by what is shown and by what on-screen text means (§5.1). Up to 10 moments | No |
 | `search_visual_text(words, range?)` | Search on-screen text for up to 5 given words (§5.2). Up to 5 moments | No |
 | `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
-| `view_frames(timestamps, question)` | Frames, downscaled (~512 px long side), described by the image model | Yes, 1 per frame |
+| `view_frames_closeup(timestamps, question)` | 1 to 3 frames, each sent large (1024 px long side), described by the image model: for a detail a grid cell is too small to show, or the one frame a paused viewer asks about | Yes, 1 per frame |
 | `view_sequence(t0, question, t1?, n)` | n frames across a window as **one grid image**, described by the image model. Defaults to the segment's range; a window across a `scene_change` boundary is kept, and each frame says which scene it is from | Yes, 1 per grid |
 | `get_transcript_window(t0, t1)` | What was said in that window | No |
 
-* **Tool choice by question type** (in the prompt):
-  * on-screen text → `search_visual_text` to find it, `read_frame_text` to read it;
-  * objects, places, people → `view_frames`;
-  * actions → `view_sequence`.
+* **How the sub-agent investigates** (the prompt; each tool's own docstring says what it does
+  and costs, and the prompt only says when to use it):
+  1. *Understand the question.* Is the moment known (the viewer's position, a time named, a short
+     range) or must it be found? Is the question about text on screen, the scene (what is shown
+     or happens), or both?
+  2. *Find the moment*, only when it is not known. Search for whatever best marks it, which need
+     not be what is asked about (the Kafka slide's title finds its diagram): `search_visual_text`
+     for words expected on screen, `search_visual_moments` for a scene or for text by meaning,
+     both in one round for a question about both. `context` says where to look first.
+  3. *Look.* Text → `read_frame_text`. Scene → `view_sequence` across the candidate; at the
+     viewer's position, `view_frames_closeup` when paused there and that one frame surely answers,
+     otherwise `view_sequence` from ~5 s before the position to it, with 3 or 4 frames, so the
+     viewer's frame is the last one. `view_frames_closeup` otherwise only for a detail a cell was
+     too small to show. A wrong candidate → the next one, then one rephrased search, then stop.
+  4. *Answer* as soon as the evidence answers the question; for "when", every confirmed moment up
+     to about three; "not found" says what was searched and why it may still be there.
 
-  Metadata first, pixels last. The stored metadata (embeddings, OCR text, segment boundaries,
+  What was said can point to a moment and say what a scene is about, but speech and picture
+  often part (a talk about lies over footage of a war), so the transcript is never evidence of
+  what is shown. Questions sent to the image model are open and self-contained ("what is on the
+  table?", not "is the cup on the table?"). Metadata first, pixels last. The stored metadata (embeddings, OCR text, segment boundaries,
   transcript) answers text questions and most "when does Y appear" questions by itself. The
   image embedding is only a vector for similarity search and says nothing an LLM can read about
   what is in the frame. So for what a frame *shows* (objects, where things are, what a diagram
   means, actions), the sub-agent looks at the frame.
-* **Budget per investigation:** at most **6 tool calls** and at most **8 images** (a grid counts
+* **Budget per investigation:** at most **8 tool calls** and at most **6 images** (a grid counts
   as one).
   * Enforced by Pydantic AI `UsageLimits` plus an image counter in deps.
   * When the budget is spent, the tool says so and the agent must answer with what it has,
@@ -200,12 +227,14 @@ version shows which videos need re-indexing after a model change.
   read (SAS) URL; the frames of one tool call are extracted in parallel. There is no frame cache
   in v1. Step 1 of the build measures the latency, and a keyframe JPEG cache is added only if a
   batch of frames takes more than ~1–2 s (an isolated change inside `services/video_frames/`).
-* **How images reach the image model:** `view_frames` sends them to `gpt-6-luna` in a request of
-  its own, as `BinaryContent` in the user message, each after a label with its position and time.
+* **How images reach the image model:** `view_frames_closeup` and `view_sequence` send them to
+  `gpt-6-luna` in a request of their own, as `BinaryContent` in the user message: close-up frames
+  each after a label with its position and time, a sequence as one grid after a list of its cells.
   The planner gets back only the image model's words.
 * **Before the index is ready:** `search_visual_moments`, `search_visual_text` and
-  `list_segments` reply "index not ready, use `view_frames` at current_time". `view_frames`, `read_frame_text` and
-  `get_transcript_window` still work, so "what's on screen now" always does.
+  `list_segments` reply "index not ready, use `view_sequence` at current_time". `view_sequence`,
+  `view_frames_closeup`, `read_frame_text` and `get_transcript_window` still work, so "what's on
+  screen now" always does.
 
 ### 4.3 What it returns
 
@@ -219,8 +248,9 @@ VisualInvestigation {
 * **Citations work with no change to `citations.py`.** `spans_of` in
   `video_agent/citations.py` collects every `start_seconds`/`end_seconds` pair in a tool result,
   so the main agent's existing check accepts visual timestamps.
-* **The sub-agent checks its own findings.** Its output validator makes sure every finding falls
-  inside a span its own tools returned. It is written inside `visual_agent/`, not imported from
+* **The sub-agent checks its own findings.** Its output validator makes sure every finding lies
+  inside one stretch of the spans its own tools returned, spans that overlap or touch joining into
+  one. It is written inside `visual_agent/`, not imported from
   `video_agent/`.
 * **"Where is X when Y appears"** is answered as a place in the scene, plus the segment range and
   the chapter it falls in, e.g. "on the kitchen table — 04:12–04:30, chapter 'Preparing the
@@ -317,7 +347,7 @@ reading a video's keyframes, both text searches say so, so an empty result is no
 on screen".
 
 Resolution note: at 0.5 fps, search is accurate to about ±2 s. Something visible for less than
-~2 s can fall between samples. The sub-agent can refine around a hit with `view_frames`.
+~2 s can fall between samples. The sub-agent can refine around a hit with `view_sequence`.
 
 ## 6. Code layout
 
@@ -336,11 +366,11 @@ backend/
 │       ├── search_visual_moments/
 │       ├── search_visual_text/
 │       ├── read_frame_text/
-│       ├── view_frames/
+│       ├── view_frames_closeup/
 │       ├── view_sequence/
 │       └── get_transcript_window/
 ├── video_agent/
-│   ├── tools/deps.py                   # CHANGED: + current_time_seconds
+│   ├── tools/deps.py                   # CHANGED: + current_time_seconds, player_paused
 │   └── tools/investigate_visual/       # NEW: the main agent's only visual tool; calls visual_agent
 ├── services/
 │   ├── visual_indexing/                # NEW: builds one video's index from its local file
@@ -539,22 +569,23 @@ machine (GTX 1650).
   about the frames in a separate request (`visual_agent/image_analysis.py`), so the planner's
   history stays text and the two models can be chosen and priced apart. `view_frames` therefore
   takes the question to look for, besides the times.
-* **The budget is soft first, hard behind** (§4.2). Each tool spends one of the 6 calls; past
+* **The budget is soft first, hard behind** (§4.2). Each tool spends one of the 8 calls; past
   them a tool does nothing and says the budget is spent, and the tool that spends the last call
   says it was the last. `UsageLimits` stops the run two calls later, and that run answers "used
-  its whole budget" rather than failing the main agent's turn. Images are counted in deps, 8 per
+  its whole budget" rather than failing the main agent's turn. Images are counted in deps, 6 per
   investigation; those of a call whose frames could not be extracted are given back.
-* **A finding is checked end by end** (§4.3): each of its two ends must fall, ±1 s, inside a
-  span a tool returned (a frame looked at, a keyframe text's stretch, a transcript piece) --
-  the rule the main agent's citation check applies. So "04:12-04:30" is accepted after looking
-  at frames at both times. A finding that fails is sent back once, then dropped, keeping the
-  answer.
+* **A finding must lie inside one stretch of returned spans** (§4.3). It was first checked end
+  by end, each end ±1 s inside any span a tool returned, which let "01:40-08:20" pass on two
+  unrelated moments at its ends. Now spans that overlap or come within 1 s of each other join
+  into stretches, and the whole finding, ±1 s, must lie inside one: two adjacent transcript
+  pieces cover a finding across both, two frames far apart do not. A finding that fails is sent
+  back once, then dropped, keeping the answer.
 * **`read_frame_text` answers from stored text by stretch** (§4.2). A time inside a read
   keyframe's stretch (§5.3) gets that keyframe's text, at no cost; any other time -- no index,
   OCR still reading, or the seconds between a boundary and its first keyframe -- is read now:
   the frame is extracted from Blob as a PNG of at most 2048 px and read by the same OCR engine
   indexing uses. Without OCR set up, those times come back unread and the planner is told to use
-  `view_frames`. The first on-demand read of a process starts the Surya worker.
+  `view_frames_closeup`. The first on-demand read of a process starts the Surya worker.
 * **Frame extraction no longer enlarges** a video smaller than the size asked for, and can
   return PNGs (`lossless`), which OCR needs.
 * **`investigate_visual` never fails the main agent's turn.** An exception in the sub-agent (the
@@ -572,11 +603,12 @@ machine (GTX 1650).
 * **The search tools spend nothing on a call that cannot search** (§5). An empty query, no
   words, or a window that ends before it starts comes back with a note and no tool call spent;
   a start before the video is moved to 0, blank words are dropped and words past 5 are left out
-  with a note, rather than the service's `ValueError` failing the call. Every moment a search
-  returns is recorded as a span the findings check accepts. An index that is not ready or is
+  with a note, rather than the service's `ValueError` failing the call. A moment found by its
+  on-screen text is recorded as a span the findings check accepts; one found only by its picture
+  is marked `needs_look` and is not, until a look (see the last note). An index that is not ready or is
   outdated spends the call and tells the planner to look at the viewer's current moment. A
   search that raises (an encoder that fails to load) is logged and reported as failed, like
-  `view_frames` does for the image model.
+  `view_frames_closeup` does for the image model.
 * **`view_sequence` keeps a window across a cut** (§4.2). The design stopped a window at a
   `scene_change` boundary; the window is now kept whole, and each frame carries the scene of the
   window it comes from (a run of segments between cuts: a `text_change` stays inside a scene).
@@ -587,5 +619,23 @@ machine (GTX 1650).
   the index is not ready; the tool works without scenes then. 2 to 9 frames, 6 by default,
   extracted at the grid's 320 px cell size.
 * **A sequence has its own image model instructions** (`SEQUENCE_ANALYSIS_PROMPT`): how to read
-  a grid, what changes from cell to cell, and that a cut is not an action. `view_frames` keeps
-  its prompt unchanged.
+  a grid, what changes from cell to cell, and that a cut is not an action.
+* **The prompts and tools were refined around one way of investigating** (§4.2, branch
+  `refine/visual-agent-prompts-and-tools`). The tools had been written one at a time, and the
+  prompt described each of them again next to its docstring; the two had drifted, and the prompt
+  still sent an action to `view_frames` in one place and to `view_sequence` in another. Now:
+  * The system prompt teaches the four steps of §4.2 and names tools only to say when to use
+    them; each tool's docstring alone says what it does and costs.
+  * `view_sequence` is the usual look. `view_frames` became `view_frames_closeup`: 1 to 3 frames
+    at 1024 px, where it had sent up to 6 at 512 px, barely larger than a 320 px grid cell. Small
+    print stays `read_frame_text`'s job, at 2048 px and no image.
+  * The budget became 8 calls and 6 images, from 6 and 8: a grid is one image, so looks rarely
+    run out of images, and a hunt with a wrong candidate or two needs calls.
+  * A moment matched only by its picture (`found_by == ["image"]`) comes back `needs_look` and is
+    not a citable span. It resembles the query, which is not showing it; the prompt already said
+    so, and nothing held the planner to it.
+  * The website sends `player_paused` with the position, so the sub-agent knows when the position
+    is the very frame (a close-up is safe) and when the viewer may be a few seconds late (a short
+    sequence ending at the position).
+  * `investigate_visual` takes `context` from the main agent, cut at 2000 characters.
+  * Both image model prompts say so when a question assumes something the frames do not show.

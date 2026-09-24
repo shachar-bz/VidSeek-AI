@@ -22,7 +22,8 @@ VidSeek-AI/
 │   │       ├── read_frame_text/            # On-screen text at given times, stored or read on demand.
 │   │       ├── search_visual_moments/      # Moments showing what a query describes, through services/visual_search/.
 │   │       ├── search_visual_text/         # Moments whose on-screen text contains given words, through services/visual_search/.
-│   │       └── view_frames/                # Frames at given times, described by the image model.
+│   │       ├── view_frames_closeup/        # One to three frames sent large, for a detail a sequence grid is too small to show.
+│   │       └── view_sequence/              # Frames across a window as one grid, described by the image model.
 │   ├── schemas/                            # The Pydantic contract shared with the Chrome extension and the website.
 │   ├── core/                               # Cross-cutting foundations: config, errors, auth primitives, security.
 │   ├── storage/                            # Where a video's bytes and its records are kept.

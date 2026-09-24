@@ -3,7 +3,8 @@
 A thin door onto `services/visual_search/`: the search reads the picture of every sampled frame
 and the meaning of every keyframe's on-screen text, and joins the two into up to ten moments
 (VISUAL_UNDERSTANDING_PLAN.md §5.1). A picture match says a frame resembles the query, not what
-it shows, so the prompt has the agent look at a moment before it says what is there.
+it shows, so such a moment comes back marked `needs_look` and is not citable until the agent has
+looked at it (`searched_moments.py`).
 
 The search runs off the event loop: the first query of a process loads the text encoders, and
 every query scans the video's frame vectors. It costs no image.
@@ -35,8 +36,11 @@ async def search_visual_moments(
 
     Searches by the picture of every frame and by what the text written on screen means, over
     the whole video or the window given. Returns up to ten moments, best first, each with its
-    times, chapter, on-screen text and what was said then. A picture match is a lead, not
-    proof: look at the moment with view_frames before saying what it shows.
+    times, chapter, on-screen text and what was said then. Describe whatever best marks the
+    moment, which need not be what the question asks about: the diagram on the Kafka slide may
+    be found as "a slide about Kafka". A moment marked needs_look matched only by its picture:
+    it resembles the query, which is not the same as showing it. Look at it with view_sequence
+    before saying what it shows; until then it cannot be cited.
 
     Args:
         query: What is shown, described in plain words in any language, e.g. "a diagram of
@@ -73,7 +77,7 @@ async def search_visual_moments(
     except Exception:
         logger.exception("The visual moment search failed for video %s", deps.video_id)
         return SearchedMoments(
-            note="The search failed. Look at the frames with view_frames instead.",
+            note="The search failed. Look at the frames with view_sequence instead.",
             budget=deps.budget.remaining(),
         )
     return searched_moments(deps, result, [])

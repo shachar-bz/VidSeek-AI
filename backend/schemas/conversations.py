@@ -135,10 +135,14 @@ class SendMessageRequest(BaseModel):
     what "this", "here" and "what's on screen now" refer to, which the words alone cannot say,
     so it travels with every message rather than being asked for. Null when the page has no
     player position to give -- the video has not loaded, or the client is not a video page.
+    `player_paused` says whether the player stood still there: paused, the position is the very
+    frame the viewer is asking about; playing, what they asked about may be a few seconds
+    earlier. Null when the page did not say.
     """
 
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
     current_time_seconds: float | None = Field(default=None, ge=0)
+    player_paused: bool | None = None
 
 
 class StreamEventType(str, Enum):

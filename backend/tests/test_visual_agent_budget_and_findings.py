@@ -34,25 +34,25 @@ def _finding(start: float, end: float, observation: str = "A slide titled Kafka.
 # --- the budget -------------------------------------------------------------------------
 
 
-def test_the_budget_is_six_tool_calls_and_eight_images() -> None:
-    assert (MAX_TOOL_CALLS, MAX_IMAGES) == (6, 8)
+def test_the_budget_is_eight_tool_calls_and_six_images() -> None:
+    assert (MAX_TOOL_CALLS, MAX_IMAGES) == (8, 6)
 
 
-def test_tool_calls_stop_being_granted_after_the_sixth() -> None:
+def test_tool_calls_stop_being_granted_after_the_eighth() -> None:
     budget = InvestigationBudget()
 
-    granted = [budget.start_tool_call() for _ in range(8)]
+    granted = [budget.start_tool_call() for _ in range(10)]
 
-    assert granted == [True] * 6 + [False, False]
+    assert granted == [True] * 8 + [False, False]
     # A refused call spends nothing.
-    assert budget.tool_calls_used == 6
+    assert budget.tool_calls_used == 8
 
 
 def test_images_are_granted_partially_when_fewer_are_left_then_not_at_all() -> None:
     budget = InvestigationBudget()
 
-    assert budget.take_images(5) == 5
-    assert budget.take_images(5) == 3
+    assert budget.take_images(4) == 4
+    assert budget.take_images(4) == 2
     assert budget.take_images(1) == 0
     assert budget.images_used == MAX_IMAGES
 
@@ -70,7 +70,7 @@ def test_images_given_back_can_be_granted_again_and_never_go_below_zero() -> Non
     budget.take_images(MAX_IMAGES)
 
     budget.return_images(3)
-    assert budget.take_images(5) == 3
+    assert budget.take_images(4) == 3
 
     budget.return_images(100)
     assert budget.images_used == 0
@@ -81,14 +81,14 @@ def test_what_is_left_is_told_in_calls_and_images() -> None:
     budget.start_tool_call()
     budget.take_images(2)
 
-    assert budget.remaining() == "5 tool calls and 6 images left."
+    assert budget.remaining() == "7 tool calls and 4 images left."
 
 
 def test_the_last_tool_call_says_it_was_the_last() -> None:
     budget = InvestigationBudget()
     for _ in range(MAX_TOOL_CALLS):
         budget.start_tool_call()
-    budget.take_images(3)
+    budget.take_images(1)
 
     remaining = budget.remaining()
 
@@ -105,8 +105,22 @@ def test_a_finding_whose_ends_fall_inside_returned_spans_is_supported() -> None:
     assert unsupported_findings([_finding(100.0, 100.0), _finding(205.0, 230.0)], spans) == []
 
 
-def test_each_end_may_fall_in_a_different_returned_span() -> None:
-    assert unsupported_findings([_finding(100.0, 210.0)], [(100.0, 100.0), (200.0, 230.0)]) == []
+def test_a_finding_from_one_returned_span_to_another_far_away_is_unsupported() -> None:
+    finding = _finding(100.0, 210.0)
+
+    assert unsupported_findings([finding], [(100.0, 100.0), (200.0, 230.0)]) == [finding]
+
+
+def test_a_finding_may_run_across_spans_that_touch() -> None:
+    spans = [(128.0, 133.5), (133.5, 140.0), (140.8, 150.0)]
+
+    assert unsupported_findings([_finding(128.0, 150.0)], spans) == []
+
+
+def test_spans_further_apart_than_the_slack_do_not_join() -> None:
+    finding = _finding(10.0, 20.0)
+
+    assert unsupported_findings([finding], [(10.0, 10.0), (11.5, 11.5), (20.0, 20.0)]) == [finding]
 
 
 def test_ends_a_second_either_side_of_a_span_are_accepted() -> None:
@@ -201,6 +215,44 @@ def test_the_prompt_gives_the_question_and_the_viewer_s_position_as_mm_ss() -> N
     assert "12:34" in prompt
     assert "754.3 seconds" in prompt
     assert "No part of the video was named" in prompt
+
+
+def test_a_paused_player_is_the_very_frame_and_a_playing_one_may_be_a_little_late() -> None:
+    paused = runner.investigation_prompt(
+        "What is this?", current_time_seconds=754.3, start_seconds=None, end_seconds=None, player_paused=True
+    )
+    playing = runner.investigation_prompt(
+        "What is this?", current_time_seconds=754.3, start_seconds=None, end_seconds=None, player_paused=False
+    )
+    unsaid = runner.investigation_prompt(
+        "What is this?", current_time_seconds=754.3, start_seconds=None, end_seconds=None
+    )
+
+    assert "paused at 12:34 (754.3 seconds)" in paused and "very frame" in paused
+    assert "playing, at 12:34 (754.3 seconds)" in playing and "a few seconds earlier" in playing
+    assert "was at 12:34 (754.3 seconds)" in unsaid
+    assert "paused" not in unsaid and "playing" not in unsaid
+
+
+def test_the_main_agent_s_context_is_given_as_hints_and_cut_when_too_long() -> None:
+    with_context = runner.investigation_prompt(
+        "Where is it drawn?",
+        current_time_seconds=None,
+        start_seconds=None,
+        end_seconds=None,
+        context="  'It' is the consumer group diagram; groups are discussed at 04:10.  ",
+    )
+    too_long = runner.investigation_prompt(
+        "q", current_time_seconds=None, start_seconds=None, end_seconds=None, context="x" * 5000
+    )
+    blank = runner.investigation_prompt(
+        "q", current_time_seconds=None, start_seconds=None, end_seconds=None, context="   "
+    )
+
+    assert "never as proof of what is shown" in with_context
+    assert with_context.endswith("'It' is the consumer group diagram; groups are discussed at 04:10.")
+    assert too_long.endswith("x" * runner.MAX_CONTEXT_CHARACTERS + " [cut]")
+    assert "main agent" not in blank
 
 
 def test_the_prompt_says_when_the_viewer_s_position_is_unknown() -> None:

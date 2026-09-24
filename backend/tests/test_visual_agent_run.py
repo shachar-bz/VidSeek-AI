@@ -110,7 +110,7 @@ def _final_answer(info: AgentInfo, answer: str, *spans: tuple[float, float]) -> 
 
 def _look_at_the_current_frame() -> ModelResponse:
     return ModelResponse(
-        parts=[ToolCallPart("view_frames", {"timestamps": [CURRENT_TIME], "question": QUESTION})]
+        parts=[ToolCallPart("view_frames_closeup", {"timestamps": [CURRENT_TIME], "question": QUESTION})]
     )
 
 
@@ -157,7 +157,7 @@ def test_the_planner_gets_its_tools_its_instructions_and_the_viewer_s_position(v
         "read_frame_text",
         "search_visual_moments",
         "search_visual_text",
-        "view_frames",
+        "view_frames_closeup",
         "view_sequence",
     ]
     assert "You investigate what is shown in one video" in seen["instructions"]
@@ -258,14 +258,22 @@ def _capture_investigations(monkeypatch, answer: VisualInvestigation | Exception
     return calls
 
 
-def test_the_viewer_s_position_comes_from_the_deps_and_the_range_is_passed_through(monkeypatch) -> None:
+def test_the_viewer_s_position_comes_from_the_deps_and_the_range_and_context_are_passed_through(monkeypatch) -> None:
     answer = VisualInvestigation(answer="Three partitions.")
     calls = _capture_investigations(monkeypatch, answer)
     pool = FakePool()
-    deps = ConversationDeps(video_id=VIDEO_ID, current_time_seconds=CURRENT_TIME, pool=pool)
+    deps = ConversationDeps(
+        video_id=VIDEO_ID, current_time_seconds=CURRENT_TIME, player_paused=True, pool=pool
+    )
 
     result = asyncio.run(
-        investigate_visual(FakeRunContext(deps), QUESTION, start_seconds=120.0, end_seconds=180.0)
+        investigate_visual(
+            FakeRunContext(deps),
+            QUESTION,
+            start_seconds=120.0,
+            end_seconds=180.0,
+            context="Partitions are discussed from 02:00.",
+        )
     )
 
     assert result is answer
@@ -274,8 +282,10 @@ def test_the_viewer_s_position_comes_from_the_deps_and_the_range_is_passed_throu
             "question": QUESTION,
             "video_id": VIDEO_ID,
             "current_time_seconds": CURRENT_TIME,
+            "player_paused": True,
             "start_seconds": 120.0,
             "end_seconds": 180.0,
+            "context": "Partitions are discussed from 02:00.",
             "pool": pool,
         }
     ]

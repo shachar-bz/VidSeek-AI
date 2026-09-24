@@ -4,11 +4,13 @@ Text only: the main agent never sees a frame. Every finding carries plain `start
 `end_seconds`, which is all the main agent's citation check needs -- it collects every such
 pair in a tool result (`video_agent/citations.py`), so a finding is a moment it may cite.
 
-That makes a finding's times a promise, so they are checked here before they leave: each end of
-a finding must fall inside a span one of this investigation's own tools returned -- a frame it
-looked at, a keyframe text's stretch, a transcript piece. The same rule the main agent holds
-its own citations to, written again rather than imported, because `visual_agent` never imports
-`video_agent`.
+That makes a finding's times a promise, so they are checked here before they leave: the whole
+finding must lie inside what this investigation's own tools returned -- a frame it looked at, a
+scene of a sequence, a keyframe text's stretch, a transcript piece, a moment found by on-screen
+text. Spans that overlap or touch join into one stretch, so a finding may run across two
+adjacent transcript pieces, but not from one returned moment to another far away with nothing
+between them. The main agent holds its own citations to the same kind of rule, written again
+rather than imported, because `visual_agent` never imports `video_agent`.
 """
 
 from __future__ import annotations
@@ -67,14 +69,25 @@ class VisualInvestigation(BaseModel):
 def unsupported_findings(
     findings: Sequence[VisualFinding], spans: Sequence[TimeSpan]
 ) -> list[VisualFinding]:
-    """The findings whose start or end falls in no span the investigation's tools returned."""
+    """The findings that do not lie inside one stretch of the spans the investigation's tools returned."""
+    stretches = covered_stretches(spans)
     return [
         finding
         for finding in findings
         if finding.end_seconds < finding.start_seconds
-        or not (_returned(finding.start_seconds, spans) and _returned(finding.end_seconds, spans))
+        or not any(
+            start - SLACK_SECONDS <= finding.start_seconds and finding.end_seconds <= end + SLACK_SECONDS
+            for start, end in stretches
+        )
     ]
 
 
-def _returned(second: float, spans: Sequence[TimeSpan]) -> bool:
-    return any(start - SLACK_SECONDS <= second <= end + SLACK_SECONDS for start, end in spans)
+def covered_stretches(spans: Sequence[TimeSpan]) -> list[TimeSpan]:
+    """The returned spans joined into stretches, wherever they overlap or come within the slack of each other."""
+    stretches: list[TimeSpan] = []
+    for start, end in sorted(spans):
+        if stretches and start <= stretches[-1][1] + SLACK_SECONDS:
+            stretches[-1] = (stretches[-1][0], max(stretches[-1][1], end))
+        else:
+            stretches.append((start, end))
+    return stretches

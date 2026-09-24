@@ -4,7 +4,7 @@ It serves two purposes. One frame cannot show an action -- "picks up the cup" is
 frames -- so a sequence shows what happens across a window. And a window is a cheap way to find
 where in it something is shown: a search's candidate moment, or a stretch the agent is unsure of,
 is scanned at once, and the frames that show it tell the agent which moment or segment to cite or
-look at closer. The tool spaces frames evenly across the window, lays them out as one timestamped
+look at closer with `view_frames_closeup`. The tool spaces frames evenly across the window, lays them out as one timestamped
 grid (`services/video_frames/grid.py`), and asks the image model about them. The grid costs one
 image of the budget, whatever the number of frames in it.
 
@@ -64,20 +64,24 @@ async def view_sequence(
 ) -> ViewedSequence | BudgetSpent:
     """Look at frames spread across a window, as one grid, and say what they show and what happens.
 
-    Two uses. For actions and events: one frame cannot show someone picking something up, or
-    what changes after a door opens. And to find where something is shown inside a window: when
-    a search gives a rough moment, or you are not sure which part of a stretch shows what you
-    want, scan it here and see which frames show it, then cite those times or look closer with
-    view_frames. The frames are spaced evenly from the start to the end, both included.
-    The whole grid costs one image. Each frame says which scene of the window it comes from;
+    The usual way to look at the video. For what is shown in a stretch: a search's moment is
+    scanned at once, and the frames that show what you want are the times to cite. For actions
+    and events: one frame cannot show someone picking something up, or what changes after a
+    door opens. The frames are spaced evenly from the start to the end, both included, so a
+    window that ends at a moment always shows that moment, with its lead-up before it. The
+    whole grid costs one image. Each cell is small; when a detail cannot be made out, look
+    closer with view_frames_closeup. Each frame says which scene of the window it comes from;
     when the window crosses a cut, a change across it is a new scene, not an action.
 
     Args:
         start_seconds: Where the window starts, in seconds from the beginning of the video.
-        question: What to look for across the frames, as a full question.
+        question: What to look for across the frames, as a full question that makes sense on
+            its own: the image model sees only this question and the frames. Ask what is there
+            or what happens, not whether what you expect is there.
         end_seconds: Where the window ends; leave out to look to the end of the segment the
             start falls in.
         frame_count: How many frames to spread across the window, 2 to 9; 6 by default.
+            Fewer for a few seconds around one moment, more for a long stretch.
 
     Returns:
         What the image model saw in each frame and its answer across them, and the scenes the
@@ -135,7 +139,7 @@ async def view_sequence(
     try:
         analysis = await deps.analyzer().analyze_sequence(question, grid, cells)
     except Exception:
-        # The grid was sent, so its image stays spent, as in view_frames.
+        # The grid was sent, so its image stays spent, as in view_frames_closeup.
         logger.exception("The image model failed to look at a sequence of %d frames", len(cells))
         return ViewedSequence(
             note=" ".join([*notes, "The image model failed to look at the frames."]),

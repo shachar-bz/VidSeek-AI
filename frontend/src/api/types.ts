@@ -343,6 +343,11 @@ export interface SendMessageRequest {
    * to. Omitted when there is no player position to give.
    */
   current_time_seconds?: number | null;
+  /**
+   * Whether the player was paused there: paused, the position is the very frame asked about;
+   * playing, what was asked about may be a few seconds earlier. Sent with the position.
+   */
+  player_paused?: boolean | null;
 }
 
 // --- the answer stream -----------------------------------------------------------------

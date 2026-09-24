@@ -18,6 +18,11 @@ class ConversationDeps:
     # page gave no position. What a deictic question ("what is this?") points at.
     current_time_seconds: float | None = None
 
+    # Whether the player was paused at that position: paused, it is the very frame the viewer
+    # is looking at; playing, what they asked about may be a few seconds earlier. None when the
+    # page did not say.
+    player_paused: bool | None = None
+
     # Shared, and deliberately mutable: the runner fills it as the agent retrieves and
     # writes, the citation check reads it to decide what the answer may claim, and the API
     # falls back to it when a run ends with no checked answer to send. All three need the

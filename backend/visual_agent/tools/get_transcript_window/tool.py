@@ -1,8 +1,8 @@
 """A Pydantic AI tool that reads what was said in a window of the video.
 
 Context for what is shown, never proof of it: the speaker may describe a slide that is not on
-screen yet. The window is capped, so one call cannot pour a whole chapter into the
-investigation.
+screen yet, and a voice-over can run over pictures of something else entirely. The window is
+capped, so one call cannot pour a whole chapter into the investigation.
 """
 
 from __future__ import annotations
@@ -26,8 +26,10 @@ def get_transcript_window(
 ) -> TranscriptWindow | BudgetSpent:
     """Read what was said between two times. Costs no image.
 
-    Use it for context around a moment: what the speaker was talking about while something
-    was on screen. What is said is not proof of what is shown.
+    Context for a look, never proof of what is shown. What was said can point to a moment ("as
+    you can see on this chart") and tell what a scene is about, which helps choose what to
+    search for and what to ask the image model. But speech and picture often part: a talk about
+    lies may play over footage of a war. Only a look says what is on screen.
 
     Args:
         start_seconds: The start of the window, in seconds from the beginning of the video.
