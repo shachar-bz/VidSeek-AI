@@ -9,14 +9,17 @@ import {
   createConversation,
   getConversation,
   listConversations,
+  renameConversation,
   sendConversationMessage,
   stopConversation,
 } from "./api";
+import { nextChatName } from "./chat-names";
 import { formatTimestamp, splitAnswerCitations } from "./citations";
 import { readPlayerPosition, seekPlayer } from "./tab-player";
 import type {
   ConversationDetail,
   ConversationMessage,
+  ConversationSummary,
   ToolCallTrace,
   VideoDetail,
 } from "./types";
@@ -269,10 +272,7 @@ async function ask(content: string): Promise<void> {
   setComposerMode("answering");
 
   try {
-    current.conversation ??= await createConversation(
-      current.userToken,
-      current.video.video_id,
-    );
+    current.conversation ??= await createChat(current);
     const position = await readPlayerPosition(current.video.source_url);
     const events = sendConversationMessage(
       current.userToken,
@@ -296,6 +296,29 @@ async function ask(content: string): Promise<void> {
     current.live = { ...current.live, outcome: "error", error: describe(error) };
   }
   settle(current);
+}
+
+/**
+ * Stores a new chat for the first question asked in it — the same conversation the website
+ * lists for this video — and numbers it "Chat N" the way the website numbers its own.
+ */
+async function createChat(current: ChatState): Promise<ConversationDetail> {
+  const { userToken, video } = current;
+  const created = await createConversation(userToken, video.video_id);
+  try {
+    const existing: ConversationSummary[] = (
+      await listConversations(userToken, video.video_id)
+    ).conversations;
+    const renamed = await renameConversation(
+      userToken,
+      created.conversation_id,
+      nextChatName(existing),
+    );
+    return { ...created, title: renamed.title };
+  } catch {
+    // The chat exists either way; without its number the companion titles it from the question.
+    return created;
+  }
 }
 
 /** Folds a finished answer into the conversation, keeping whatever the companion stored. */

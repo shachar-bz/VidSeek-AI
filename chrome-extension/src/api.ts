@@ -7,6 +7,7 @@ import type {
   CaptionCandidate,
   ConversationDetail,
   ConversationList,
+  ConversationSummary,
   DiscoveryResult,
   MediaCandidate,
   SendMessageRequest,
@@ -254,6 +255,18 @@ export async function stopConversation(
   await companionFetch<unknown>(
     `/v1/conversations/${encodeURIComponent(conversationId)}/stop`,
     { method: "POST" },
+    userToken,
+  );
+}
+
+export async function renameConversation(
+  userToken: string,
+  conversationId: string,
+  title: string,
+): Promise<ConversationSummary> {
+  return companionFetch<ConversationSummary>(
+    `/v1/conversations/${encodeURIComponent(conversationId)}`,
+    { method: "PATCH", body: JSON.stringify({ title }) },
     userToken,
   );
 }
