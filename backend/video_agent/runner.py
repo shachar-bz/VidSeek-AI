@@ -41,6 +41,7 @@ from .tools.get_chapter_context import get_chapter_context
 from .tools.get_memory_context import get_memory_context
 from .tools.get_video_info import get_video_info
 from .tools.get_video_outline import get_video_outline
+from .tools.investigate_visual import investigate_visual
 from .tools.memories_semantic_search import memories_semantic_search
 
 # Every other OpenAI call site in the backend (video_insights, grouper, segmenter,
@@ -58,6 +59,7 @@ TOOLS = (
     memories_semantic_search,
     get_chapter_context,
     get_memory_context,
+    investigate_visual,
 )
 
 
@@ -104,7 +106,7 @@ class ConversationAgentRunner(Protocol):
 
 
 def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
-    """Build the production agent with exactly the five video-scoped retrieval tools."""
+    """Build the production agent with its five transcript tools and its one visual tool."""
 
     chat_model = OpenAIChatModel(
         model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))
@@ -227,7 +229,7 @@ def _summarize_result(content: object) -> str:
         return f"{len(content)} result{'s' if len(content) != 1 else ''}"
     if hasattr(content, "model_dump"):
         data = content.model_dump()
-        for key in ("chapters", "memories", "segments", "matches"):
+        for key in ("chapters", "memories", "segments", "matches", "findings"):
             value = data.get(key)
             if isinstance(value, list):
                 return f"{len(value)} {key}"

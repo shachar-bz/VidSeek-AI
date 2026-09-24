@@ -45,9 +45,12 @@ class VideoFrameSource:
         times: Sequence[float],
         *,
         long_side: int = FRAME_LONG_SIDE,
+        lossless: bool = False,
     ) -> list[ExtractedFrame]:
-        """The frames at these times, in the same order."""
-        return extract_frames(self.read_link(video_id), times, long_side=long_side)
+        """The frames at these times, in the same order; PNGs rather than JPEGs if `lossless`."""
+        return extract_frames(
+            self.read_link(video_id), times, long_side=long_side, lossless=lossless
+        )
 
     def sequence_grid(
         self, video_id: str, start_seconds: float, end_seconds: float, count: int

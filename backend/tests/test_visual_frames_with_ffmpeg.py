@@ -116,8 +116,8 @@ def test_a_frame_is_extracted_at_the_time_asked_for_as_a_small_jpeg(red_then_blu
     red = extract_frame(str(red_then_blue), 3.0)
     blue = extract_frame(str(red_then_blue), 15.0, long_side=128)
 
-    red_image = Image.open(io.BytesIO(red.jpeg))
-    blue_image = Image.open(io.BytesIO(blue.jpeg))
+    red_image = Image.open(io.BytesIO(red.image_bytes))
+    blue_image = Image.open(io.BytesIO(blue.image_bytes))
     assert red_image.format == "JPEG" and max(red_image.size) <= 512
     assert max(blue_image.size) == 128
     assert red_image.convert("RGB").getpixel((5, 5))[0] > 200

@@ -5,6 +5,9 @@ Used only at query time. Indexing reads the local file while it exists and never
 
 from .extraction import (
     FRAME_LONG_SIDE,
+    JPEG,
+    PNG,
+    READABLE_LONG_SIDE,
     ExtractedFrame,
     FrameExtractionError,
     extract_frame,
@@ -16,6 +19,9 @@ from .source import FRAME_LINK_LIFETIME_SECONDS, VideoFrameSource, VideoNotStore
 __all__ = [
     "FRAME_LINK_LIFETIME_SECONDS",
     "FRAME_LONG_SIDE",
+    "JPEG",
+    "PNG",
+    "READABLE_LONG_SIDE",
     "ExtractedFrame",
     "FrameExtractionError",
     "VideoFrameSource",
