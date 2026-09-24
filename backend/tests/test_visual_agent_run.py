@@ -158,6 +158,7 @@ def test_the_planner_gets_its_tools_its_instructions_and_the_viewer_s_position(v
         "search_visual_moments",
         "search_visual_text",
         "view_frames",
+        "view_sequence",
     ]
     assert "You investigate what is shown in one video" in seen["instructions"]
     assert f"Question: {QUESTION}" in seen["prompt"]

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from backend.services.video_frames import VideoFrameSource
 from backend.services.visual_indexing.ocr import OcrEngine, configured_ocr_engine
+from backend.services.visual_search import VideoVisualMap, ready_video_map
 from backend.storage.postgres import (
     PostgresChapters,
     PostgresVideoRecords,
@@ -48,6 +49,8 @@ class VisualDeps:
     ocr_engine: Callable[[], OcrEngine | None] = configured_ocr_engine
 
     _chapters: tuple[StoredChapterOutline, ...] | None = field(default=None, repr=False)
+    _video_map: VideoVisualMap | None = field(default=None, repr=False)
+    _video_map_read: bool = field(default=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def frames(self) -> VideoFrameSource:
@@ -65,6 +68,17 @@ class VisualDeps:
     def record_span(self, start_seconds: float, end_seconds: float) -> None:
         with self._lock:
             self.spans.append((start_seconds, end_seconds))
+
+    def video_map(self) -> VideoVisualMap | None:
+        """The video's segments, for where its scenes are; None while the index cannot be trusted.
+
+        Read once per investigation, like the chapter outline.
+        """
+        with self._lock:
+            if not self._video_map_read:
+                self._video_map = ready_video_map(self.video_id, pool=self.pool)
+                self._video_map_read = True
+            return self._video_map
 
     def chapter_at(self, time_seconds: float) -> str | None:
         """The title of the chapter this time falls in; the outline is read once per investigation."""

@@ -5,9 +5,9 @@ visual sub-agent looks at a sequence instead. Sent as one grid, a sequence costs
 rather than one per frame. Every cell is stamped with its time, so the model can say *when* in
 the window something happened, not only that it did.
 
-The layout is a starting point. DeepSeek's vision model caps an image at 384 tokens, which can
-make a large grid unreadable; the eval (VISUAL_UNDERSTANDING_PLAN.md §8) is what settles the
-cell size and the number of columns.
+The layout is a starting point: too many cells in one image leaves each too small to read, and
+the eval (VISUAL_UNDERSTANDING_PLAN.md §8) is what settles the cell size and the number of
+columns.
 """
 
 from __future__ import annotations

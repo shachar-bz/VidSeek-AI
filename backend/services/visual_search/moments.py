@@ -185,6 +185,14 @@ def open_index(video_id: str, *, pool=None) -> VisualSearchResult | SearchContex
     )
 
 
+def ready_video_map(video_id: str, *, pool=None) -> VideoVisualMap | None:
+    """The video's segments and chapters when its index can be trusted, as `open_index` decides; None otherwise."""
+    state = PostgresVisualIndex(pool=pool).state(video_id)
+    if state is None or state.status != READY or state.index_version != CURRENT_VISUAL_INDEX_VERSION:
+        return None
+    return load_video_map(video_id, pool=pool)
+
+
 def keyframe_text_moments(
     keyframe_times: Iterable[float], video_map: VideoVisualMap, window: TimeWindow
 ) -> list[KeyframeTextMoment]:
