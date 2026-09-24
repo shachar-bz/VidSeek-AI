@@ -1,0 +1,12 @@
+# The OCR worker's own Python environment -- not the backend's. worker.py runs in it, started
+# by engine.py with the interpreter VIDSEEK_OCR_PYTHON points at (see backend/.env.example).
+# It cannot share the backend's environment: Surya needs torch >= 2.7 and Pillow < 11, and the
+# backend runs on torch 2.6 and Pillow 12.
+#
+# The text detector runs on the CPU (TORCH_DEVICE=cpu), so the CPU torch wheel pip installs by
+# default is enough; the OCR model itself runs on the GPU under llama.cpp's llama-server,
+# which is a separate download (VIDSEEK_OCR_LLAMA_SERVER).
+#
+# Surya's code is Apache 2.0; its model weights are free for research, personal use and
+# startups under $5M in funding or revenue, and need a commercial licence beyond that.
+surya-ocr==0.22.1

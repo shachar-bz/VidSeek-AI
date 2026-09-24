@@ -31,8 +31,10 @@ from backend.services.visual_indexing import (
     NoFramesToIndex,
     SamplingStopped,
     build_visual_index,
+    read_keyframe_text,
 )
-from backend.services.visual_indexing.sampling import sample_frames
+from backend.services.visual_indexing.ocr import FrameReading, TextBlock
+from backend.services.visual_indexing.sampling import decode_frame_at, sample_frames
 from backend.services.visual_indexing.segments import SCENE_CHANGE, VIDEO_START
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not on PATH")
@@ -187,3 +189,57 @@ def test_times_are_spread_across_a_window_both_ends_included() -> None:
 def test_grid_labels_use_the_same_spelling_as_citations() -> None:
     assert format_timestamp(75.9) == "01:15"
     assert format_timestamp(3725.0) == "1:02:05"
+
+
+@needs_ffmpeg
+def test_a_keyframe_is_decoded_at_the_video_s_own_resolution_for_ocr(red_then_blue: Path) -> None:
+    red = decode_frame_at(red_then_blue, 4.0)
+    blue = decode_frame_at(red_then_blue, 15.0)
+
+    # Not shrunk to the 384 px the sampling pass uses, and never enlarged.
+    assert red.size == (320, 180)
+    assert red.getpixel((160, 90))[0] > 200
+    assert blue.getpixel((160, 90))[2] > 200
+
+
+@needs_ffmpeg
+def test_a_keyframe_larger_than_the_ocr_limit_is_shrunk_to_it(red_then_blue: Path) -> None:
+    assert decode_frame_at(red_then_blue, 4.0, long_side=160).size == (160, 90)
+
+
+@needs_ffmpeg
+def test_a_keyframe_past_the_end_is_no_frame(red_then_blue: Path) -> None:
+    assert decode_frame_at(red_then_blue, 30.0) is None
+
+
+@needs_ffmpeg
+def test_a_keyframe_of_an_unreadable_file_is_an_error(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.mp4"
+    broken.write_bytes(b"not a video")
+
+    with pytest.raises(FrameSamplingError):
+        decode_frame_at(broken, 0.0)
+
+
+@needs_ffmpeg
+def test_keyframe_text_is_read_off_the_real_frames(red_then_blue: Path) -> None:
+    class ColourReader:
+        """Reads a blue frame as showing text, which the second half of the clip is."""
+
+        name = "colour-reader"
+
+        def read(self, images):
+            return [
+                FrameReading(blocks=(TextBlock("blue slide", "Text", 0.9),))
+                if image.getpixel((10, 10))[2] > 200
+                else FrameReading()
+                for image in images
+            ]
+
+    batches = list(read_keyframe_text(red_then_blue, [0.0, 12.0, 30.0], ColourReader()))
+
+    readings = [reading for batch in batches for reading in batch]
+    assert [(r.time_seconds, r.text.text if r.text else None) for r in readings] == [
+        (0.0, None),
+        (12.0, "blue slide"),
+    ]

@@ -1,0 +1,11 @@
+-- pg_trgm, for finding a query's words in the on-screen text of keyframes (0024).
+--
+-- Alone in its own file for the reason 0001_extensions.sql gives: creating an extension can
+-- fail for a reason outside the schema, and a failure here should point at the server's
+-- configuration. It is not added to 0001 because a database that has 0001 applied would never
+-- run it again.
+--
+-- On Azure Database for PostgreSQL Flexible Server this statement fails until `pg_trgm` is
+-- added to the `azure.extensions` server parameter: Portal > the server > Settings > Server
+-- parameters > search `azure.extensions` > tick PG_TRGM (keep VECTOR ticked) > Save.
+create extension if not exists pg_trgm;

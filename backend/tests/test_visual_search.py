@@ -14,6 +14,8 @@ from backend.services.visual_search import (
     INDEX_NOT_READY,
     INDEX_OUTDATED,
     INDEX_READY,
+    OCR_MEANING,
+    OCR_WORDS,
     TRANSCRIPT,
     TimeRange,
     merge_into_ranges,
@@ -265,3 +267,75 @@ def test_a_window_limits_where_hits_may_be_but_not_what_stands_out() -> None:
 
     assert [moment.segment.segment_index for moment in result.moments] == [2]
     assert result.image_match_found
+
+
+# --- on-screen text ------------------------------------------------------------------------
+
+# Segment 2 has a second keyframe at 50 s, so the text read at 40 s stands for 40-50 s.
+SEGMENTS_WITH_TWO_KEYFRAMES = SEGMENTS[:2] + [{**SEGMENTS[2], "keyframe_times": [40.0, 50.0]}]
+
+
+def test_on_screen_text_is_found_by_its_words_and_its_meaning_for_the_stretch_it_was_shown() -> None:
+    pool = FakePool(
+        responses=[
+            READY_STATE,
+            SEGMENTS_WITH_TWO_KEYFRAMES,
+            CHAPTERS,
+            frame_scores({}),
+            [{"caption_count": 0}],
+            [],
+            [{"text_count": 2}],
+            [
+                {"time_seconds": 40.0, "ocr_text": "Architecture diagram", "similarity": 0.9},
+                {"time_seconds": 0.0, "ocr_text": "Agenda", "similarity": 0.2},
+            ],
+            [
+                {"time_seconds": 40.0, "ocr_text": "Architecture diagram", "similarity": 0.9},
+                {"time_seconds": 0.0, "ocr_text": "Agenda", "similarity": 0.82},
+            ],
+        ]
+    )
+
+    result = search(pool, on_screen_text_query_encoder=lambda _: [1.0])
+
+    # "Agenda" is below the word floor, and too far below the best text by meaning.
+    [moment] = result.moments
+    assert moment.sources == (OCR_WORDS, OCR_MEANING)
+    assert moment.matched_ranges == (TimeRange(40.0, 50.0),)
+    assert moment.on_screen_text == "Architecture diagram"
+    assert moment.chapter.title == "The diagram"
+    assert not result.image_match_found
+
+
+def test_the_last_keyframe_of_a_segment_stands_for_the_rest_of_it() -> None:
+    pool = FakePool(
+        responses=[
+            READY_STATE,
+            SEGMENTS_WITH_TWO_KEYFRAMES,
+            CHAPTERS,
+            frame_scores({}),
+            [{"caption_count": 0}],
+            [],
+            [{"text_count": 1}],
+            [{"time_seconds": 50.0, "ocr_text": "Questions?", "similarity": 1.0}],
+            [],
+        ]
+    )
+
+    result = search(pool, on_screen_text_query_encoder=lambda _: [1.0])
+
+    assert result.moments[0].matched_ranges == (TimeRange(50.0, 60.0),)
+
+
+def test_a_video_whose_keyframes_show_no_text_is_not_searched_for_it() -> None:
+    def no_model(_query):
+        raise AssertionError("e5 must not load for a video with no on-screen text")
+
+    pool = FakePool(
+        responses=[READY_STATE, SEGMENTS, CHAPTERS, frame_scores({}), [{"caption_count": 0}], [], [{"text_count": 0}]]
+    )
+
+    result = search(pool, on_screen_text_query_encoder=no_model)
+
+    assert result.moments == ()
+    assert not any("word_similarity" in statement for statement in pool.statements)

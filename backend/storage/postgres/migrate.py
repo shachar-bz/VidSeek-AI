@@ -45,14 +45,17 @@ create table if not exists public.{MIGRATIONS_TABLE} (
 )
 """
 
-# The first migration is the only one that can fail for a reason outside the schema, and
-# the message Postgres gives for it does not mention the setting that fixes it.
+# The migrations that create an extension are the only ones that can fail for a reason
+# outside the schema, and the message Postgres gives for it does not mention the setting that
+# fixes it. Each is mapped to the name the extension has in the `azure.extensions` list.
 EXTENSIONS_MIGRATION = "0001_extensions.sql"
+TRIGRAM_EXTENSION_MIGRATION = "0023_trigram_extension.sql"
+EXTENSION_MIGRATIONS = {EXTENSIONS_MIGRATION: "VECTOR", TRIGRAM_EXTENSION_MIGRATION: "PG_TRGM"}
 AZURE_EXTENSION_HELP = (
     "Applying {filename} failed. On Azure Database for PostgreSQL Flexible Server an "
     "extension must be allow-listed before any role may create it: open the server in the "
     "Azure portal, go to Settings > Server parameters, search for `azure.extensions`, tick "
-    "VECTOR, and save. The server applies the change without a restart. Then run this "
+    "{extension}, and save. The server applies the change without a restart. Then run this "
     "again. The underlying error follows.\n\n{error}"
 )
 
@@ -124,9 +127,12 @@ def _apply_one(pool, path: Path) -> None:
                 (path.name,),
             )
     except psycopg.Error as error:
-        if path.name == EXTENSIONS_MIGRATION:
+        extension = EXTENSION_MIGRATIONS.get(path.name)
+        if extension is not None:
             raise RuntimeError(
-                AZURE_EXTENSION_HELP.format(filename=path.name, error=error)
+                AZURE_EXTENSION_HELP.format(
+                    filename=path.name, extension=extension, error=error
+                )
             ) from error
         raise
     logger.info("Applied %s", path.name)

@@ -115,3 +115,20 @@ def visual_indexing_enabled() -> bool:
     raise RuntimeError(
         f"VIDSEEK_VISUAL_INDEXING must be true or false (received {raw_value!r})"
     )
+
+
+def ocr_python_path() -> Path | None:
+    """The Python interpreter of the separate environment Surya is installed in, or None.
+
+    Surya needs a newer torch and an older Pillow than this backend runs on, so it cannot be
+    installed next to it; on-screen text is read by a worker process started with this
+    interpreter instead (`services/visual_indexing/ocr/surya/`). Unset means OCR is off on
+    this machine: videos are still indexed visually, and their keyframes are left unread.
+    """
+    configured = get("VIDSEEK_OCR_PYTHON")
+    return Path(configured).expanduser() if configured else None
+
+
+def ocr_llama_server_path() -> str | None:
+    """Where llama.cpp's `llama-server` is, for Surya to run its OCR model with; None for PATH."""
+    return get("VIDSEEK_OCR_LLAMA_SERVER")

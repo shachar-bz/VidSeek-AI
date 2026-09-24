@@ -46,6 +46,8 @@ from .video_jobs import PostgresVideoJobs, StoredVideoJob, VideoJob
 from .video_records import PostgresVideoRecords, StoredVideoRecord, VideoRecord
 from .visual_index import (
     FrameSimilarity,
+    KeyframeText,
+    KeyframeTextMatch,
     NewFrameEmbedding,
     NewVisualSegment,
     PostgresVisualIndex,
@@ -60,6 +62,8 @@ __all__ = [
     "ChapterWithNeighbours",
     "FrameCaptionMatch",
     "FrameSimilarity",
+    "KeyframeText",
+    "KeyframeTextMatch",
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",

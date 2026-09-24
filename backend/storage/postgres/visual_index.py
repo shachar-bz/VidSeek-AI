@@ -9,6 +9,11 @@ with another's version.
 The status columns live on `videos` but are written only here. `PostgresVideoRecords.upsert`
 does not know they exist, which is what keeps a re-recorded video from erasing them.
 
+The on-screen text of keyframes (`migrations/0024_keyframe_on_screen_text.sql`) is written
+after the rest, by `set_keyframe_text`, onto the keyframe rows `replace` created: OCR is the
+slow part of indexing, and a video is searchable by its frames while its text is still being
+read. Replacing the index deletes the text with its keyframes.
+
 Needs AZURE_DATABASE_URL in `backend/.env`, and the migrations applied.
 """
 
@@ -97,6 +102,41 @@ where s.video_id = %s::uuid
 order by s.segment_index
 """
 
+# Keyframes are unique per video and time, and their times are written from the same floats
+# the text is read for, so an exact match on the time finds the row.
+SET_KEYFRAME_TEXT_SQL = """
+update public.video_keyframes
+set ocr_text = %s, ocr_language = %s, ocr_confidence = %s, ocr_embedding = %s::vector,
+    ocr_engine = %s
+where video_id = %s::uuid and time_seconds = %s
+"""
+
+KEYFRAME_TEXT_COUNT_SQL = """
+select count(*) as text_count
+from public.video_keyframes
+where video_id = %s::uuid and ocr_text is not null
+"""
+
+# How well the query's words appear somewhere in each keyframe's text: `word_similarity` scores
+# the best-matching stretch of the text, so a two-word query is not diluted by a slide full of
+# other words, and a misread letter or two still leaves most trigrams in common.
+KEYFRAME_TEXT_WORD_MATCHES_SQL = """
+select time_seconds, ocr_text, word_similarity(%s, ocr_text) as similarity
+from public.video_keyframes
+where video_id = %s::uuid and ocr_text is not null
+order by similarity desc, time_seconds
+limit %s
+"""
+
+# Every keyframe's text scored by meaning against a query vector, closest first.
+KEYFRAME_TEXT_SIMILARITIES_SQL = """
+select time_seconds, ocr_text, 1 - (ocr_embedding <=> %s::vector) as similarity
+from public.video_keyframes
+where video_id = %s::uuid and ocr_embedding is not null
+order by ocr_embedding <=> %s::vector, time_seconds
+limit %s
+"""
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,6 +185,31 @@ class FrameSimilarity:
     """How close one sampled frame is to a query vector."""
 
     time_seconds: float
+    similarity: float
+
+
+@dataclass(frozen=True)
+class KeyframeText:
+    """What OCR read on one keyframe, as `set_keyframe_text` writes it.
+
+    `text` None means the keyframe was read and shows no text worth keeping; the row still
+    records the engine, so it is not read again for nothing.
+    """
+
+    time_seconds: float
+    text: str | None
+    language: str | None = None
+    confidence: float | None = None
+    # multilingual-e5-small of `text`; None exactly when `text` is.
+    embedding: Sequence[float] | None = None
+
+
+@dataclass(frozen=True)
+class KeyframeTextMatch:
+    """One keyframe's on-screen text and how close it is to a query."""
+
+    time_seconds: float
+    text: str
     similarity: float
 
 
@@ -276,3 +341,66 @@ class PostgresVisualIndex:
             )
             for row in rows
         ]
+
+    def set_keyframe_text(
+        self, video_id: str, texts: Sequence[KeyframeText], *, engine: str
+    ) -> int:
+        """Record what `engine` read on these keyframes, and say how many rows were given.
+
+        One statement per keyframe, sent together. A time with no keyframe row -- the index
+        was replaced while its text was being read -- updates nothing, which is right: the
+        new index's keyframes are read again.
+        """
+        rows = [
+            (
+                text.text,
+                text.language,
+                text.confidence,
+                list(text.embedding) if text.embedding is not None else None,
+                engine,
+                video_id,
+                text.time_seconds,
+            )
+            for text in texts
+        ]
+        if not rows:
+            return 0
+        with connection(self._pool) as open_connection:
+            with open_connection.cursor() as cursor:
+                cursor.executemany(SET_KEYFRAME_TEXT_SQL, rows)
+        return len(rows)
+
+    def keyframe_text_count(self, video_id: str) -> int:
+        """How many of this video's keyframes show text; zero until OCR has read one."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(KEYFRAME_TEXT_COUNT_SQL, (video_id,)).fetchone()
+        return int(row["text_count"]) if row else 0
+
+    def keyframe_text_word_matches(
+        self, video_id: str, query: str, limit: int
+    ) -> list[KeyframeTextMatch]:
+        """The keyframes whose text contains the query's words most closely, best first."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                KEYFRAME_TEXT_WORD_MATCHES_SQL, (query, video_id, limit)
+            ).fetchall()
+        return [_keyframe_text_match(row) for row in rows]
+
+    def keyframe_text_similarities(
+        self, video_id: str, embedding: Sequence[float], limit: int
+    ) -> list[KeyframeTextMatch]:
+        """The keyframes whose text is closest in meaning to `embedding`, best first."""
+        vector = list(embedding)
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                KEYFRAME_TEXT_SIMILARITIES_SQL, (vector, video_id, vector, limit)
+            ).fetchall()
+        return [_keyframe_text_match(row) for row in rows]
+
+
+def _keyframe_text_match(row: dict) -> KeyframeTextMatch:
+    return KeyframeTextMatch(
+        time_seconds=float(row["time_seconds"]),
+        text=row["ocr_text"],
+        similarity=float(row["similarity"]),
+    )

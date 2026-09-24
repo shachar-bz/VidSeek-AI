@@ -156,6 +156,10 @@ sentence-transformers>=3.0
 # above) and can be turned off with VIDSEEK_VISUAL_INDEXING=false. Pillow and numpy decode,
 # hash and lay out frames. ffmpeg on PATH (already required) samples frames from the local file
 # and extracts frames from Blob Storage on demand. 4.49 is the first transformers with SigLIP 2.
+# OCR (Surya) is not installed here: it needs torch >= 2.7 and Pillow < 11, so it runs in a worker
+# process of its own environment, whose dependencies are in
+# backend/services/visual_indexing/ocr/surya/requirements.txt (see VIDSEEK_OCR_PYTHON). Removing
+# the module removes that file with backend/services/visual_indexing/.
 transformers>=4.49
 pillow
 numpy

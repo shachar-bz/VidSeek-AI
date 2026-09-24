@@ -15,6 +15,8 @@ from backend.download_pipeline import visual_indexing
 from backend.download_pipeline.visual_indexing import (
     JOB_CANCELLED,
     NO_VIDEO_FRAMES,
+    OCR_FAILED,
+    OCR_INTERRUPTED,
     VISUAL_INDEXING_DISABLED,
     VISUAL_INDEXING_FAILED,
     VISUAL_INDEXING_INTERRUPTED,
@@ -26,9 +28,11 @@ from backend.services.visual_indexing import (
     CURRENT_VISUAL_INDEX_VERSION,
     BuiltVisualIndex,
     IndexedFrame,
+    KeyframeReading,
     NoFramesToIndex,
     SamplingStopped,
 )
+from backend.services.visual_indexing.ocr import OcrError, OnScreenText
 from backend.services.visual_indexing.segments import SCENE_CHANGE, VIDEO_START, VisualSegment
 from backend.tests.fake_postgres import FakePool
 
@@ -203,4 +207,110 @@ def test_a_database_that_refuses_the_status_does_not_stop_the_index(tmp_path: Pa
 
     assert outcome.status == "ready"
     assert replace.called
+    assert not path.exists()
+
+
+# --- on-screen text ------------------------------------------------------------------------
+
+READ_TEXT_PATH = "backend.download_pipeline.visual_indexing.read_keyframe_text"
+
+
+class NamedEngine:
+    name = "surya-ocr-2"
+
+    def read(self, images):
+        raise AssertionError("read_keyframe_text is stood in for")
+
+
+def text_writes(pool: FakePool) -> list:
+    """Every keyframe row `set_keyframe_text` wrote, in order."""
+    return [
+        row
+        for item in pool.recorded
+        if item.statement.lstrip().startswith("update public.video_keyframes")
+        for row in item.parameters
+    ]
+
+
+def batches(*groups):
+    """What `read_keyframe_text` yields: lists of readings, one list per batch."""
+    return iter([list(group) for group in groups])
+
+
+def test_keyframe_text_is_read_after_the_index_is_ready_and_stored_batch_by_batch(tmp_path: Path) -> None:
+    path = local_video(tmp_path)
+    pool = FakePool()
+    order = []
+    slide = OnScreenText("System design", "en", 0.9)
+
+    def read(local_path, keyframe_times, engine, *, stop_event):
+        order.append(("read", status_writes(pool)[-1][0], local_path.exists(), list(keyframe_times)))
+        return batches([KeyframeReading(0.0, slide)], [KeyframeReading(2.0, None)])
+
+    with patch(BUILD_PATH, return_value=BUILT), patch(PROBE_PATH, return_value=4.0), patch(
+        READ_TEXT_PATH, side_effect=read
+    ):
+        outcome = index_video_visually(
+            VIDEO_ID,
+            path,
+            pool=pool,
+            ocr_engine=NamedEngine(),
+            embed_texts=lambda texts: [[0.5, 0.5] for _ in texts],
+        )
+
+    # Read once the index is ready, from the local copy, which is deleted only afterwards.
+    assert order == [("read", "ready", True, [0.0, 2.0])]
+    assert not path.exists()
+    assert text_writes(pool) == [
+        ("System design", "en", 0.9, [0.5, 0.5], "surya-ocr-2", VIDEO_ID, 0.0),
+        (None, None, None, None, "surya-ocr-2", VIDEO_ID, 2.0),
+    ]
+    assert (outcome.status, outcome.keyframes_read, outcome.keyframes_with_text) == ("ready", 2, 1)
+    assert outcome.ocr_problem is None
+
+
+def test_without_an_ocr_engine_the_keyframes_are_left_unread(tmp_path: Path) -> None:
+    path = local_video(tmp_path)
+    pool = FakePool()
+    with patch(BUILD_PATH, return_value=BUILT), patch(PROBE_PATH, return_value=4.0), patch(
+        READ_TEXT_PATH
+    ) as read:
+        outcome = index_video_visually(VIDEO_ID, path, pool=pool)
+
+    assert not read.called
+    assert text_writes(pool) == []
+    assert (outcome.status, outcome.keyframes_read, outcome.ocr_problem) == ("ready", 0, None)
+
+
+def test_an_ocr_failure_keeps_the_index_ready_and_what_was_read_before_it(tmp_path: Path) -> None:
+    path = local_video(tmp_path)
+    pool = FakePool()
+
+    def read(local_path, keyframe_times, engine, *, stop_event):
+        yield [KeyframeReading(0.0, OnScreenText("Agenda", "en", 0.8))]
+        raise OcrError("Surya's worker exited")
+
+    with patch(BUILD_PATH, return_value=BUILT), patch(PROBE_PATH, return_value=4.0), patch(
+        READ_TEXT_PATH, side_effect=read
+    ):
+        outcome = index_video_visually(
+            VIDEO_ID, path, pool=pool, ocr_engine=NamedEngine(), embed_texts=lambda texts: [[1.0]]
+        )
+
+    assert (outcome.status, outcome.ocr_problem, outcome.keyframes_read) == ("ready", OCR_FAILED, 1)
+    assert status_writes(pool)[-1] == ("ready", None)
+    assert [row[0] for row in text_writes(pool)] == ["Agenda"]
+    assert not path.exists()
+
+
+def test_a_shutdown_while_reading_text_leaves_the_index_ready(tmp_path: Path) -> None:
+    path = local_video(tmp_path)
+    pool = FakePool()
+    with patch(BUILD_PATH, return_value=BUILT), patch(PROBE_PATH, return_value=4.0), patch(
+        READ_TEXT_PATH, side_effect=SamplingStopped("stopped")
+    ):
+        outcome = index_video_visually(VIDEO_ID, path, pool=pool, ocr_engine=NamedEngine())
+
+    assert (outcome.status, outcome.problem, outcome.ocr_problem) == ("ready", None, OCR_INTERRUPTED)
+    assert status_writes(pool)[-1] == ("ready", None)
     assert not path.exists()

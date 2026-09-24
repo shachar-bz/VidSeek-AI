@@ -106,6 +106,9 @@ def test_a_table_is_never_created_before_the_extension_it_needs() -> None:
     assert names.index("0011_chapter_embeddings_video_times.sql") < names.index(
         "0021_embedding_ann_indexes.sql"
     )
+    # Keyframe text goes onto the keyframes 0022 creates, indexed with the extension 0023 does.
+    assert names.index("0022_video_visual_index.sql") < names.index("0024_keyframe_on_screen_text.sql")
+    assert names.index("0023_trigram_extension.sql") < names.index("0024_keyframe_on_screen_text.sql")
 
 
 def test_a_fresh_database_has_every_migration_pending() -> None:
@@ -154,6 +157,16 @@ def test_a_refused_extension_names_the_azure_setting_that_fixes_it() -> None:
 
     with pytest.raises(RuntimeError, match="azure.extensions"):
         apply_migrations(pool)
+
+
+def test_a_refused_trigram_extension_names_its_own_setting() -> None:
+    pool = FakeMigrationPool(fails_on="create extension if not exists pg_trgm")
+
+    with pytest.raises(RuntimeError, match="tick PG_TRGM"):
+        apply_migrations(pool)
+
+    assert "0023_trigram_extension.sql" not in pool.applied
+    assert "0022_video_visual_index.sql" in pool.applied
 
 
 def test_a_migration_that_failed_is_not_recorded_as_applied() -> None:

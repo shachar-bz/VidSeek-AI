@@ -1,14 +1,17 @@
 """Finds the moments of one video that match a text query, from everything the index knows.
 
-Three ranked lists are read and fused by rank (`fusion.py`):
+Five ranked lists are read and fused by rank (`fusion.py`):
 
 * `image` -- every sampled frame scored against the query with SigLIP 2's text encoder, kept
   only where it stands out from the rest of the video (`scoring.py`), merged into ranges;
 * `caption` -- the captions the visual sub-agent saved on earlier questions, by e5 meaning;
+* `ocr_words` -- keyframes whose on-screen text contains the query's words, by trigram;
+* `ocr_meaning` -- keyframes whose on-screen text means what the query does, by e5;
 * `transcript` -- the memories whose speech is closest to the query, by MiniLM.
 
-On-screen text joins as two more lists (trigram and e5 over OCR text) once OCR exists; nothing
-else here has to change for it.
+A keyframe's text stands for the stretch it was on screen: from the keyframe to the next one
+in its segment, or to the segment's end. The two OCR lists are empty, and cost no model load,
+for a video whose keyframes have not been read.
 
 The fusion is per visual segment. The lists do not share a granularity -- a frame is an
 instant, a caption an instant or a window, a memory can run for minutes -- but every one of
@@ -46,7 +49,14 @@ from .video_map import VideoVisualMap, load_video_map
 # The names the lists are fused under, in the order a moment reports them.
 IMAGE = "image"
 CAPTION = "caption"
+OCR_WORDS = "ocr_words"
+OCR_MEANING = "ocr_meaning"
 TRANSCRIPT = "transcript"
+SOURCES = (IMAGE, CAPTION, OCR_WORDS, OCR_MEANING, TRANSCRIPT)
+
+# The lists whose ranges say precisely where in a segment the match is. A memory can run for
+# minutes, so a range the transcript alone found is only as precise as the segment.
+PRECISE_SOURCES = (IMAGE, CAPTION, OCR_WORDS, OCR_MEANING)
 
 # Whether the index could be searched at all.
 INDEX_READY = "ready"
@@ -79,6 +89,13 @@ class SearchSettings:
     caption_similarity_floor: float = 0.8
     caption_margin_from_best: float = 0.05
     caption_candidates: int = 10
+    # pg_trgm `word_similarity` under which a keyframe's text does not contain the query's
+    # words. 0.6 is pg_trgm's own default for "a match"; lower keeps a misread letter or two.
+    ocr_word_similarity_floor: float = 0.5
+    # e5 cosine for on-screen text, read the way saved captions are and for the same reason.
+    ocr_meaning_similarity_floor: float = 0.8
+    ocr_meaning_margin_from_best: float = 0.05
+    ocr_candidates: int = 10
     # MiniLM cosine under which a memory is not a match.
     transcript_similarity_floor: float = 0.3
     transcript_candidates: int = 5
@@ -117,6 +134,8 @@ class VisualMoment:
     peak_z_score: float | None = None
     # The saved caption that matched best, when one did.
     caption: str | None = None
+    # The on-screen text of the keyframe that matched best, when one did.
+    on_screen_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -146,6 +165,7 @@ class _Piece:
     range: TimeRange
     peak_z_score: float | None = None
     caption: str | None = None
+    on_screen_text: str | None = None
 
 
 @dataclass
@@ -165,12 +185,14 @@ def search_visual_moments(
     image_query_encoder: QueryEncoder | None = None,
     caption_query_encoder: QueryEncoder | None = None,
     transcript_query_encoder: QueryEncoder | None = None,
+    on_screen_text_query_encoder: QueryEncoder | None = None,
 ) -> VisualSearchResult:
     """The moments of this video matching `query`, best first, within the window if one is given.
 
     Frames are scored against the whole video even when a window is given, so a window
-    narrows where hits may be but not what counts as standing out. The three encoders default
-    to the shared SigLIP 2, multilingual-e5-small and MiniLM models; a test replaces them.
+    narrows where hits may be but not what counts as standing out. The encoders default to
+    the shared SigLIP 2, MiniLM and multilingual-e5-small models -- e5 for both captions and
+    on-screen text; a test replaces them.
     """
     state = PostgresVisualIndex(pool=pool).state(video_id)
     if state is None or state.status != READY:
@@ -211,6 +233,22 @@ def search_visual_moments(
             window,
             _Piece(TRANSCRIPT, rank, TimeRange(match.start_seconds, match.end_seconds)),
         )
+    word_matches, meaning_matches = _on_screen_text_matches(
+        video_id, query, settings, pool, on_screen_text_query_encoder
+    )
+    for source, matches in ((OCR_WORDS, word_matches), (OCR_MEANING, meaning_matches)):
+        for rank, match in enumerate(matches, start=1):
+            _add(
+                evidence,
+                video_map,
+                window,
+                _Piece(
+                    source,
+                    rank,
+                    _on_screen_range(video_map, match.time_seconds),
+                    on_screen_text=match.text,
+                ),
+            )
 
     moments = _fuse(evidence, video_map)[: settings.max_moments]
     return VisualSearchResult(
@@ -287,6 +325,42 @@ def _transcript_matches(video_id, query, settings, pool, encoder):
     return [match for match in matches if match.similarity >= settings.transcript_similarity_floor]
 
 
+def _on_screen_text_matches(video_id, query, settings, pool, encoder):
+    """Keyframes whose text holds the query's words, and those whose text means it, best first.
+
+    Neither query runs, and e5 is not loaded, for a video none of whose keyframes show text.
+    """
+    store = PostgresVisualIndex(pool=pool)
+    if store.keyframe_text_count(video_id) == 0:
+        return [], []
+    words = [
+        match
+        for match in store.keyframe_text_word_matches(video_id, query, settings.ocr_candidates)
+        if match.similarity >= settings.ocr_word_similarity_floor
+    ]
+    if encoder is None:
+        from backend.services.embeddings.multilingual_text_embedding import embed_query
+
+        encoder = embed_query
+    by_meaning = store.keyframe_text_similarities(video_id, encoder(query), settings.ocr_candidates)
+    if not by_meaning:
+        return words, []
+    cutoff = max(
+        settings.ocr_meaning_similarity_floor,
+        max(match.similarity for match in by_meaning) - settings.ocr_meaning_margin_from_best,
+    )
+    return words, [match for match in by_meaning if match.similarity >= cutoff]
+
+
+def _on_screen_range(video_map: VideoVisualMap, time_seconds: float) -> TimeRange:
+    """The stretch a keyframe's text stands for: until the next keyframe of its segment, or its end."""
+    segment = video_map.segment_at(time_seconds)
+    if segment is None:
+        return TimeRange(time_seconds, time_seconds)
+    later = [keyframe for keyframe in segment.keyframe_times if keyframe > time_seconds]
+    return TimeRange(time_seconds, min(later) if later else max(segment.end_seconds, time_seconds))
+
+
 def _add(
     evidence: dict[int, _SegmentEvidence],
     video_map: VideoVisualMap,
@@ -304,7 +378,14 @@ def _add(
         )
         entry = evidence.setdefault(segment.segment_index, _SegmentEvidence(segment))
         entry.pieces.append(
-            _Piece(piece.source, piece.rank, inside, piece.peak_z_score, piece.caption)
+            _Piece(
+                piece.source,
+                piece.rank,
+                inside,
+                piece.peak_z_score,
+                piece.caption,
+                piece.on_screen_text,
+            )
         )
 
 
@@ -316,7 +397,7 @@ def _fuse(evidence: dict[int, _SegmentEvidence], video_map: VideoVisualMap) -> l
     and the next piece's segments come right after them.
     """
     rankings: dict[str, dict[int, int]] = {}
-    for source in (IMAGE, CAPTION, TRANSCRIPT):
+    for source in SOURCES:
         best_rank_by_segment: dict[int, int] = {}
         for segment_index in sorted(evidence):
             for piece in evidence[segment_index].pieces:
@@ -333,7 +414,7 @@ def _fuse(evidence: dict[int, _SegmentEvidence], video_map: VideoVisualMap) -> l
     moments = []
     for fused in reciprocal_rank_fusion(rankings):
         entry = evidence[fused.key]
-        precise = [piece for piece in entry.pieces if piece.source in (IMAGE, CAPTION)]
+        precise = [piece for piece in entry.pieces if piece.source in PRECISE_SOURCES]
         chosen = precise or entry.pieces
         ranges = tuple(
             sorted(
@@ -344,6 +425,10 @@ def _fuse(evidence: dict[int, _SegmentEvidence], video_map: VideoVisualMap) -> l
         image_peaks = [piece.peak_z_score for piece in entry.pieces if piece.peak_z_score is not None]
         captions = sorted(
             (piece for piece in entry.pieces if piece.caption is not None),
+            key=lambda piece: piece.rank,
+        )
+        on_screen = sorted(
+            (piece for piece in entry.pieces if piece.on_screen_text is not None),
             key=lambda piece: piece.rank,
         )
         moments.append(
@@ -357,6 +442,7 @@ def _fuse(evidence: dict[int, _SegmentEvidence], video_map: VideoVisualMap) -> l
                 chapter=video_map.chapter_at(ranges[0].start_seconds),
                 peak_z_score=max(image_peaks) if image_peaks else None,
                 caption=captions[0].caption if captions else None,
+                on_screen_text=on_screen[0].on_screen_text if on_screen else None,
             )
         )
     return moments

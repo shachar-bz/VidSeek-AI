@@ -36,8 +36,10 @@ VidSeek-AI/
 │   │   │   ├── image_embedding/            # SigLIP 2: frame vectors and the text queries scored against them.
 │   │   │   └── multilingual_text_embedding/ # multilingual-e5-small, for saved frame captions and on-screen text.
 │   │   ├── visual_indexing/                # Builds one video's visual index from its local file; no database.
-│   │   │   ├── sampling/                   # The ffmpeg decode pass: one shrunken frame every two seconds.
-│   │   │   └── segments/                   # Content-change segmentation and keyframe choice.
+│   │   │   ├── sampling/                   # The ffmpeg decode pass (one shrunken frame every two seconds), and keyframes at full size.
+│   │   │   ├── segments/                   # Content-change segmentation and keyframe choice.
+│   │   │   └── ocr/                        # The OCR engine interface and the text a keyframe keeps.
+│   │   │       └── surya/                  # Surya 2, run in a worker process of its own Python environment.
 │   │   ├── visual_search/                  # Finds a video's moments matching a text query, placed in segment and chapter.
 │   │   ├── video_frames/                   # Frames of a stored video, extracted on demand from Blob Storage.
 │   │   ├── shot_detection/                 # Shot boundary detection services, plus the script that compares them.
@@ -113,6 +115,10 @@ The rules bind production code. Tests (`backend/tests/`, `frontend/tests/`,
   from anywhere but the stored video, because no frame is ever stored.
 * `services/visual_indexing/` touches no database; `download_pipeline/visual_indexing.py`
   stores what it builds and is the one stage that owns, and deletes, the local video file.
+* `services/visual_indexing/ocr/surya/worker.py` runs in Surya's own Python environment, not
+  the backend's, and imports nothing from `backend`. The backend reaches Surya only through
+  that worker's stdin and stdout (`ocr/surya/engine.py`), and never imports `surya`; its
+  dependencies are in `ocr/surya/requirements.txt`, not in `backend/requirements.txt`.
 * `frontend/src/components/ui/` imports nothing from the rest of the app.
 * A page never imports another page; what two pages share goes in `frontend/src/pages/`
   itself, or lower, in `auth/`, `layout/` or `components/ui/`.
