@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VidSeek</title>
+    <title>VidSeek AI</title>
     <link rel="stylesheet" href="/src/popup.css" />
   </head>
   <body>
     <section id="auth" hidden>
-      <div id="auth-texture" aria-hidden="true"><pre id="auth-texture-art"></pre></div>
+      <div id="auth-texture" class="texture" aria-hidden="true"><pre></pre></div>
 
       <div id="auth-welcome" class="auth-panel">
         <div class="auth-brand">
@@ -18,8 +18,8 @@
           </p>
         </div>
         <div class="auth-actions">
-          <button id="auth-show-login" type="button" class="auth-pill auth-pill--light">Login</button>
-          <button id="auth-show-signup" type="button" class="auth-pill auth-pill--dark">Sign up</button>
+          <button id="auth-show-login" type="button" class="pill pill--light">Login</button>
+          <button id="auth-show-signup" type="button" class="pill pill--dark">Sign up</button>
         </div>
       </div>
 
@@ -41,30 +41,92 @@
           <p id="auth-error"></p>
         </div>
         <div class="auth-actions">
-          <button id="auth-submit" type="submit" class="auth-pill auth-pill--dark">Log in</button>
+          <button id="auth-submit" type="submit" class="pill pill--dark">Log in</button>
           <button id="auth-back" type="button" class="auth-link">Back</button>
         </div>
       </form>
     </section>
 
     <main id="app" hidden>
-      <div id="auth-signed-in">
-        <p id="auth-status"></p>
-        <button id="auth-logout" class="secondary">Log out</button>
-      </div>
+      <div id="app-texture" class="texture" aria-hidden="true"><pre></pre></div>
 
-      <h1>VidSeek</h1>
-      <p id="status">Inspect the active tab to find its video.</p>
-      <progress id="progress" max="1" value="0"></progress>
-      <div id="details"></div>
-      <fieldset id="video-picker" hidden></fieldset>
-      <button id="inspect">Inspect video</button>
-      <button id="download" hidden>Grant access and download</button>
-      <button id="verify" hidden>Verify & play</button>
-      <button id="stop-verify" hidden>Finish verification</button>
-      <button id="capture" hidden>Capture difficult player</button>
-      <button id="stop-capture" hidden>Stop capture and retry</button>
-      <button id="cancel" class="secondary" hidden>Cancel</button>
+      <header class="app-bar">
+        <span class="app-bar__brand">VidSeek AI</span>
+        <div id="auth-signed-in" class="app-bar__account">
+          <span id="auth-status"></span>
+          <button id="auth-logout" type="button" class="app-bar__logout">Log out</button>
+        </div>
+      </header>
+
+      <section id="inspect-view" class="view" hidden>
+        <div class="view-hero">
+          <h1 class="view-title">Inspect video</h1>
+          <p class="view-tagline">Find the video on this tab, then chat with AI about it</p>
+        </div>
+        <div class="status-card">
+          <p id="status">Open the page with your video, then inspect it.</p>
+          <div id="details"></div>
+        </div>
+        <fieldset id="video-picker" hidden></fieldset>
+        <div class="view-actions">
+          <button id="inspect" type="button" class="pill pill--dark">Inspect video</button>
+          <button id="download" type="button" class="pill pill--dark" hidden>Grant access and scan</button>
+          <button id="verify" type="button" class="pill pill--dark" hidden>Verify &amp; play</button>
+          <button id="stop-verify" type="button" class="pill pill--dark" hidden>Finish verification</button>
+          <button id="cancel-verify" type="button" class="pill pill--light" hidden>Cancel</button>
+        </div>
+      </section>
+
+      <section id="processing-view" class="view" hidden>
+        <div class="view-hero">
+          <div id="scan-loader" class="scan-loader" aria-hidden="true"></div>
+          <h1 id="processing-heading" class="view-title">Scanning video</h1>
+          <p id="processing-title" class="view-tagline view-tagline--title"></p>
+        </div>
+        <ol id="scan-steps" class="scan-steps">
+          <li data-step="download">Download</li>
+          <li data-step="transcribe">Transcribe</li>
+          <li data-step="understand">Understand</li>
+          <li data-step="ready">Chat</li>
+        </ol>
+        <progress id="progress" max="1" value="0"></progress>
+        <div class="status-card">
+          <p id="processing-status"></p>
+          <div id="processing-details"></div>
+        </div>
+        <p id="processing-note" class="view-note">
+          You can close this panel or sign out. The scan keeps running, and the chat opens here
+          when it's done.
+        </p>
+        <div class="view-actions">
+          <button id="capture" type="button" class="pill pill--dark" hidden>Capture difficult player</button>
+          <button id="stop-capture" type="button" class="pill pill--dark" hidden>Stop capture and retry</button>
+          <button id="scan-another" type="button" class="pill pill--dark" hidden>Scan another video</button>
+          <button id="cancel" type="button" class="pill pill--light" hidden>Cancel scan</button>
+        </div>
+      </section>
+
+      <section id="chat-view" class="view" hidden>
+        <header class="chat-header">
+          <div class="chat-header__text">
+            <h1 id="chat-title" class="chat-header__title"></h1>
+            <p id="chat-source" class="chat-header__source"></p>
+          </div>
+          <button id="chat-new" type="button" class="chat-header__action">New chat</button>
+        </header>
+        <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+        <p id="chat-notice" class="chat-notice"></p>
+        <form id="chat-composer" class="chat-composer">
+          <textarea id="chat-input" rows="1" placeholder="Ask about this video" maxlength="8000"></textarea>
+          <button id="chat-send" type="submit" class="chat-composer__button" aria-label="Send">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+          </button>
+          <button id="chat-stop" type="button" class="chat-composer__button" aria-label="Stop answering" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+          </button>
+        </form>
+        <button id="chat-scan-another" type="button" class="text-link">Scan another video</button>
+      </section>
     </main>
     <script type="module" src="/src/popup.ts"></script>
   </body>

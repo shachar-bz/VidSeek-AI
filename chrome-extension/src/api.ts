@@ -1,22 +1,30 @@
 // Requests to the local companion and shared error handling.
+import { readEventStream } from "./answer-stream";
 import type {
   AuthSession,
   AuthUser,
   BrowserContext,
   CaptionCandidate,
+  ConversationDetail,
+  ConversationList,
+  ConversationSummary,
   DiscoveryResult,
   MediaCandidate,
+  SendMessageRequest,
+  StreamEvent,
+  VideoDetail,
   VideoJob,
 } from "./types";
 
 const COMPANION_URL = "http://127.0.0.1:8765";
 
-async function companionFetch<T>(
+/** Issues one request and hands back the raw response, raising on any refusal. */
+async function companionRequest(
   path: string,
   init: RequestInit = {},
   token?: string,
   userToken?: string,
-): Promise<T> {
+): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -28,6 +36,16 @@ async function companionFetch<T>(
       .catch(() => ({ detail: response.statusText }));
     throw new Error(describeDetail(payload.detail) || response.statusText);
   }
+  return response;
+}
+
+async function companionFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  token?: string,
+  userToken?: string,
+): Promise<T> {
+  const response = await companionRequest(path, init, token, userToken);
   // /v1/auth/logout answers 204 with no body; parsing that as JSON would throw.
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -165,5 +183,90 @@ export async function retryWithCapture(
       }),
     },
     token,
+  );
+}
+
+// The calls below authenticate as the signed-in user, whose token is the bearer token here
+// rather than the separate header the job calls carry it in.
+
+export async function getVideo(
+  userToken: string,
+  videoId: string,
+): Promise<VideoDetail> {
+  return companionFetch<VideoDetail>(
+    `/v1/videos/${encodeURIComponent(videoId)}`,
+    {},
+    userToken,
+  );
+}
+
+export async function listConversations(
+  userToken: string,
+  videoId: string,
+): Promise<ConversationList> {
+  return companionFetch<ConversationList>(
+    `/v1/videos/${encodeURIComponent(videoId)}/conversations`,
+    {},
+    userToken,
+  );
+}
+
+export async function createConversation(
+  userToken: string,
+  videoId: string,
+): Promise<ConversationDetail> {
+  return companionFetch<ConversationDetail>(
+    `/v1/videos/${encodeURIComponent(videoId)}/conversations`,
+    { method: "POST", body: JSON.stringify({}) },
+    userToken,
+  );
+}
+
+export async function getConversation(
+  userToken: string,
+  conversationId: string,
+): Promise<ConversationDetail> {
+  return companionFetch<ConversationDetail>(
+    `/v1/conversations/${encodeURIComponent(conversationId)}`,
+    {},
+    userToken,
+  );
+}
+
+/** Asks one question and yields the answer's events as they arrive. */
+export async function* sendConversationMessage(
+  userToken: string,
+  conversationId: string,
+  body: SendMessageRequest,
+  signal?: AbortSignal,
+): AsyncGenerator<StreamEvent> {
+  const response = await companionRequest(
+    `/v1/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { method: "POST", body: JSON.stringify(body), signal },
+    userToken,
+  );
+  yield* readEventStream(response);
+}
+
+export async function stopConversation(
+  userToken: string,
+  conversationId: string,
+): Promise<void> {
+  await companionFetch<unknown>(
+    `/v1/conversations/${encodeURIComponent(conversationId)}/stop`,
+    { method: "POST" },
+    userToken,
+  );
+}
+
+export async function renameConversation(
+  userToken: string,
+  conversationId: string,
+  title: string,
+): Promise<ConversationSummary> {
+  return companionFetch<ConversationSummary>(
+    `/v1/conversations/${encodeURIComponent(conversationId)}`,
+    { method: "PATCH", body: JSON.stringify({ title }) },
+    userToken,
   );
 }

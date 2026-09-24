@@ -476,6 +476,8 @@ def test_a_page_already_recorded_is_deduplicated_without_downloading(tmp_path: P
 
     assert job.status == JobStatus.COMPLETE
     assert job.video_storage_key == EXISTING_VIDEO.video.blob_name
+    # The extension opens its chat against this id the moment the job reports it.
+    assert job.video_id == EXISTING_VIDEO.id
     assert linked == [("user-1", EXISTING_VIDEO.id)]
     executor.submit.assert_not_called()
     assert job.job_id not in manager._jobs
@@ -562,6 +564,7 @@ def test_a_completed_job_leaves_memory_once_the_database_holds_its_outcome(
 
     assert fetched.status == JobStatus.COMPLETE
     assert fetched.video_storage_key == STORED.name
+    assert fetched.video_id == produced_video.id
 
 
 def test_an_insight_failure_finishes_as_a_durable_partial_success(tmp_path: Path) -> None:
@@ -595,6 +598,7 @@ def test_an_insight_failure_finishes_as_a_durable_partial_success(tmp_path: Path
     assert finished.status == JobStatus.PARTIAL_SUCCESS
     assert finished.error_code == INSIGHT_GENERATION_FAILED
     assert finished.video_storage_key == STORED.name
+    assert finished.video_id == "22222222-2222-2222-2222-222222222222"
     assert finished.message == (
         "Video and transcript saved; its generated insights are not available yet"
     )

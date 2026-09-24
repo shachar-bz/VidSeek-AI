@@ -196,6 +196,7 @@ class _Job:
             transcript_source=self.transcript_source,
             comments_path=self.comments_path,
             video_storage_key=self.video_storage_key,
+            video_id=self.video_id,
             error_code=self.error_code,
             can_capture=self.can_capture,
         )
@@ -220,6 +221,7 @@ def _response_from_persisted_job(job: VideoJob) -> VideoJobResponse:
         acquisition_mode=job.acquisition_mode or "",
         error_code=job.error_code,
         video_storage_key=_blob_name_for_video(job.video_id),
+        video_id=job.video_id,
     )
 
 

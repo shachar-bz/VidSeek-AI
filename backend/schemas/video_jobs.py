@@ -106,6 +106,9 @@ class VideoJobResponse(BaseModel):
     # not a link: a SAS URL carries a signature, which this response has no business
     # holding, and the container is the companion's business rather than the tab's.
     video_storage_key: str | None = None
+    # The `videos` row this job produced, once stage two of the pipeline has written it.
+    # What the extension opens its chat against when the job finishes; null until then.
+    video_id: str | None = None
     error_code: str | None = None
     can_capture: bool = False
 

@@ -66,7 +66,7 @@ VidSeek-AI/
 │   └── tests/                              # Automated backend companion tests.
 ├── chrome-extension/                       # Internal Manifest V3 video download extension.
 │   ├── public/                             # Static files copied into the extension build.
-│   ├── src/                                # Background worker, popup, page and frame discovery, and the companion API client.
+│   ├── src/                                # Background worker, side panel (inspect, scan, chat), page and frame discovery, and the companion API client.
 │   └── tests/                              # Extension helper unit tests.
 └── frontend/                               # The VidSeek website: a React + Vite single-page app.
     ├── src/                                # The app root, the route table and the directories below.
