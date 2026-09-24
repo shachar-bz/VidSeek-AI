@@ -14,7 +14,13 @@ VidSeek-AI/
 │   │       ├── get_memory_context/         # Reads one memory with the memories around it in its chapter.
 │   │       ├── get_video_info/             # Looks up the current video's metadata.
 │   │       ├── get_video_outline/          # Lists the current video's chapters without their contents.
+│   │       ├── investigate_visual/         # Answers a question about what the video shows, through the visual sub-agent.
 │   │       └── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
+│   ├── visual_agent/                       # The visual sub-agent: plans a look at the video, has frames described by an image model, answers in text.
+│   │   └── tools/                          # Pydantic AI tools the sub-agent calls; one directory per tool.
+│   │       ├── get_transcript_window/      # What was said between two times.
+│   │       ├── read_frame_text/            # On-screen text at given times, stored or read on demand.
+│   │       └── view_frames/                # Frames at given times, described by the image model.
 │   ├── schemas/                            # The Pydantic contract shared with the Chrome extension and the website.
 │   ├── core/                               # Cross-cutting foundations: config, errors, auth primitives, security.
 │   ├── storage/                            # Where a video's bytes and its records are kept.
@@ -105,7 +111,12 @@ The rules bind production code. Tests (`backend/tests/`, `frontend/tests/`,
 * `schemas/` is the contract shared with the extension and the website; it depends only on
   `core/`, imports no web framework, and reaches no database. Assembling one of its models
   out of several tables is `api/`'s work, not its own.
-* `video_agent/tools/` gets one directory per tool.
+* `video_agent/tools/` and `visual_agent/tools/` get one directory per tool.
+* `video_agent` may import `visual_agent`, never the reverse: the sub-agent is called
+  through `video_agent/tools/investigate_visual/` and knows nothing of the main agent.
+  `visual_agent` reaches the database and Blob Storage only through `services/` and
+  `storage/`, and never sends pixels to its planning model — frames go to the image model
+  in `visual_agent/image_analysis.py`, and only its words come back.
 * `frontend/src/api/` is the only place the website calls `fetch`; a page asks it for data
   rather than building a request itself. `frontend/src/api/types.ts` mirrors
   `backend/schemas/` field for field, the same way `chrome-extension/src/types.ts` does,
