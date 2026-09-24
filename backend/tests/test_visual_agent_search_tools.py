@@ -99,7 +99,7 @@ def _search_text(deps: VisualDeps, words: list[str], **window):
 # --- search_visual_moments -----------------------------------------------------------------
 
 
-def test_a_picture_match_comes_back_placed_and_becomes_citable() -> None:
+def test_a_picture_match_comes_back_placed_but_needs_a_look_before_it_is_citable() -> None:
     transcript = [{"segment_index": 3, "start_seconds": 20.0, "end_seconds": 30.0, "text": "Here is the diagram."}]
     deps = _deps(index_pool(after=[frame_scores({24.0: 0.4, 26.0: 0.42}), transcript]))
 
@@ -112,8 +112,10 @@ def test_a_picture_match_comes_back_placed_and_becomes_citable() -> None:
     assert moment.found_by == ["image"]
     assert moment.peak_z_score is not None and moment.peak_z_score > 1.5
     assert moment.transcript == "Here is the diagram."
+    assert moment.needs_look is True
     assert result.note is None
-    assert deps.spans == [(24.0, 26.0)]
+    # Resembling the query is not showing it: nothing is citable until a look.
+    assert deps.spans == []
     assert deps.budget.tool_calls_used == 1
     assert f"{MAX_TOOL_CALLS - 1} tool calls" in result.budget
 
@@ -124,7 +126,6 @@ def test_the_window_is_passed_to_the_search_and_a_start_before_the_video_moved_t
     result = _search_moments(deps, start_seconds=-5.0, end_seconds=30.0)
 
     assert [(m.start_seconds, m.end_seconds) for m in result.moments] == [(24.0, 24.0)]
-    assert deps.spans == [(24.0, 24.0)]
 
 
 def test_a_window_ending_before_it_starts_searches_nothing_and_spends_nothing() -> None:
@@ -165,7 +166,7 @@ def test_an_index_not_ready_sends_the_agent_to_the_current_moment(search: str) -
 
     assert result.moments == []
     assert "not ready (status: indexing)" in result.note
-    assert "02:10 (130.0 s)" in result.note and "view_frames" in result.note
+    assert "02:10 (130.0 s)" in result.note and "view_sequence" in result.note
     assert deps.spans == []
     assert deps.budget.tool_calls_used == 1
 
@@ -219,6 +220,7 @@ def test_the_words_found_come_back_with_their_moment_and_become_citable() -> Non
     assert (moment.start_seconds, moment.end_seconds) == (20.0, 40.0)
     assert moment.found_by == ["text_characters"]
     assert moment.matched_words == ["kafka", "partitions"]
+    assert moment.needs_look is False
     assert moment.on_screen_text == "Kafka\nPartitions"
     assert (moment.chapter, moment.peak_z_score) == ("Opening", None)
     assert deps.spans == [(20.0, 40.0)]

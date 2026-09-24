@@ -37,7 +37,7 @@ from backend.visual_agent.tools.read_frame_text import (
     covering_keyframe,
     read_frame_text,
 )
-from backend.visual_agent.tools.view_frames import ViewedFrames, view_frames
+from backend.visual_agent.tools.view_frames_closeup import CLOSEUP_LONG_SIDE, ViewedFrames, view_frames_closeup
 
 VIDEO_ID = "11111111-2222-3333-4444-555555555555"
 
@@ -191,7 +191,7 @@ def _deps(
 
 
 def _view(deps: VisualDeps, timestamps: list[float], question: str = "What is drawn?"):
-    return asyncio.run(view_frames(FakeRunContext(deps), timestamps, question))
+    return asyncio.run(view_frames_closeup(FakeRunContext(deps), timestamps, question))
 
 
 def _read_text(deps: VisualDeps, timestamps: list[float]):
@@ -202,7 +202,7 @@ def _outline_reads(pool: FakePool) -> int:
     return sum("from public.chapters" in statement for statement in pool.statements)
 
 
-# --- view_frames ------------------------------------------------------------------------
+# --- view_frames_closeup ----------------------------------------------------------------
 
 
 def test_viewing_frames_returns_what_each_one_showed_and_records_a_moment_per_frame() -> None:
@@ -220,10 +220,11 @@ def test_viewing_frames_returns_what_each_one_showed_and_records_a_moment_per_fr
     assert result.note is None
     assert deps.spans == [(130.0, 130.0), (131.5, 131.5)]
     assert (deps.budget.tool_calls_used, deps.budget.images_used) == (1, 2)
-    assert result.budget == "5 tool calls and 6 images left."
-    # Small JPEGs of this video, and the question passed on to the image model as asked.
+    assert result.budget == "7 tool calls and 4 images left."
+    # Large JPEGs of this video, and the question passed on to the image model as asked.
+    assert CLOSEUP_LONG_SIDE == 1024
     assert source.calls == [
-        {"video_id": VIDEO_ID, "times": [130.0, 131.5], "long_side": 512, "lossless": False}
+        {"video_id": VIDEO_ID, "times": [130.0, 131.5], "long_side": CLOSEUP_LONG_SIDE, "lossless": False}
     ]
     assert analyzer.calls[0][0] == "What is on the whiteboard?"
     assert [frame.time_seconds for frame in analyzer.calls[0][1]] == [130.0, 131.5]
@@ -239,16 +240,16 @@ def test_repeated_and_negative_times_are_looked_at_once_from_the_start() -> None
     assert deps.budget.images_used == 2
 
 
-def test_more_than_six_times_are_cut_to_the_first_six_and_says_so() -> None:
+def test_more_than_three_times_are_cut_to_the_first_three_and_says_so() -> None:
     source = FakeFrameSource()
     deps = _deps(frame_source=source)
 
-    result = _view(deps, [float(second) for second in range(8)])
+    result = _view(deps, [float(second) for second in range(5)])
 
-    assert source.calls[0]["times"] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
-    assert len(result.frames) == 6
-    assert "Only the first 6 times were looked at." in result.note
-    assert deps.budget.images_used == 6
+    assert source.calls[0]["times"] == [0.0, 1.0, 2.0]
+    assert len(result.frames) == 3
+    assert "Only the first 3 times were looked at." in result.note
+    assert deps.budget.images_used == 3
 
 
 def test_only_the_images_left_are_granted_and_the_note_says_so() -> None:
@@ -256,7 +257,7 @@ def test_only_the_images_left_are_granted_and_the_note_says_so() -> None:
     deps = _deps(frame_source=source)
     deps.budget.take_images(MAX_IMAGES - 2)
 
-    result = _view(deps, [10.0, 20.0, 30.0, 40.0])
+    result = _view(deps, [10.0, 20.0, 30.0])
 
     assert source.calls[0]["times"] == [10.0, 20.0]
     assert [frame.time_seconds for frame in result.frames] == [10.0, 20.0]
@@ -338,9 +339,11 @@ def test_extra_observations_are_ignored() -> None:
     assert [frame.observation for frame in result.frames] == ["Observation 1"]
 
 
-def test_after_six_calls_view_frames_does_no_work_and_says_the_budget_is_spent() -> None:
+def test_after_its_last_call_view_frames_closeup_does_no_work_and_says_the_budget_is_spent() -> None:
     source = FakeFrameSource()
     deps = _deps(frame_source=source)
+    # Enough images for every call, so it is the calls that run out.
+    deps.budget.max_images = MAX_TOOL_CALLS
 
     results = [_view(deps, [float(call)]) for call in range(MAX_TOOL_CALLS + 1)]
 
@@ -484,7 +487,7 @@ def test_without_ocr_an_uncovered_time_comes_back_unread_and_uncitable() -> None
 
     unread, stored = result.texts
     assert (unread.text, unread.source) == (None, "unread")
-    assert "OCR is not set up" in unread.note and "view_frames" in unread.note
+    assert "OCR is not set up" in unread.note and "view_frames_closeup" in unread.note
     assert stored.source == "stored"
     # Only the stored text's stretch is a moment the agent may cite.
     assert deps.spans == [(2.0, 8.0)]

@@ -46,9 +46,10 @@ async def read_frame_text(
 ) -> FrameTexts | BudgetSpent:
     """Read the text shown on screen at these times: slides, boards, code, captions.
 
-    Costs no image. Text already read when the video was indexed is returned at once, with
-    the stretch of video it is shown for; any other time is read now, which takes a few
-    seconds per frame.
+    Costs no image, and reads small print better than any look at the picture. Text already
+    read when the video was indexed is returned at once, with the stretch of video it is shown
+    for; any other time is read now, which takes a few seconds per frame. Use it for the whole
+    text when a search moment's on_screen_text was cut.
 
     Args:
         timestamps: The times to read, in seconds from the beginning of the video; at most six.
@@ -114,7 +115,7 @@ async def _read_now(deps: VisualDeps, times: list[float]) -> dict[float, FrameTe
     """The text of each frame, read now with the OCR engine; unread, with the reason, when it cannot be."""
     engine = await asyncio.to_thread(deps.ocr_engine)
     if engine is None:
-        return _unread(deps, times, "OCR is not set up on this machine; look at the frame with view_frames to read it.")
+        return _unread(deps, times, "OCR is not set up on this machine; look at the frame with view_frames_closeup to read it.")
     try:
         frames = await asyncio.to_thread(
             deps.frames().frames,

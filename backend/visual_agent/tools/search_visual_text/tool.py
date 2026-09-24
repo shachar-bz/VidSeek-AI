@@ -36,8 +36,9 @@ async def search_visual_text(
 
     Each word is matched exactly as a run of letters, ignoring case and spaces, and also
     inside longer words ("cup" finds "cupboard"). Returns up to five moments, the ones showing
-    the most different words first, each saying which words it matched. A word OCR misread is
-    not found; search_visual_moments finds on-screen text by meaning.
+    the most different words first, each saying which words it matched. The words need not be
+    the question's: a slide's title or a label near what is asked about can mark its moment.
+    A word OCR misread is not found; search_visual_moments finds on-screen text by meaning.
 
     Args:
         words: One to five words or short phrases you expect to be written on screen, in the

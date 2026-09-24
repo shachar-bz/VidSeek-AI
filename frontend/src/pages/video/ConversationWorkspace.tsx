@@ -66,6 +66,12 @@ function formatMessageTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(date);
 }
 
+/** Where the player stood when a message was sent, and whether it was paused there. */
+export interface PlayerPosition {
+  seconds: number;
+  paused: boolean;
+}
+
 /**
  * Chats are numbered rather than named by hand: the next one continues the highest
  * `Chat N` this video already has, so a renamed chat never steals a number back.
@@ -173,13 +179,13 @@ export function ConversationWorkspace({
   video,
   approximate,
   onSeek,
-  playerTime
+  playerPosition
 }: {
   video: VideoDetail;
   approximate: boolean;
   onSeek(seconds: number): void;
-  /** The player's position right now, read when a message is sent; null without a player. */
-  playerTime?(): number | null;
+  /** The player's position right now and whether it is paused, read when a message is sent; null without a player. */
+  playerPosition?(): PlayerPosition | null;
 }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -312,7 +318,7 @@ export function ConversationWorkspace({
     if (!canChat || !draft.trim() || streaming || creating) return;
     const content = draft;
     // Read before the chat is created, so the position is the one the question was asked at.
-    const currentTime = playerTime?.() ?? null;
+    const position = playerPosition?.() ?? null;
     const conversationId = selectedId ?? await createChatForFirstMessage();
     if (!conversationId) return;
     if (liveRef.current) commitLiveToHistory(liveRef.current);
@@ -328,8 +334,8 @@ export function ConversationWorkspace({
     let terminal = false;
 
     try {
-      const input: SendMessageRequest = currentTime !== null && Number.isFinite(currentTime) && currentTime >= 0
-        ? { content, current_time_seconds: currentTime }
+      const input: SendMessageRequest = position !== null && Number.isFinite(position.seconds) && position.seconds >= 0
+        ? { content, current_time_seconds: position.seconds, player_paused: position.paused }
         : { content };
       for await (const streamEvent of sendConversationMessage(conversationId, input, controller.signal)) {
         if (generationRef.current !== generation) return;

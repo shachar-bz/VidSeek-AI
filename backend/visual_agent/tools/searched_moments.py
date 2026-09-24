@@ -2,8 +2,10 @@
 
 `search_visual_moments` and `search_visual_text` return the same shape, built here from the
 search service's result (`services/visual_search/`). Every moment carries plain `start_seconds`
-and `end_seconds`, and is recorded as a span the findings check accepts: a moment a search
-returned is a moment the sub-agent may cite.
+and `end_seconds`. A moment found by its on-screen text is recorded as a span the findings check
+accepts: the text was read there, so the sub-agent may cite it. A moment found only by its
+picture is not: resembling the query is not showing it, so it is marked `needs_look` and becomes
+citable only once `view_sequence` or `view_frames_closeup` has looked at it.
 
 A search that could not run -- the index is not built yet, or was built with other models --
 returns no moments and a note telling the agent to look at the frames instead. While OCR is
@@ -16,7 +18,13 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from backend.services.video_frames import format_timestamp
-from backend.services.visual_search import INDEX_NOT_READY, INDEX_OUTDATED, VisualSearchResult
+from backend.services.visual_search import (
+    INDEX_NOT_READY,
+    INDEX_OUTDATED,
+    TEXT_CHARACTERS,
+    TEXT_MEANING,
+    VisualSearchResult,
+)
 
 from .deps import VisualDeps
 
@@ -55,6 +63,13 @@ class SearchedMoment(BaseModel):
     matched_words: list[str] = Field(
         default_factory=list, description="The words asked for that are written on screen here."
     )
+    needs_look: bool = Field(
+        default=False,
+        description=(
+            "True when only the picture matched: a lead, not proof. Look at it with view_sequence "
+            "before saying what it shows; until then it cannot be cited as a finding."
+        ),
+    )
 
 
 class SearchedMoments(BaseModel):
@@ -76,7 +91,9 @@ def searched_moments(
 
     moments = []
     for moment in result.moments:
-        deps.record_span(moment.start_seconds, moment.end_seconds)
+        needs_look = not (TEXT_MEANING in moment.found_by or TEXT_CHARACTERS in moment.found_by)
+        if not needs_look:
+            deps.record_span(moment.start_seconds, moment.end_seconds)
         moments.append(
             SearchedMoment(
                 start_seconds=moment.start_seconds,
@@ -90,6 +107,7 @@ def searched_moments(
                 transcript=moment.transcript,
                 peak_z_score=round(moment.peak_z_score, 2) if moment.peak_z_score is not None else None,
                 matched_words=list(moment.matched_words),
+                needs_look=needs_look,
             )
         )
     if not moments:
@@ -110,12 +128,12 @@ def unsearchable_note(deps: VisualDeps, result: VisualSearchResult) -> str:
         status = f" (status: {result.visual_status})" if result.visual_status else ""
         reason = f"The video's visual index is not ready{status}, so it cannot be searched."
     if deps.current_time_seconds is None:
-        instead = "Look at the frames the question points to with view_frames or read_frame_text instead."
+        instead = "Look at the frames the question points to with view_sequence or read_frame_text instead."
     else:
         instead = (
             "Look at the viewer's current moment, "
             f"{format_timestamp(deps.current_time_seconds)} ({deps.current_time_seconds:.1f} s), "
-            "with view_frames or read_frame_text instead."
+            "with view_sequence or read_frame_text instead."
         )
     return f"{reason} {instead}"
 

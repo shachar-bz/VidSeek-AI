@@ -5,7 +5,7 @@ import { allowsBrowsing, type VideoDetail, type VideoOutlineResponse, type Video
 import { getVideo, getVideoOutline, getVideoTranscript } from "../../api/video";
 import { ErrorState, LoadingState, StatusBadge, type StatusTone } from "../../components/ui";
 import { featureFailureMessage, sourceLabel } from "../shared";
-import { ConversationWorkspace } from "./ConversationWorkspace";
+import { ConversationWorkspace, type PlayerPosition } from "./ConversationWorkspace";
 import { VideoDetailsTabs } from "./OutlineInsights";
 import { VideoPlayer } from "./VideoPlayer";
 import { activeTranscriptIndex } from "./format";
@@ -43,7 +43,10 @@ export function VideoPage() {
   const activeLineIndexRef = useRef(-1);
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const rememberPlayer = useCallback((player: HTMLVideoElement | null) => { playerRef.current = player; }, []);
-  const readPlayerTime = useCallback(() => playerRef.current?.currentTime ?? null, []);
+  const readPlayerPosition = useCallback((): PlayerPosition | null => {
+    const player = playerRef.current;
+    return player ? { seconds: player.currentTime, paused: player.paused } : null;
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -118,7 +121,7 @@ export function VideoPage() {
           <VideoPlayer videoId={videoId} available={browsing} title={video.title} captionLines={transcript?.lines} captionLanguage={video.transcript_language} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
           <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
         </div>
-        <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} playerTime={readPlayerTime} />
+        <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} playerPosition={readPlayerPosition} />
       </div>
     </div>
   );

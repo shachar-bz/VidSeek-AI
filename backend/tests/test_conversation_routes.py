@@ -327,14 +327,14 @@ def test_the_players_position_reaches_the_agent_with_the_question() -> None:
         conversation_id = _create(client)
         client.post(
             f"/v1/conversations/{conversation_id}/messages",
-            json={"content": "What is this diagram?", "current_time_seconds": 312.4},
+            json={"content": "What is this diagram?", "current_time_seconds": 312.4, "player_paused": True},
         )
         client.post(
             f"/v1/conversations/{conversation_id}/messages", json={"content": "And then?"}
         )
 
-    assert runner.runs[0][2].current_time_seconds == 312.4
-    assert runner.runs[1][2].current_time_seconds is None
+    assert (runner.runs[0][2].current_time_seconds, runner.runs[0][2].player_paused) == (312.4, True)
+    assert (runner.runs[1][2].current_time_seconds, runner.runs[1][2].player_paused) == (None, None)
 
 
 def test_a_negative_player_position_is_rejected() -> None:

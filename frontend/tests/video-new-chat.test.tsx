@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConversationDetail, VideoDetail } from "../src/api/types";
-import { ConversationWorkspace } from "../src/pages/video/ConversationWorkspace";
+import { ConversationWorkspace, type PlayerPosition } from "../src/pages/video/ConversationWorkspace";
 
 const api = vi.hoisted(() => ({
   createConversation: vi.fn(),
@@ -49,11 +49,11 @@ const created: ConversationDetail = {
   messages: []
 };
 
-function renderWorkspace(playerTime?: () => number | null) {
+function renderWorkspace(playerPosition?: () => PlayerPosition | null) {
   return render(
     <MemoryRouter initialEntries={["/videos/video-1"]}>
       <Routes>
-        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} playerTime={playerTime} />} />
+        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} playerPosition={playerPosition} />} />
       </Routes>
     </MemoryRouter>
   );
@@ -102,12 +102,24 @@ describe("a new chat", () => {
   });
 
   it("sends where the player was, so 'what is this?' has a moment to point at", async () => {
-    renderWorkspace(() => 312.4);
+    renderWorkspace(() => ({ seconds: 312.4, paused: true }));
     await sendFirstMessage("What is this diagram?");
 
     expect(api.sendConversationMessage.mock.calls[0]?.[1]).toEqual({
       content: "What is this diagram?",
-      current_time_seconds: 312.4
+      current_time_seconds: 312.4,
+      player_paused: true
+    });
+  });
+
+  it("says when the player was still playing, so the moment may be a little earlier", async () => {
+    renderWorkspace(() => ({ seconds: 40, paused: false }));
+    await sendFirstMessage("What is he doing?");
+
+    expect(api.sendConversationMessage.mock.calls[0]?.[1]).toEqual({
+      content: "What is he doing?",
+      current_time_seconds: 40,
+      player_paused: false
     });
   });
 

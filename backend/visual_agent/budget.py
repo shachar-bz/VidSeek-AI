@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 
 from pydantic_ai.usage import UsageLimits
 
-MAX_TOOL_CALLS = 6
-MAX_IMAGES = 8
+MAX_TOOL_CALLS = 8
+MAX_IMAGES = 6
 
 # Calls past the soft cap that are still answered (with "budget spent") before the run is
 # stopped outright, and model requests allowed: one per round of tool calls, one for the

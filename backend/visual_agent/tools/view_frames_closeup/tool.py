@@ -1,9 +1,10 @@
-"""A Pydantic AI tool that shows frames of the video to the image model and returns what it saw.
+"""A Pydantic AI tool that shows the image model a few frames large, for a detail a grid cell is too small to show.
 
-The frames are extracted from the stored video on demand (`services/video_frames/`), in
-parallel, and sent to the image model together with the sub-agent's question. The sub-agent
-gets the model's words back, never the pixels. Each frame spends one image of the budget; the
-images of a call that fails to extract are given back.
+`view_sequence` is the agent's usual look: a whole window as one grid of small cells, for one
+image. This is the close look behind it: a few exact times, each frame extracted from the stored
+video large (`CLOSEUP_LONG_SIDE`) and sent on its own, so a diagram's boxes, a face or a small
+object can be made out. The sub-agent gets the model's words back, never the pixels. Each frame
+spends one image of the budget; the images of a call that fails to extract are given back.
 """
 
 from __future__ import annotations
@@ -23,26 +24,34 @@ from ..budget_spent import BudgetSpent
 from ..deps import VisualDeps
 from .result import ViewedFrame, ViewedFrames
 
-# The most frames one call looks at: as many as are extracted at once, and enough for an
-# action spread across a short window.
-MAX_FRAMES_PER_CALL = 6
+# A close look is at a few exact moments; scanning a stretch is view_sequence's job, and each
+# frame here costs one image of a small budget.
+MAX_FRAMES_PER_CALL = 3
+
+# How large each frame is sent: about three times a grid cell on each side, enough to make out
+# a detail, while small print is left to read_frame_text, which reads larger still.
+CLOSEUP_LONG_SIDE = 1024
 
 logger = logging.getLogger(__name__)
 
 
-async def view_frames(
+async def view_frames_closeup(
     ctx: RunContext[VisualDeps], timestamps: list[float], question: str
 ) -> ViewedFrames | BudgetSpent:
-    """Look at the frames shown at these times and say what they show, in answer to a question.
+    """Look closely at one to three frames, each shown large, and say what they show.
 
-    The only way to know what a picture shows: objects, people, where things are, what a
-    diagram means, what is happening. For an action, pass a few times spread across a short
-    window. Each frame costs one image of the budget.
+    For a detail too small to make out in a view_sequence grid: what a diagram's boxes and
+    arrows say, a face, a small object, where exactly something is. Also for the one frame the
+    viewer paused on, when that frame alone answers the question. Not for actions or for
+    finding which part of a window shows something; view_sequence does both for one image.
+    Written text is read better, and for free, by read_frame_text. Each frame costs one image.
 
     Args:
-        timestamps: The times to look at, in seconds from the beginning of the video; at most
-            six. Repeated times are looked at once.
-        question: What to look for in the frames, as a full question.
+        timestamps: The exact times to look at, in seconds from the beginning of the video; at
+            most three. Repeated times are looked at once.
+        question: What to look for, as a full question that makes sense on its own: the image
+            model sees only this question and the frames. Ask what is there ("What is on the
+            table?"), not whether what you expect is there.
 
     Returns:
         What the image model saw in each frame, in order, and its answer across them.
@@ -65,7 +74,9 @@ async def view_frames(
     if not times:
         return ViewedFrames(note=" ".join(notes) or "No times were given.", budget=deps.budget.remaining())
     try:
-        frames = await asyncio.to_thread(deps.frames().frames, deps.video_id, times)
+        frames = await asyncio.to_thread(
+            deps.frames().frames, deps.video_id, times, long_side=CLOSEUP_LONG_SIDE
+        )
     except (FrameExtractionError, VideoNotStoredError) as error:
         deps.budget.return_images(len(times))
         return ViewedFrames(note=f"The frames could not be extracted: {error}", budget=deps.budget.remaining())
