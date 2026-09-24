@@ -46,8 +46,8 @@ class VideoStorageError(RuntimeError):
     """Blob Storage would not take the video, which costs the run its result.
 
     Distinct from every other failure in the pipeline because Blob Storage is the video's
-    only home: the local copy exists to get the video transcribed and is deleted afterwards,
-    so a video that never reached the container has nowhere left to live. Raised in place of
+    only home: the local copy exists to get the video transcribed and indexed and is deleted
+    afterwards, so a video that never reached the container has nowhere left to live. Raised in place of
     whatever the storage client raised, which stays reachable as `__cause__`.
     """
 

@@ -129,9 +129,16 @@ class RenameConversationRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    """One question for the agent, answered on the response's event stream."""
+    """One question for the agent, answered on the response's event stream.
+
+    `current_time_seconds` is where the page's player was when the question was sent. It is
+    what "this", "here" and "what's on screen now" refer to, which the words alone cannot say,
+    so it travels with every message rather than being asked for. Null when the page has no
+    player position to give -- the video has not loaded, or the client is not a video page.
+    """
 
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    current_time_seconds: float | None = Field(default=None, ge=0)
 
 
 class StreamEventType(str, Enum):

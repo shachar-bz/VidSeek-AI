@@ -32,7 +32,14 @@ VidSeek-AI/
 │   │   ├── transcripts/                    # The normalized timestamped transcript every source is converted into.
 │   │   ├── embeddings/                     # Shared sentence-transformers embedding model, loaded once per process.
 │   │   │   ├── chapter_embedding/          # Embeds a video's chapters and stores the vectors.
-│   │   │   └── memory_embedding/           # Embeds a video's memories and stores the vectors.
+│   │   │   ├── memory_embedding/           # Embeds a video's memories and stores the vectors.
+│   │   │   ├── image_embedding/            # SigLIP 2: frame vectors and the text queries scored against them.
+│   │   │   └── multilingual_text_embedding/ # multilingual-e5-small, for saved frame captions and on-screen text.
+│   │   ├── visual_indexing/                # Builds one video's visual index from its local file; no database.
+│   │   │   ├── sampling/                   # The ffmpeg decode pass: one shrunken frame every two seconds.
+│   │   │   └── segments/                   # Content-change segmentation and keyframe choice.
+│   │   ├── visual_search/                  # Finds a video's moments matching a text query, placed in segment and chapter.
+│   │   ├── video_frames/                   # Frames of a stored video, extracted on demand from Blob Storage.
 │   │   ├── shot_detection/                 # Shot boundary detection services, plus the script that compares them.
 │   │   │   ├── omni/                       # Shot boundary detection on a GPU (OmniShotCut).
 │   │   │   ├── pyscenedetect/              # Shot boundary detection without a GPU.
@@ -44,7 +51,7 @@ VidSeek-AI/
 │   ├── semantic_segmentation/              # What a transcript becomes once transcription is done.
 │   │   ├── memories/                       # Stage two: a transcript divided into semantic memories by an LLM.
 │   │   └── chapters/                       # Stage three: memories grouped into higher-level chapters by an LLM.
-│   ├── download_pipeline/                  # The order one video runs through: download, store, segment, embed.
+│   ├── download_pipeline/                  # The order one video runs through: download, store, segment, embed, and visual indexing beside them.
 │   └── tests/                              # Automated backend companion tests.
 ├── chrome-extension/                       # Internal Manifest V3 video download extension.
 │   ├── public/                             # Static files copied into the extension build.
@@ -75,6 +82,8 @@ VidSeek-AI/
 * A video's journey starts at `services/video_download/jobs.py` and runs the stages in
   `download_pipeline/`.
 * The website starts at `frontend/src/main.tsx`; every URL it has is in `frontend/src/routes.ts`.
+* `VISUAL_UNDERSTANDING_PLAN.md` designs the layer that answers questions about what a video
+  shows; its ingestion half runs on a second executor in `jobs.py`.
 * `frontend/WEBSITE_FUNCTIONALITY.md` specifies what the website does,
   `backend/services/video_download/WEB_DISCOVERY.md` how authenticated pages are searched for
   video, and `OPEN_TASKS.md` the known gaps left open on purpose.
@@ -99,6 +108,11 @@ The rules bind production code. Tests (`backend/tests/`, `frontend/tests/`,
   rather than building a request itself. `frontend/src/api/types.ts` mirrors
   `backend/schemas/` field for field, the same way `chrome-extension/src/types.ts` does,
   and is the only declaration of the wire format the website is written against.
+* `services/video_frames/` is used only at query time. Visual indexing reads the local copy
+  of a video while it exists and never goes through Blob Storage; nothing reads frames back
+  from anywhere but the stored video, because no frame is ever stored.
+* `services/visual_indexing/` touches no database; `download_pipeline/visual_indexing.py`
+  stores what it builds and is the one stage that owns, and deletes, the local video file.
 * `frontend/src/components/ui/` imports nothing from the rest of the app.
 * A page never imports another page; what two pages share goes in `frontend/src/pages/`
   itself, or lower, in `auth/`, `layout/` or `components/ui/`.

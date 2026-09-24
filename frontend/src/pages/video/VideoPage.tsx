@@ -43,6 +43,7 @@ export function VideoPage() {
   const activeLineIndexRef = useRef(-1);
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const rememberPlayer = useCallback((player: HTMLVideoElement | null) => { playerRef.current = player; }, []);
+  const readPlayerTime = useCallback(() => playerRef.current?.currentTime ?? null, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -117,7 +118,7 @@ export function VideoPage() {
           <VideoPlayer videoId={videoId} available={browsing} title={video.title} captionLines={transcript?.lines} captionLanguage={video.transcript_language} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
           <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
         </div>
-        <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} />
+        <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} playerTime={readPlayerTime} />
       </div>
     </div>
   );

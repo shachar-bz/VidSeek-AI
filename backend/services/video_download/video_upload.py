@@ -4,10 +4,11 @@ The upload runs after transcription rather than straight after the download, so 
 place in the job manager owns it for all three routes — YouTube, authenticated download
 and a file Chrome fetched — instead of each pipeline growing its own copy.
 
-Blob Storage is the video's only home: the local copy made during download exists solely to
-get the video transcribed, and is deleted once it is safely in the container. A checkout
-with no storage credentials cannot give a video anywhere durable to live, so it fails the
-job instead of letting the local file quietly become the permanent copy.
+Blob Storage is the video's only home: the local copy made during download exists to get the
+video transcribed and indexed, and is deleted once visual indexing is done with it
+(`backend/download_pipeline/visual_indexing.py`), not here. A checkout with no storage
+credentials cannot give a video anywhere durable to live, so it fails the job instead of
+letting the local file quietly become the permanent copy.
 """
 
 from __future__ import annotations
@@ -37,11 +38,14 @@ def upload_job_video(
     duration_seconds: float | None,
     progress_callback,
 ) -> StoredVideo:
-    """Upload one video and its middle-frame thumbnail, then delete the local files.
+    """Upload one video and its middle-frame thumbnail, then delete the local thumbnail.
 
     The job id is the video's prefix in the container. It is what the companion has to hand
     that is unique per video; the `videos` row written afterwards is what ties this blob
     name to the page the video came from.
+
+    The local video is left where it is: visual indexing reads it next, and deletes it when
+    it is done.
     """
     storage = BlobVideoStorage()
     thumbnail_path = video_path.with_name(f"{video_path.stem}.thumbnail.jpg")
@@ -61,6 +65,5 @@ def upload_job_video(
         ),
     )
     storage.upload_thumbnail(thumbnail_path, video_blob_name=stored.name)
-    video_path.unlink(missing_ok=True)
     thumbnail_path.unlink(missing_ok=True)
     return stored

@@ -318,6 +318,36 @@ def test_both_ready_and_partial_completed_videos_are_chat_capable() -> None:
         assert runner.runs[0][2].timestamps_reliable is expected_reliable
 
 
+def test_the_players_position_reaches_the_agent_with_the_question() -> None:
+    # "What is this?" means whatever was on screen when it was asked, so the position the
+    # website sends has to arrive in the agent's deps untouched.
+    runner = FakeRunner([TextFragment("answer")])
+    app = _app(runner=runner)
+    with TestClient(app) as client:
+        conversation_id = _create(client)
+        client.post(
+            f"/v1/conversations/{conversation_id}/messages",
+            json={"content": "What is this diagram?", "current_time_seconds": 312.4},
+        )
+        client.post(
+            f"/v1/conversations/{conversation_id}/messages", json={"content": "And then?"}
+        )
+
+    assert runner.runs[0][2].current_time_seconds == 312.4
+    assert runner.runs[1][2].current_time_seconds is None
+
+
+def test_a_negative_player_position_is_rejected() -> None:
+    with TestClient(_app()) as client:
+        conversation_id = _create(client)
+        response = client.post(
+            f"/v1/conversations/{conversation_id}/messages",
+            json={"content": "What is this?", "current_time_seconds": -1},
+        )
+
+    assert response.status_code == 422
+
+
 def test_stop_persists_partial_text_and_emits_stopped() -> None:
     async def scenario() -> None:
         conversations = MemoryConversations()

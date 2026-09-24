@@ -304,6 +304,21 @@ def test_transcript_preserves_lines_and_timing_fidelity() -> None:
     ]
 
 
+def test_video_detail_reports_how_far_the_visual_index_is() -> None:
+    app = _app(videos)
+    client = TestClient(app)
+
+    app.state.library_views_store = StubViews(_row(visual_status="indexing"))
+    indexing = client.get(f"/v1/videos/{VIDEO_ID}").json()
+    app.state.library_views_store = StubViews(_row(visual_status=None))
+    unknown = client.get(f"/v1/videos/{VIDEO_ID}").json()
+
+    # A video is ready to chat about before its index is; the two are reported apart.
+    assert indexing["stage"] == ReadinessStage.READY.value
+    assert indexing["visual_status"] == "indexing"
+    assert unknown["visual_status"] is None
+
+
 def test_partial_video_exposes_the_same_insights_as_ready() -> None:
     app = _app(videos)
     app.state.library_views_store = StubViews(_row(has_timed_transcript=False))

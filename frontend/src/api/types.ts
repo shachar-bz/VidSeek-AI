@@ -183,6 +183,13 @@ export interface VideoInsights {
   suggested_questions: string[];
 }
 
+/**
+ * How far a video's visual index is. Mirrors `VisualStatus`. Separate from the readiness
+ * stage: a video is ready to chat about before its index finishes, and one whose index failed
+ * or was skipped still answers everything its transcript can.
+ */
+export type VisualStatus = "pending" | "indexing" | "ready" | "failed" | "skipped";
+
 export interface VideoDetail {
   video_id: string;
   title: string;
@@ -201,6 +208,8 @@ export interface VideoDetail {
   /** Null for every video before `ready`; not an error. */
   insights: VideoInsights | null;
   conversation_count: number;
+  /** Whether questions about what the video shows can search all of it yet. */
+  visual_status: VisualStatus | null;
 }
 
 /**
@@ -329,6 +338,11 @@ export interface RenameConversationRequest {
 
 export interface SendMessageRequest {
   content: string;
+  /**
+   * Where the player was when the question was sent: what "this" and "on screen now" refer
+   * to. Omitted when there is no player position to give.
+   */
+  current_time_seconds?: number | null;
 }
 
 // --- the answer stream -----------------------------------------------------------------

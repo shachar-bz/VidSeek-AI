@@ -24,6 +24,7 @@ import {
   type ConversationMessage,
   type ConversationSummary,
   type PinnedAnswer,
+  type SendMessageRequest,
   type VideoDetail
 } from "../../api/types";
 import { getPinnedAnswers, pinAnswer, unpinAnswer } from "../../api/video";
@@ -171,11 +172,14 @@ function MessageCard({
 export function ConversationWorkspace({
   video,
   approximate,
-  onSeek
+  onSeek,
+  playerTime
 }: {
   video: VideoDetail;
   approximate: boolean;
   onSeek(seconds: number): void;
+  /** The player's position right now, read when a message is sent; null without a player. */
+  playerTime?(): number | null;
 }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -307,6 +311,8 @@ export function ConversationWorkspace({
     event.preventDefault();
     if (!canChat || !draft.trim() || streaming || creating) return;
     const content = draft;
+    // Read before the chat is created, so the position is the one the question was asked at.
+    const currentTime = playerTime?.() ?? null;
     const conversationId = selectedId ?? await createChatForFirstMessage();
     if (!conversationId) return;
     if (liveRef.current) commitLiveToHistory(liveRef.current);
@@ -322,7 +328,10 @@ export function ConversationWorkspace({
     let terminal = false;
 
     try {
-      for await (const streamEvent of sendConversationMessage(conversationId, { content }, controller.signal)) {
+      const input: SendMessageRequest = currentTime !== null && Number.isFinite(currentTime) && currentTime >= 0
+        ? { content, current_time_seconds: currentTime }
+        : { content };
+      for await (const streamEvent of sendConversationMessage(conversationId, input, controller.signal)) {
         if (generationRef.current !== generation) return;
         const current = liveRef.current;
         if (!current) return;

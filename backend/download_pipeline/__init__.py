@@ -14,6 +14,14 @@ over.
 `run_download_pipeline` runs all five. Each stage is also importable on its own, which is
 what makes later-stage failures recoverable: those stages need only durable video artifacts,
 not anything held by the process that downloaded the video.
+
+A sixth stage branches off after `video_storage` rather than following `insights`:
+
+    video_storage -> visual_indexing (on the job manager's visual executor, in parallel)
+                     frame vectors, segments, keyframes
+
+`hand_over_for_visual_indexing` is called by the pipeline; `index_video_visually` is the
+background task the job manager runs, and the one stage that needs the local video file.
 """
 
 from .acquisition import AcquisitionRoute, acquire_video
@@ -31,6 +39,12 @@ from .result import (
 )
 from .segmentation import SegmentedVideo, segment_and_store
 from .video_storage import StorageOutcome, store_video
+from .visual_indexing import (
+    ScheduleVisualIndexing,
+    VisualIndexingOutcome,
+    hand_over_for_visual_indexing,
+    index_video_visually,
+)
 
 __all__ = [
     "CHAPTER_GROUPING_FAILED",
@@ -42,12 +56,16 @@ __all__ = [
     "EmbeddedVideo",
     "InsightGenerationOutcome",
     "ProcessedVideo",
+    "ScheduleVisualIndexing",
     "SegmentedVideo",
     "StorageOutcome",
     "VideoStorageError",
+    "VisualIndexingOutcome",
     "acquire_video",
     "embed_video",
     "generate_and_store_insights",
+    "hand_over_for_visual_indexing",
+    "index_video_visually",
     "run_download_pipeline",
     "segment_and_store",
     "store_video",

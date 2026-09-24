@@ -14,6 +14,10 @@ class ConversationDeps:
     video_id: str
     timestamps_reliable: bool = True
 
+    # Where the viewer's player was when the question was sent, in seconds; None when the
+    # page gave no position. What a deictic question ("what is this?") points at.
+    current_time_seconds: float | None = None
+
     # Shared, and deliberately mutable: the runner fills it as the agent retrieves and
     # writes, the citation check reads it to decide what the answer may claim, and the API
     # falls back to it when a run ends with no checked answer to send. All three need the

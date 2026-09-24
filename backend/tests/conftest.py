@@ -10,6 +10,11 @@ upload to a real storage container on a machine that happens to have credentials
 
 Between them, a test that passes on a bare checkout passes on a configured one, which is
 the property that makes the suite worth trusting.
+
+A third turns background visual indexing off. A job run in a test would otherwise hand its
+video to the job manager's visual executor, which loads SigLIP 2 and keeps the GPU -- and the
+test process -- busy long after the test itself has finished. A test about visual indexing
+turns it back on for itself.
 """
 
 import os
@@ -43,3 +48,9 @@ def ignore_local_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
     is inherit one nobody asked for.
     """
     monkeypatch.setattr(config, "_env_file_values", dict)
+
+
+@pytest.fixture(autouse=True)
+def visual_indexing_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No job started by a test schedules a real visual index in the background."""
+    monkeypatch.setenv("VIDSEEK_VISUAL_INDEXING", "false")
