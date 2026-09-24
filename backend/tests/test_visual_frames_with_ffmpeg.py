@@ -18,6 +18,8 @@ import pytest
 from PIL import Image
 
 from backend.services.video_frames import (
+    JPEG,
+    PNG,
     FrameExtractionError,
     build_frame_grid,
     evenly_spaced_times,
@@ -36,6 +38,8 @@ from backend.services.visual_indexing import (
 from backend.services.visual_indexing.ocr import FrameReading, TextBlock
 from backend.services.visual_indexing.sampling import decode_frame_at, sample_frames
 from backend.services.visual_indexing.segments import SCENE_CHANGE, VIDEO_START
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not on PATH")
 
@@ -116,12 +120,49 @@ def test_a_frame_is_extracted_at_the_time_asked_for_as_a_small_jpeg(red_then_blu
     red = extract_frame(str(red_then_blue), 3.0)
     blue = extract_frame(str(red_then_blue), 15.0, long_side=128)
 
-    red_image = Image.open(io.BytesIO(red.jpeg))
-    blue_image = Image.open(io.BytesIO(blue.jpeg))
+    red_image = Image.open(io.BytesIO(red.image_bytes))
+    blue_image = Image.open(io.BytesIO(blue.image_bytes))
     assert red_image.format == "JPEG" and max(red_image.size) <= 512
     assert max(blue_image.size) == 128
     assert red_image.convert("RGB").getpixel((5, 5))[0] > 200
     assert blue_image.convert("RGB").getpixel((5, 5))[2] > 200
+
+
+@needs_ffmpeg
+def test_a_lossless_frame_is_a_png_for_ocr(red_then_blue: Path) -> None:
+    frame = extract_frame(str(red_then_blue), 3.0, lossless=True)
+
+    assert frame.media_type == PNG
+    assert frame.image_bytes.startswith(PNG_SIGNATURE)
+    image = Image.open(io.BytesIO(frame.image_bytes))
+    assert image.format == "PNG"
+    assert image.convert("RGB").getpixel((5, 5))[0] > 200
+
+
+@needs_ffmpeg
+def test_a_lossless_batch_is_all_pngs_and_a_default_one_all_jpegs(red_then_blue: Path) -> None:
+    lossless = extract_frames(str(red_then_blue), [3.0, 15.0], lossless=True)
+    default = extract_frames(str(red_then_blue), [3.0, 15.0])
+
+    assert [frame.media_type for frame in lossless] == [PNG, PNG]
+    assert [frame.media_type for frame in default] == [JPEG, JPEG]
+
+
+@needs_ffmpeg
+def test_a_frame_smaller_than_the_long_side_is_never_enlarged(red_then_blue: Path) -> None:
+    # The clip is 320x180; asking for up to 2048 px must hand back the video's own size.
+    jpeg = extract_frame(str(red_then_blue), 3.0, long_side=2048)
+    png = extract_frame(str(red_then_blue), 3.0, long_side=2048, lossless=True)
+
+    assert Image.open(io.BytesIO(jpeg.image_bytes)).size == (320, 180)
+    assert Image.open(io.BytesIO(png.image_bytes)).size == (320, 180)
+
+
+@needs_ffmpeg
+def test_a_frame_larger_than_the_long_side_keeps_its_aspect_ratio(red_then_blue: Path) -> None:
+    frame = extract_frame(str(red_then_blue), 3.0, long_side=160, lossless=True)
+
+    assert Image.open(io.BytesIO(frame.image_bytes)).size == (160, 90)
 
 
 @needs_ffmpeg

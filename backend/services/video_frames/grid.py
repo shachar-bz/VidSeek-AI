@@ -58,7 +58,7 @@ def build_frame_grid(
     """
     if not frames:
         raise ValueError("A grid needs at least one frame")
-    images = [Image.open(io.BytesIO(frame.jpeg)).convert("RGB") for frame in frames]
+    images = [Image.open(io.BytesIO(frame.image_bytes)).convert("RGB") for frame in frames]
     for image in images:
         image.thumbnail((cell_long_side, cell_long_side))
     cell_width = max(image.width for image in images)

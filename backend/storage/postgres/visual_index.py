@@ -144,6 +144,22 @@ from public.video_keyframes
 where video_id = %s::uuid and ocr_engine is null
 """
 
+# Every keyframe of one video with what OCR made of it and the segment it belongs to, in time
+# order: enough to tell which keyframe's text covers a given time, and whether it was read.
+KEYFRAMES_SQL = """
+select
+    k.time_seconds,
+    k.ocr_text,
+    k.ocr_engine,
+    s.segment_index,
+    s.start_seconds as segment_start_seconds,
+    s.end_seconds as segment_end_seconds
+from public.video_keyframes k
+join public.video_visual_segments s on s.id = k.segment_id
+where k.video_id = %s::uuid
+order by k.time_seconds
+"""
+
 logger = logging.getLogger(__name__)
 
 
@@ -217,6 +233,22 @@ class StoredKeyframeText:
 
     time_seconds: float
     text: str
+
+
+@dataclass(frozen=True)
+class StoredKeyframe:
+    """One keyframe, what OCR read on it, and the segment it belongs to.
+
+    `engine` None means OCR has not read it yet; set with `text` None, it was read and shows no
+    text worth keeping.
+    """
+
+    time_seconds: float
+    text: str | None
+    engine: str | None
+    segment_index: int
+    segment_start_seconds: float
+    segment_end_seconds: float
 
 
 @dataclass(frozen=True)
@@ -396,6 +428,22 @@ class PostgresVisualIndex:
             rows = open_connection.execute(KEYFRAME_TEXTS_SQL, (video_id,)).fetchall()
         return [
             StoredKeyframeText(time_seconds=float(row["time_seconds"]), text=row["ocr_text"])
+            for row in rows
+        ]
+
+    def keyframes(self, video_id: str) -> list[StoredKeyframe]:
+        """Every keyframe of this video, read or not, in time order."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(KEYFRAMES_SQL, (video_id,)).fetchall()
+        return [
+            StoredKeyframe(
+                time_seconds=float(row["time_seconds"]),
+                text=row["ocr_text"],
+                engine=row["ocr_engine"],
+                segment_index=int(row["segment_index"]),
+                segment_start_seconds=float(row["segment_start_seconds"]),
+                segment_end_seconds=float(row["segment_end_seconds"]),
+            )
             for row in rows
         ]
 

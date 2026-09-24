@@ -2,11 +2,13 @@
 
 Status: ingestion, storage and the query-time services are implemented (branch
 `feat/visual-index-ingestion-and-search`), keyframe OCR with Surya (§3.2 step 5, branch
-`feat/visual-keyframe-ocr`), and the two search services of §5 (branch
-`feat/visual-search-tools`), none of it run on real footage yet. The insights re-run that depends
-on OCR (step 6), the visual sub-agent, its tools (including the wrappers around the two searches)
-and `investigate_visual` are not implemented yet. §12 lists where the implementation departs from
-this design and why.
+`feat/visual-keyframe-ocr`), the two search services of §5 (branch
+`feat/visual-search-tools`), and build step 1 of §9 (branch `feat/visual-sub-agent`): the visual
+sub-agent with `view_frames`, `read_frame_text` and `get_transcript_window`, and the main agent's
+`investigate_visual`. None of it has run on real footage yet. The insights re-run that depends on
+OCR (step 6), and the sub-agent tools of step 3 (`search_visual_moments`, `search_visual_text`,
+`list_segments`, `view_sequence`) are not implemented yet. §12 lists where the implementation
+departs from this design and why.
 
 ## 1. Goal
 
@@ -44,7 +46,7 @@ general footage), in English and Hebrew:
                                 ├─► content-change detection ──► segments        investigate_visual(question, current_time, range?)
                                 │                                                               │
                                 └─► keyframes (timestamps only)                                ▼
-                                               └─► OCR (if text) ─► text + e5         visual sub-agent (cheap VLM)
+                                               └─► OCR (if text) ─► text + e5         visual sub-agent (gpt-6-sol; frames → gpt-6-luna)
                                                                                      list_segments / search_visual_moments /
  after both pipelines finish: re-run insights with OCR text                          search_visual_text / read_frame_text /
                                                                                      view_frames /
@@ -158,10 +160,12 @@ version shows which videos need re-indexing after a model change.
 ### 4.2 The sub-agent
 
 * A separate Pydantic AI agent in a new package, `backend/visual_agent/`.
-* **Model:** read from env and configurable.
-  * Default: the cheapest vision-capable OpenAI model.
-  * Candidate to compare in the eval: DeepSeek `deepseek-v4-flash-vision-exp`, through Pydantic
-    AI's OpenAI-compatible provider.
+* **Two models.**
+  * The planner, **`gpt-6-sol`**, chooses the tools, reads their results and writes the answer.
+    It never receives an image.
+  * The image model, **`gpt-6-luna`**, is called by `view_frames`: it gets the frames and the
+    planner's question, and answers in text, one observation per frame plus an answer across them.
+  * DeepSeek is not used.
 * **Stateless per call.** Follow-up context lives in the main agent's history.
 * **Tools** (one directory per tool, like `video_agent/tools/`):
 
@@ -171,7 +175,7 @@ version shows which videos need re-indexing after a model change.
 | `search_visual_moments(query, range?)` | Search by what is shown and by what on-screen text means (§5.1). Up to 10 moments | No |
 | `search_visual_text(words, range?)` | Search on-screen text for up to 5 given words (§5.2). Up to 5 moments | No |
 | `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
-| `view_frames(timestamps)` | Frames, downscaled (~512 px long side) | Yes, 1 per frame |
+| `view_frames(timestamps, question)` | Frames, downscaled (~512 px long side), described by the image model | Yes, 1 per frame |
 | `view_sequence(t0, t1, n)` | n frames across a window as **one grid image**. Defaults to the segment's range and never crosses a `scene_change` boundary | Yes, 1 per grid |
 | `get_transcript_window(t0, t1)` | What was said in that window | No |
 
@@ -194,10 +198,9 @@ version shows which videos need re-indexing after a model change.
   read (SAS) URL; the frames of one tool call are extracted in parallel. There is no frame cache
   in v1. Step 1 of the build measures the latency, and a keyframe JPEG cache is added only if a
   batch of frames takes more than ~1–2 s (an isolated change inside `services/video_frames/`).
-* **How images reach the VLM:** tools return
-  `ToolReturn(return_value=..., content=[BinaryContent(...)])`, and Pydantic AI delivers the
-  image as a user message. DeepSeek accepts images only in user messages, so this must be tested
-  first.
+* **How images reach the image model:** `view_frames` sends them to `gpt-6-luna` in a request of
+  its own, as `BinaryContent` in the user message, each after a label with its position and time.
+  The planner gets back only the image model's words.
 * **Before the index is ready:** `search_visual_moments`, `search_visual_text` and
   `list_segments` reply "index not ready, use `view_frames` at current_time". `view_frames`, `read_frame_text` and
   `get_transcript_window` still work, so "what's on screen now" always does.
@@ -325,6 +328,7 @@ backend/
 │   ├── prompt.py                       # tool choice by question type, budget behaviour
 │   ├── budget.py                       # tool call and image limits
 │   ├── result.py                       # VisualInvestigation, findings
+│   ├── image_analysis.py               # gpt-6-luna: frames + question in, what they show out
 │   └── tools/                          # one directory per tool
 │       ├── list_segments/
 │       ├── search_visual_moments/
@@ -383,15 +387,14 @@ No images are stored: Blob keeps only the video, as today.
 A small eval set of **~15 real questions over 2–3 videos**, mixing lectures and general footage
 and covering every question type in §1. It is used to:
 
-* pick the VLM (OpenAI cheap vision vs DeepSeek vision-exp);
+* check the planner and image model (`gpt-6-sol`, `gpt-6-luna`) answer the question types of §1;
 * check the OCR engine (Surya vs PaddleOCR + Tesseract), with Hebrew included: accuracy and
   seconds per keyframe on the GTX 1650. With no stored frames, the comparison re-reads keyframe
   timestamps from local copies of the eval videos;
 * tune the z-score cutoffs (1.5 to start), the 0.15 picture level, the 20-keyframe fallback of
   the text-by-meaning list, and the content-change thresholds (embedding distance, phash
   distance);
-* tune the grid layout of `view_sequence`. DeepSeek's 384-token image cap may make grids
-  unreadable;
+* tune the grid layout of `view_sequence`;
 * check that segments catch real cuts and slide changes without over-splitting on motion. The
   shot-detection comparison in `services/shot_detection/results/` already lists the cuts on two
   test videos and serves as ground truth for the cuts;
@@ -406,8 +409,10 @@ Each step ships something usable. The riskiest assumption is tested first.
      `ConversationDeps`.
    * `visual_agent/` with `view_frames`, `read_frame_text` (on-demand OCR) and
      `get_transcript_window`, plus the main agent's `investigate_visual`.
-   * This already answers "what's on screen now" with no index. Test image delivery to both VLM
-     candidates here, and measure Blob seek latency to decide whether a frame cache is needed.
+   * This already answers "what's on screen now" with no index. Test image delivery to the image
+     model here, and measure Blob seek latency to decide whether a frame cache is needed.
+   * *Built (branch `feat/visual-sub-agent`) and measured (§12): images reach `gpt-6-luna`, and a
+     batch of 6 frames comes out of Blob in ~1.5 s, so no frame cache.*
 2. **Build the index.**
    * The visual executor, the local-file lifetime change and `visual_status`.
    * 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
@@ -419,8 +424,8 @@ Each step ships something usable. The riskiest assumption is tested first.
 
 ## 10. Risks to verify early
 
-1. **DeepSeek vision is experimental.** It caps each image at 384 tokens and accepts images only
-   in user messages. Verify image delivery through Pydantic AI's `ToolReturn` in step 1.
+1. **Image delivery to `gpt-6-luna`** through Pydantic AI's `BinaryContent`: *verified* (§12).
+   DeepSeek, the earlier candidate with its 384-token image cap, was dropped.
 2. **Seeking in a WebM file over HTTP can be slow** when it has no seek cues, and every frame the
    sub-agent looks at is a seek. Measure it; if it is slow, remux at Store time, and if it is
    still slow, add the keyframe JPEG cache.
@@ -518,10 +523,45 @@ machine (GTX 1650).
 * **SigLIP runs in fp32, not fp16.** On the GTX 1650 fp16 measured 2.6x slower (32 frames in
   4.8 s vs 1.8 s). Peak VRAM at batch 32 is ~1.8 GB. Indexing an hour of 1080p video costs
   ~85 s of decode and ~105 s of embedding, about 3 minutes.
-* **Frame extraction latency** (§4.2, risk 2): 6 frames from a local 1080p MP4 in 0.65 s.
-  Over a Blob SAS link it is not measured yet; `python -m backend.services.video_frames.measure_latency
-  <video_id>` measures it against a stored video.
+* **Frame extraction latency** (§4.2, risk 2): 6 frames from a local 1080p MP4 in 0.65 s. Over a
+  Blob SAS link, on a stored 21-minute WebM: one frame in 0.69 s (median), 6 in parallel in 1.51 s,
+  inside the 1-2 s the design allowed, so there is no frame cache.
+  `python -m backend.services.video_frames.measure_latency <video_id>` measures it again.
 * **`VIDSEEK_VISUAL_INDEXING=false`** turns ingestion off on a machine without a GPU; its videos
   are marked `skipped`. Videos recorded before migration 0022 are marked `skipped` with
   `ingested_before_visual_indexing`.
-
+* **The planner never sees pixels** (§4.2). The design had tools hand images to one VLM through
+  `ToolReturn`; the sub-agent now plans with `gpt-6-sol` and `view_frames` asks `gpt-6-luna`
+  about the frames in a separate request (`visual_agent/image_analysis.py`), so the planner's
+  history stays text and the two models can be chosen and priced apart. `view_frames` therefore
+  takes the question to look for, besides the times.
+* **The budget is soft first, hard behind** (§4.2). Each tool spends one of the 6 calls; past
+  them a tool does nothing and says the budget is spent, and the tool that spends the last call
+  says it was the last. `UsageLimits` stops the run two calls later, and that run answers "used
+  its whole budget" rather than failing the main agent's turn. Images are counted in deps, 8 per
+  investigation; those of a call whose frames could not be extracted are given back.
+* **A finding is checked end by end** (§4.3): each of its two ends must fall, ±1 s, inside a
+  span a tool returned (a frame looked at, a keyframe text's stretch, a transcript piece) --
+  the rule the main agent's citation check applies. So "04:12-04:30" is accepted after looking
+  at frames at both times. A finding that fails is sent back once, then dropped, keeping the
+  answer.
+* **`read_frame_text` answers from stored text by stretch** (§4.2). A time inside a read
+  keyframe's stretch (§5.3) gets that keyframe's text, at no cost; any other time -- no index,
+  OCR still reading, or the seconds between a boundary and its first keyframe -- is read now:
+  the frame is extracted from Blob as a PNG of at most 2048 px and read by the same OCR engine
+  indexing uses. Without OCR set up, those times come back unread and the planner is told to use
+  `view_frames`. The first on-demand read of a process starts the Surya worker.
+* **Frame extraction no longer enlarges** a video smaller than the size asked for, and can
+  return PNGs (`lossless`), which OCR needs.
+* **`investigate_visual` never fails the main agent's turn.** An exception in the sub-agent (the
+  model provider down, a missing key) is logged and returned as an answer saying the visual
+  investigation failed.
+* **Both models are called through the Responses API** (`OpenAIResponsesModel`), not Chat
+  Completions: `gpt-6-sol` and `gpt-6-luna` answer a Chat Completions request that carries
+  function tools with HTTP 400 while they reason, and Pydantic AI carries structured output
+  through a tool. The main conversation agent had the same failure and was moved too.
+* **Measured live** on a stored lecture: the image model describes a frame in ~4 s; "what is this
+  diagram?" at 05:00 took ~15 s through the main agent (the investigation ~9 s: one call, one
+  image), and the answer's citation passed the check. A question about what was said did not
+  call `investigate_visual`. At 512 px the image model misread a slide title ("Nan to Tetris");
+  `read_frame_text` is the tool for exact text.

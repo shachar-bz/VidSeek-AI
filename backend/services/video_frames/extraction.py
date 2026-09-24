@@ -1,4 +1,4 @@
-"""Extracts single frames from a video at given times, as small JPEGs, with ffmpeg.
+"""Extracts single frames from a video at given times, as small JPEGs (or PNGs for OCR), with ffmpeg.
 
 No frame is ever stored, so every frame the visual sub-agent looks at is extracted here, on
 demand. `source` is whatever ffmpeg can open: at query time a read-only SAS URL of the blob
@@ -30,6 +30,13 @@ FRAME_LONG_SIDE = 512
 # ffmpeg's MJPEG quality scale, 2 (best) to 31 (worst).
 JPEG_QUALITY = 4
 
+# The long side a frame is read at for OCR, the same cap indexing reads keyframes at: a
+# 512 px frame is too small to read, and enlarging adds no detail.
+READABLE_LONG_SIDE = 2048
+
+JPEG = "image/jpeg"
+PNG = "image/png"
+
 # How many frames one call extracts at once.
 MAX_PARALLEL_EXTRACTIONS = 6
 
@@ -55,10 +62,12 @@ class FrameExtractionError(RuntimeError):
 
 @dataclass(frozen=True)
 class ExtractedFrame:
-    """One frame as a JPEG, and the time it was taken at."""
+    """One frame as an image file, and the time it was taken at."""
 
     time_seconds: float
-    jpeg: bytes
+    # A JPEG unless the frame was asked for losslessly, then a PNG; `media_type` says which.
+    image_bytes: bytes
+    media_type: str = JPEG
 
 
 def extract_frame(
@@ -67,8 +76,14 @@ def extract_frame(
     *,
     long_side: int = FRAME_LONG_SIDE,
     timeout_seconds: float = EXTRACTION_TIMEOUT_SECONDS,
+    lossless: bool = False,
 ) -> ExtractedFrame:
-    """The frame shown at `time_seconds`, shrunk so its long side is at most `long_side`."""
+    """The frame shown at `time_seconds`, shrunk so its long side is at most `long_side`.
+
+    A frame already smaller than that is left at its own size. `lossless` returns a PNG
+    rather than a JPEG, for OCR: a JPEG's ringing around thin strokes is what OCR misreads.
+    """
+    encoding = ["-c:v", "png"] if lossless else ["-c:v", "mjpeg", "-q:v", str(JPEG_QUALITY)]
     command = [
         "ffmpeg",
         "-v",
@@ -83,13 +98,10 @@ def extract_frame(
         "-frames:v",
         "1",
         "-vf",
-        f"scale={long_side}:{long_side}:force_original_aspect_ratio=decrease",
+        f"scale='min(iw,{long_side})':'min(ih,{long_side})':force_original_aspect_ratio=decrease",
         "-f",
         "image2pipe",
-        "-c:v",
-        "mjpeg",
-        "-q:v",
-        str(JPEG_QUALITY),
+        *encoding,
         "pipe:1",
     ]
     try:
@@ -116,7 +128,9 @@ def extract_frame(
             f"ffmpeg could not extract the frame at {time_seconds:.1f} s: "
             f"{detail or f'exit code {completed.returncode}'}"
         )
-    return ExtractedFrame(time_seconds=time_seconds, jpeg=completed.stdout)
+    return ExtractedFrame(
+        time_seconds=time_seconds, image_bytes=completed.stdout, media_type=PNG if lossless else JPEG
+    )
 
 
 def extract_frames(
@@ -125,6 +139,7 @@ def extract_frames(
     *,
     long_side: int = FRAME_LONG_SIDE,
     max_parallel: int = MAX_PARALLEL_EXTRACTIONS,
+    lossless: bool = False,
 ) -> list[ExtractedFrame]:
     """The frames at every time in `times`, in the same order, extracted in parallel.
 
@@ -138,7 +153,12 @@ def extract_frames(
         max_workers=min(max_parallel, len(times)), thread_name_prefix="vidseek-frame"
     ) as pool:
         return list(
-            pool.map(lambda time_seconds: extract_frame(source, time_seconds, long_side=long_side), times)
+            pool.map(
+                lambda time_seconds: extract_frame(
+                    source, time_seconds, long_side=long_side, lossless=lossless
+                ),
+                times,
+            )
         )
 
 
