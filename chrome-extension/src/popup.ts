@@ -14,8 +14,9 @@ import {
   signUp,
 } from "./api";
 import {
+  LIKELY_MAIN_VIDEO_DETAIL,
   chooseDirectCandidate,
-  discoverPage,
+  describeCapturedSources,
   findVideoGroups,
   isYouTubeUrl,
   mergeDiscoveryResults,
@@ -64,6 +65,10 @@ const scanAnotherButton =
   document.querySelector<HTMLButtonElement>("#scan-another")!;
 const chatScanAnotherButton =
   document.querySelector<HTMLButtonElement>("#chat-scan-another")!;
+const actionHintElement =
+  document.querySelector<HTMLParagraphElement>("#action-hint")!;
+const checkStepsElement =
+  document.querySelector<HTMLOListElement>("#check-steps")!;
 
 const inspectViewElement = document.querySelector<HTMLElement>("#inspect-view")!;
 const processingViewElement =
@@ -320,15 +325,45 @@ function resetVideoPicker(): void {
   videoPickerElement.replaceChildren();
 }
 
+/**
+ * What the inspect screen is asking the user to do next. Each step shows only its own
+ * buttons, with one line under the main one saying what pressing it will do:
+ * - find: nothing found yet, so looking is the only thing to do;
+ * - scan: a video is ready to send to the scan;
+ * - check: an adaptive player has to be watched playing once before it can be scanned;
+ * - checking: that playback check is running, waiting for the user to play the video.
+ */
+type InspectStep = "find" | "scan" | "check" | "checking";
+
+const ACTION_HINTS: Record<InspectStep, string> = {
+  find: "",
+  scan: "Chrome asks you to let VidSeek read this site, then the scan starts.",
+  check:
+    "Chrome asks you to let VidSeek read this site, then shows a “started debugging this browser” bar while the check runs. That bar is VidSeek watching the video load, and it goes away when the check ends.",
+  checking: "VidSeek then looks at what loaded and starts the scan.",
+};
+
+function showInspectStep(step: InspectStep, hint = ACTION_HINTS[step]): void {
+  downloadButton.hidden = step !== "scan";
+  verifyButton.hidden = step !== "check";
+  stopVerifyButton.hidden = step !== "checking";
+  cancelVerifyButton.hidden = step !== "checking";
+  // Once there is a next step, looking again is the fallback, not the thing to do.
+  inspectButton.hidden = step === "checking";
+  inspectButton.textContent = step === "find" ? "Find video" : "Search again";
+  inspectButton.classList.toggle("pill--dark", step === "find");
+  inspectButton.classList.toggle("pill--light", step !== "find");
+  checkStepsElement.hidden = step !== "check" && step !== "checking";
+  checkStepsElement.dataset.progress = step === "checking" ? "playing" : "";
+  actionHintElement.textContent = hint;
+}
+
 /** Stopped, notified state for any DRM signal, whether seen at inspect time or after playback. */
 function reportDrmBlocked(reason: string): void {
   discovery = undefined;
-  downloadButton.hidden = true;
-  verifyButton.hidden = true;
-  stopVerifyButton.hidden = true;
+  showInspectStep("find");
   captureButton.hidden = true;
   cancelButton.hidden = true;
-  cancelVerifyButton.hidden = true;
   void clearVerifyState();
   void chrome.action.setBadgeBackgroundColor({ color: "#c62828" });
   void chrome.action.setBadgeText({ text: "DRM" });
@@ -356,8 +391,15 @@ function needsPlaybackVerification(discoveryValue: DiscoveryResult): boolean {
  * Applies the DRM/playback-verification gate to a discovery result and sets the popup's
  * button state accordingly. Shared by the single-video path and the video picker below, so
  * picking a specific video from several never skips the same DRM check a single video gets.
+ *
+ * `playbackVerified` marks a result that came out of a finished playback check: it was
+ * already watched playing without DRM, so asking for the check again would only send the
+ * user round the same loop.
  */
-function presentDiscovery(discoveryValue: DiscoveryResult): void {
+function presentDiscovery(
+  discoveryValue: DiscoveryResult,
+  playbackVerified = false,
+): void {
   discovery = discoveryValue;
   if (discoveryValue.drm_detected) {
     reportDrmBlocked(
@@ -365,22 +407,28 @@ function presentDiscovery(discoveryValue: DiscoveryResult): void {
     );
     return;
   }
-  if (needsPlaybackVerification(discoveryValue)) {
-    downloadButton.hidden = true;
-    verifyButton.hidden = false;
+  if (playbackVerified) {
+    showInspectStep("scan");
     setStatus(
+      "Ready to scan.",
+      "The playback check passed: this video isn't copy-protected.",
+    );
+  } else if (needsPlaybackVerification(discoveryValue)) {
+    showInspectStep("check");
+    setStatus(
+      "One more step: a quick playback check.",
       discoveryValue.media_candidates.length
-        ? "Adaptive player detected."
-        : "No direct source found yet.",
-      "Finish any ads first. Click 'Verify & play', scroll the main player into view and play it, then finish verification to rescan loaded players.",
+        ? "This site streams its video in pieces. VidSeek has to see it play once to find the full video and make sure it isn't copy-protected (DRM)."
+        : "No video file was found yet. Some players only load one once the video plays, so VidSeek has to watch it play once to find it and make sure it isn't copy-protected (DRM).",
     );
   } else {
-    verifyButton.hidden = true;
-    downloadButton.textContent = "Grant access and scan";
-    downloadButton.hidden = false;
+    showInspectStep("scan");
+    const captions = discoveryValue.caption_candidates.length;
     setStatus(
       "Video found.",
-      `${discoveryValue.media_candidates.length} media source(s), ${discoveryValue.caption_candidates.length} caption/transcript source(s)`,
+      captions
+        ? `Captions found too (${captions}), so the transcript will be quick.`
+        : "",
     );
   }
 }
@@ -389,36 +437,58 @@ function presentDiscovery(discoveryValue: DiscoveryResult): void {
 function renderVideoPicker(
   groups: VideoGroup[],
   frames: FrameDiscoveryResult[],
+  playbackVerified = false,
 ): void {
   const legend = document.createElement("legend");
   legend.textContent = "Choose a video";
   videoPickerElement.replaceChildren(legend);
 
-  for (const [index, group] of groups.entries()) {
+  const inputs = groups.map((group, index) => {
     const label = document.createElement("label");
     const input = document.createElement("input");
     input.type = "radio";
     input.name = "video-group";
     input.value = String(index);
     input.addEventListener("change", () =>
-      presentDiscovery(resolveSelectedGroup(group, frames)),
+      presentDiscovery(resolveSelectedGroup(group, frames), playbackVerified),
     );
-    label.append(input, ` ${group.label}`);
+    const text = document.createElement("span");
+    text.className = "video-choice";
+    const title = document.createElement("span");
+    title.className = "video-choice__label";
+    title.textContent = group.label;
+    text.append(title);
+    if (group.detail) {
+      const detail = document.createElement("span");
+      detail.className = "video-choice__detail";
+      detail.textContent = group.detail;
+      text.append(detail);
+    }
+    label.append(input, text);
     videoPickerElement.appendChild(label);
-  }
+    return input;
+  });
 
   videoPickerElement.hidden = false;
+  // The first choice is picked for the user, so there is always a next step to take.
+  inputs[0]!.checked = true;
+  presentDiscovery(resolveSelectedGroup(groups[0]!, frames), playbackVerified);
+  // A DRM refusal for the first choice keeps its own message; another choice may be clean.
+  if (!discovery) return;
   setStatus(
     `Found ${groups.length} videos on this page.`,
-    "Choose which one to scan below.",
+    groups.some((group) => group.detail === LIKELY_MAIN_VIDEO_DETAIL)
+      ? "The longest is usually the one you're watching, and it's picked for you. Choose another below if it isn't."
+      : "The first one is picked for you. Choose another below if it isn't the one you want.",
   );
 }
 
 async function inspectTab(): Promise<void> {
   inspectButton.disabled = true;
   discovery = undefined;
-  downloadButton.hidden = true;
+  showInspectStep("find");
   resetVideoPicker();
+  setStatus("Looking for a video on this tab…");
   try {
     const [tab] = await chrome.tabs.query({
       active: true,
@@ -444,9 +514,8 @@ async function inspectTab(): Promise<void> {
         "YouTube video found.",
         "Captions and comments are fetched by the YouTube pipeline.",
       );
-      verifyButton.hidden = true;
-      downloadButton.textContent = "Scan video";
-      downloadButton.hidden = false;
+      // YouTube is scanned without any site access, so there is no Chrome prompt to warn of.
+      showInspectStep("scan", "");
       return;
     }
 
@@ -468,10 +537,9 @@ async function inspectTab(): Promise<void> {
     // Without this a failed re-inspect leaves the previous page's discovery armed
     // behind a still-visible Download button.
     discovery = undefined;
-    downloadButton.hidden = true;
-    verifyButton.hidden = true;
+    showInspectStep("find");
     resetVideoPicker();
-    setStatus("Inspection failed", String(error));
+    setStatus("Couldn't look for a video on this tab", String(error));
   } finally {
     inspectButton.disabled = false;
   }
@@ -593,8 +661,7 @@ async function startDownload(): Promise<void> {
       videoId: job.video_id,
     };
     await writeScannedVideo(scan);
-    downloadButton.hidden = true;
-    verifyButton.hidden = true;
+    showInspectStep("find");
     resetVideoPicker();
     showScanInProgress(scan);
     renderJob(job);
@@ -659,14 +726,8 @@ async function startVerification(): Promise<void> {
     grantedOrigins = await grantSiteAccess(discovery);
     await message({ type: "START_CAPTURE", tabId: activeTabId });
     await saveVerifyState({ discovery, grantedOrigins, tabId: activeTabId });
-    verifyButton.hidden = true;
-    downloadButton.hidden = true;
-    stopVerifyButton.hidden = false;
-    cancelVerifyButton.hidden = false;
-    setStatus(
-      "Verification active.",
-      "Reload the page and press Play, then reopen this popup and click 'Finish verification'.",
-    );
+    showInspectStep("checking");
+    setStatus("Playback check running.", "Now play the video in the page.");
   } catch (error) {
     if (grantedOrigins.length) {
       await chrome.permissions
@@ -676,7 +737,7 @@ async function startVerification(): Promise<void> {
         .remove({ permissions: ["cookies"] })
         .catch(() => false);
     }
-    setStatus("Could not start verification", String(error));
+    setStatus("Couldn't start the playback check", String(error));
   } finally {
     verifyButton.disabled = false;
   }
@@ -694,8 +755,8 @@ async function finishVerification(): Promise<void> {
     });
     if (!response.ok) throw new Error(response.error);
     await clearVerifyState();
-    stopVerifyButton.hidden = true;
-    cancelVerifyButton.hidden = true;
+    // Whatever follows (a picker, the scan, or its failure) starts from a verified video.
+    showInspectStep("scan");
     if (response.drm_detected) {
       if (verifyState?.grantedOrigins.length) {
         await chrome.permissions
@@ -727,7 +788,7 @@ async function finishVerification(): Promise<void> {
         g.result.selected_media_id === verifyState.discovery.selected_media_id,
     );
     if (groups && !selected) {
-      renderVideoPicker(groups, frames);
+      renderVideoPicker(groups, frames, true);
       return;
     }
     const fresh = selected
@@ -754,20 +815,26 @@ async function finishVerification(): Promise<void> {
       !discovery.media_candidates.length &&
       !isYouTubeUrl(discovery.page_url)
     ) {
-      // Several unmatched requests could be ads or different videos. Do not pick one.
+      // Renditions of one stream are already folded together by the capture, so several
+      // requests left here are different videos (an ad and the main one, say). Offer them
+      // rather than silently picking one.
       if (response.candidates.length > 1) {
         renderVideoPicker(
-          response.candidates.map((candidate, index) => ({
-            frameId: 0,
-            label: `Captured source ${index + 1}: ${candidate.kind} (${new URL(candidate.url).hostname})`,
-            result: {
-              ...discovery!,
-              selected_media_id: undefined,
-              media_candidates: [candidate],
-              caption_candidates: [],
-            },
-          })),
+          describeCapturedSources(response.candidates).map(
+            ({ candidate, label, detail }) => ({
+              frameId: 0,
+              label,
+              detail,
+              result: {
+                ...discovery!,
+                selected_media_id: undefined,
+                media_candidates: [candidate],
+                caption_candidates: [],
+              },
+            }),
+          ),
           frames,
+          true,
         );
         return;
       }
@@ -784,23 +851,21 @@ async function finishVerification(): Promise<void> {
       !isYouTubeUrl(discovery.page_url)
     ) {
       throw new Error(
-        "No playable source was found. Scroll the player into view, play it and inspect again.",
+        "Nothing played while the check was running. Click Find video, then run the check and play the video for a few seconds before coming back.",
       );
     }
     setStatus(
-      "No DRM detected.",
-      `${response.candidates.length} media request(s) confirmed during playback. Starting the scan...`,
+      "The playback check passed.",
+      "This video isn't copy-protected. Starting the scan…",
     );
     await startDownload();
   } catch (error) {
     // The capture already detached on the background side (win or lose), so there is
     // nothing left to finish — send the user back to a fresh inspect rather than leaving
-    // a "Finish verification" button that would now do nothing.
+    // an "I played it" button that would now do nothing.
     await clearVerifyState().catch(() => undefined);
-    stopVerifyButton.hidden = true;
-    cancelVerifyButton.hidden = true;
-    inspectButton.hidden = false;
-    setStatus("Verification did not find a video", String(error));
+    showInspectStep("find");
+    setStatus("The playback check didn't find a video", String(error));
   } finally {
     stopVerifyButton.disabled = false;
   }
@@ -849,12 +914,8 @@ function showInspectView(): void {
   showView("inspect");
   discovery = undefined;
   resetVideoPicker();
-  inspectButton.hidden = false;
-  downloadButton.hidden = true;
-  verifyButton.hidden = true;
-  stopVerifyButton.hidden = true;
-  cancelVerifyButton.hidden = true;
-  setStatus("Open the page with your video, then inspect it.");
+  showInspectStep("find");
+  setStatus("Open the page with your video, then click Find video.");
 }
 
 /** The processing screen, set up for a scan that is still running. */
@@ -904,7 +965,7 @@ function renderJob(job: VideoJob): void {
     setStatus(
       job.message,
       job.status === "failed" && job.can_capture
-        ? "This player may need a capture: start it, reload or replay the video, then stop capture to retry."
+        ? "VidSeek couldn't download this player directly. Click 'Retry with a playback check', reload or replay the video in the page, then come back and click 'I played it, retry'."
         : "",
     );
     captureButton.hidden = !job.can_capture;
@@ -1023,13 +1084,8 @@ async function restoreSignedInView(): Promise<void> {
   const scan = await readScannedVideo(authSession.user.id);
   if (response.verifying) {
     showInspectView();
-    inspectButton.hidden = true;
-    stopVerifyButton.hidden = false;
-    cancelVerifyButton.hidden = false;
-    setStatus(
-      "Verification active.",
-      "Reopen this panel after pressing Play in the page, then click 'Finish verification'.",
-    );
+    showInspectStep("checking");
+    setStatus("Playback check running.", "Now play the video in the page.");
     return;
   }
   if (scan) {
@@ -1123,10 +1179,12 @@ captureButton.addEventListener("click", () => {
     captureButton.hidden = true;
     stopCaptureButton.hidden = false;
     setStatus(
-      "Capture active",
-      "Reload or replay the video, then reopen this panel and stop capture.",
+      "Playback check running.",
+      "Reload or replay the video in the page, then come back and click 'I played it, retry'.",
     );
-  })().catch((error) => setStatus("Could not start capture", String(error)));
+  })().catch((error) =>
+    setStatus("Couldn't start the playback check", String(error)),
+  );
 });
 stopCaptureButton.addEventListener("click", () => {
   stopCaptureButton.disabled = true;
@@ -1142,13 +1200,13 @@ stopCaptureButton.addEventListener("click", () => {
         return;
       }
       setStatus(
-        "Captured request submitted",
-        `${response.candidates.length} media request(s) found`,
+        "Retrying the scan with what the player loaded.",
+        "",
       );
     })
     .catch((error: unknown) => {
       capturing = false;
-      setStatus("Capture did not find a video", String(error));
+      setStatus("The playback check didn't find a video", String(error));
     })
     .finally(() => {
       stopCaptureButton.disabled = false;

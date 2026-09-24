@@ -13,6 +13,7 @@ import {
   isLicenseTraffic,
   readEmeMonitor,
 } from "./discovery";
+import { collapseHlsRenditions } from "./hls-renditions";
 import { recordScannedVideoId } from "./scanned-video";
 import type {
   BrowserCookie,
@@ -484,7 +485,13 @@ function buildCandidatesFromRequests(requests: Map<string, CapturedRequest>): {
     const order = { hls: 0, dash: 1, direct: 2 };
     return order[left.kind] - order[right.kind];
   });
-  return { candidates, cookies: [...capturedCookies.values()] };
+  const playlistBodies = new Map<string, string>();
+  for (const request of requests.values())
+    if (request.body) playlistBodies.set(request.url, request.body);
+  return {
+    candidates: collapseHlsRenditions(candidates, playlistBodies),
+    cookies: [...capturedCookies.values()],
+  };
 }
 
 /**

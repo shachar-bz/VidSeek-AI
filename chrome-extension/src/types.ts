@@ -7,6 +7,10 @@ export interface MediaCandidate {
   mime_type: string;
   source: string;
   headers?: Record<string, string>;
+  /** Read from a captured playlist, only to tell the video picker's choices apart. */
+  duration_seconds?: number;
+  /** The tallest rendition a captured master playlist offers, for the same picker. */
+  max_height?: number;
 }
 
 export interface CaptionCandidate {

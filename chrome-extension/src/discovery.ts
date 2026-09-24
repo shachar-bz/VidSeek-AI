@@ -337,7 +337,73 @@ function expandVideoFrames(
 export interface VideoGroup {
   frameId: number;
   label: string;
+  /** A second, quieter line under the label: what sets this choice apart. */
+  detail?: string;
   result: DiscoveryResult;
+}
+
+/** 754 → "12:34", 4000 → "1:06:40". */
+export function formatDuration(totalSeconds: number): string {
+  const seconds = Math.round(totalSeconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const rest = String(seconds % 60).padStart(2, "0");
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
+    : `${minutes}:${rest}`;
+}
+
+export interface CapturedSourceChoice {
+  candidate: MediaCandidate;
+  label: string;
+  detail: string;
+}
+
+// A clip this short, and this much shorter than the longest one seen, is almost never the
+// video the user came for.
+const SHORT_CLIP_SECONDS = 90;
+const SHORT_CLIP_RATIO = 3;
+
+/** The detail line of the capture most likely to be the video the user is watching. */
+export const LIKELY_MAIN_VIDEO_DETAIL = "Longest, so most likely the main video";
+
+/**
+ * Names the videos a playback check captured, longest first. A URL means nothing to the
+ * user, but a length usually does: the talk they are watching runs for minutes, the ad or
+ * sponsor intro before it for seconds.
+ */
+export function describeCapturedSources(
+  candidates: MediaCandidate[],
+): CapturedSourceChoice[] {
+  const ordered = [...candidates].sort(
+    (left, right) =>
+      (right.duration_seconds ?? -1) - (left.duration_seconds ?? -1),
+  );
+  const longest = ordered[0]?.duration_seconds;
+  const measured = ordered.filter((candidate) => candidate.duration_seconds);
+  return ordered.map((candidate, index) => {
+    const duration = candidate.duration_seconds;
+    const facts = [duration ? formatDuration(duration) : "length unknown"];
+    if (candidate.max_height) facts.push(`up to ${candidate.max_height}p`);
+    let detail = `Streamed from ${hostnameOf(candidate.url)}`;
+    if (measured.length > 1 && longest && duration) {
+      if (index === 0) detail = LIKELY_MAIN_VIDEO_DETAIL;
+      else if (
+        duration < SHORT_CLIP_SECONDS &&
+        duration * SHORT_CLIP_RATIO <= longest
+      )
+        detail = "Short clip, probably an ad or intro";
+    }
+    return { candidate, label: `Video ${index + 1} · ${facts.join(" · ")}`, detail };
+  });
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "this page";
+  }
 }
 
 function isEmptyFrameResult(result: DiscoveryResult): boolean {
@@ -358,10 +424,14 @@ function describeVideoGroup(
     return `YouTube: ${result.page_title.replace(/ - YouTube$/, "")}`;
   if (result.page_title && result.page_title !== topPageTitle)
     return result.page_title;
-  const mediaCount = `${result.media_candidates.length} media source(s)`;
-  return frameId === 0
-    ? `Main page (${mediaCount})`
-    : `Embedded player (${mediaCount})`;
+  return frameId === 0 ? "Video on this page" : "Video in an embedded player";
+}
+
+function describeVideoGroupDetail(result: DiscoveryResult): string | undefined {
+  const duration = result.media_duration_seconds;
+  return duration && Number.isFinite(duration)
+    ? `Length ${formatDuration(duration)}`
+    : undefined;
 }
 
 /**
@@ -388,6 +458,7 @@ export function findVideoGroups(
     .map((frame) => ({
       frameId: frame.frameId,
       label: describeVideoGroup(frame.result, frame.frameId, topPageTitle),
+      detail: describeVideoGroupDetail(frame.result),
       result: frame.result,
     }));
   return groups.length > 1 ? groups : undefined;

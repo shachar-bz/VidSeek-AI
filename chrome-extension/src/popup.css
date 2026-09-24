@@ -469,6 +469,61 @@ textarea {
   accent-color: var(--ink);
 }
 
+.video-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.video-choice__detail {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+/* The playback check's three steps; once it runs, the first is done and the second is now. */
+.check-steps {
+  margin: 10px 0 0;
+  padding: 0 0 0 18px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.check-steps li + li {
+  margin-top: 4px;
+}
+
+.check-steps strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.check-steps[data-progress="playing"] li:first-child {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.check-steps[data-progress="playing"] li:nth-child(2) {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Says what the main button above it does, before the user presses it. */
+.action-hint {
+  max-width: 250px;
+  margin: -2px 0 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.action-hint:empty {
+  display: none;
+}
+
 .view-actions {
   display: flex;
   flex-direction: column;
