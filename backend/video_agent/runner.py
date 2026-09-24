@@ -28,7 +28,7 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from backend.core import config
@@ -108,7 +108,9 @@ class ConversationAgentRunner(Protocol):
 def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
     """Build the production agent with its five transcript tools and its one visual tool."""
 
-    chat_model = OpenAIChatModel(
+    # The Responses API rather than Chat Completions: gpt-6-sol refuses function tools on
+    # Chat Completions while it reasons, which failed every conversation.
+    chat_model = OpenAIResponsesModel(
         model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))
     )
     agent = Agent(
