@@ -31,12 +31,20 @@ from .result import VisualInvestigation, unsupported_findings
 from .tools.deps import VisualDeps
 from .tools.get_transcript_window import get_transcript_window
 from .tools.read_frame_text import read_frame_text
+from .tools.search_visual_moments import search_visual_moments
+from .tools.search_visual_text import search_visual_text
 from .tools.view_frames import view_frames
 
 # The same key every other OpenAI call site in the backend reads (see `video_agent/runner.py`).
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 MODEL_NAME = "gpt-6-sol"
-TOOLS = (view_frames, read_frame_text, get_transcript_window)
+TOOLS = (
+    search_visual_moments,
+    search_visual_text,
+    view_frames,
+    read_frame_text,
+    get_transcript_window,
+)
 
 # Answers sent back by the findings check before unsupported findings are dropped instead.
 FINDINGS_RETRIES = 1
@@ -49,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_visual_agent(model: str = MODEL_NAME) -> Agent[VisualDeps, VisualInvestigation]:
-    """The sub-agent with its three tools and the findings check."""
+    """The sub-agent with its tools and the findings check."""
     agent = Agent(
         # The Responses API rather than Chat Completions: gpt-6-sol refuses function tools on
         # Chat Completions while it reasons.

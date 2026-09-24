@@ -3,11 +3,12 @@
 Status: ingestion, storage and the query-time services are implemented (branch
 `feat/visual-index-ingestion-and-search`), keyframe OCR with Surya (§3.2 step 5, branch
 `feat/visual-keyframe-ocr`), the two search services of §5 (branch
-`feat/visual-search-tools`), and build step 1 of §9 (branch `feat/visual-sub-agent`): the visual
+`feat/visual-search-tools`), build step 1 of §9 (branch `feat/visual-sub-agent`): the visual
 sub-agent with `view_frames`, `read_frame_text` and `get_transcript_window`, and the main agent's
-`investigate_visual`. None of it has run on real footage yet. The insights re-run that depends on
-OCR (step 6), and the sub-agent tools of step 3 (`search_visual_moments`, `search_visual_text`,
-`list_segments`, `view_sequence`) are not implemented yet. §12 lists where the implementation
+`investigate_visual`, and the two search tools of step 3 (branch
+`feat/visual-agent-search-tools`): `search_visual_moments` and `search_visual_text`. The search
+tools have not run on real footage yet. The insights re-run that depends on OCR (step 6), and the
+rest of step 3 (`list_segments`, `view_sequence`) are not implemented yet. §12 lists where the implementation
 departs from this design and why.
 
 ## 1. Goal
@@ -419,6 +420,8 @@ Each step ships something usable. The riskiest assumption is tested first.
      migrations.
 3. **Search and navigate.** `search_visual_moments` and `search_visual_text` (§5), `list_segments`
    and `view_sequence`.
+   * *The two searches are built as sub-agent tools (branch `feat/visual-agent-search-tools`);
+     `list_segments` and `view_sequence` are not.*
 4. **Enrich and evaluate.** Insights re-run with OCR text, and the eval set to set the models
    and thresholds.
 
@@ -565,3 +568,11 @@ machine (GTX 1650).
   image), and the answer's citation passed the check. A question about what was said did not
   call `investigate_visual`. At 512 px the image model misread a slide title ("Nan to Tetris");
   `read_frame_text` is the tool for exact text.
+* **The search tools spend nothing on a call that cannot search** (§5). An empty query, no
+  words, or a window that ends before it starts comes back with a note and no tool call spent;
+  a start before the video is moved to 0, blank words are dropped and words past 5 are left out
+  with a note, rather than the service's `ValueError` failing the call. Every moment a search
+  returns is recorded as a span the findings check accepts. An index that is not ready or is
+  outdated spends the call and tells the planner to look at the viewer's current moment. A
+  search that raises (an encoder that fails to load) is logged and reported as failed, like
+  `view_frames` does for the image model.
