@@ -7,6 +7,7 @@ from backend.storage.postgres import (
     NewFrameEmbedding,
     NewVisualSegment,
     PostgresVisualIndex,
+    StoredKeyframe,
 )
 from backend.tests.fake_postgres import FakePool
 
@@ -185,3 +186,43 @@ def test_keyframes_ocr_has_not_read_are_those_with_no_engine() -> None:
     assert store.unread_keyframe_count(VIDEO_ID) == 4
     assert "ocr_engine is null" in pool.statements[0]
     assert PostgresVisualIndex(pool=FakePool()).unread_keyframe_count(VIDEO_ID) == 0
+
+
+def test_every_keyframe_is_read_with_its_text_engine_and_segment_in_time_order() -> None:
+    pool = FakePool(
+        rows=[
+            {
+                "time_seconds": 0.0,
+                "ocr_text": "Agenda",
+                "ocr_engine": "surya-ocr-2",
+                "segment_index": 0,
+                "segment_start_seconds": 0.0,
+                "segment_end_seconds": 12.0,
+            },
+            {
+                "time_seconds": 12,
+                "ocr_text": None,
+                "ocr_engine": None,
+                "segment_index": "1",
+                "segment_start_seconds": 12,
+                "segment_end_seconds": 30,
+            },
+        ]
+    )
+
+    keyframes = PostgresVisualIndex(pool=pool).keyframes(VIDEO_ID)
+
+    assert keyframes == [
+        StoredKeyframe(0.0, "Agenda", "surya-ocr-2", 0, 0.0, 12.0),
+        # Not read yet: no engine, and no text either.
+        StoredKeyframe(12.0, None, None, 1, 12.0, 30.0),
+    ]
+    assert isinstance(keyframes[1].time_seconds, float)
+    assert isinstance(keyframes[1].segment_index, int)
+    assert pool.recorded[0].parameters == (VIDEO_ID,)
+    assert "join public.video_visual_segments" in pool.statements[0]
+    assert "order by k.time_seconds" in pool.statements[0]
+
+
+def test_a_video_with_no_keyframes_reads_none() -> None:
+    assert PostgresVisualIndex(pool=FakePool()).keyframes(VIDEO_ID) == []

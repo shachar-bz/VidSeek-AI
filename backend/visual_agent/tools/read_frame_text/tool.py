@@ -19,7 +19,7 @@ import asyncio
 import io
 from collections.abc import Sequence
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from pydantic_ai import RunContext
 
 from backend.services.video_frames import (
@@ -125,12 +125,17 @@ async def _read_now(deps: VisualDeps, times: list[float]) -> dict[float, FrameTe
         )
     except (FrameExtractionError, VideoNotStoredError) as error:
         return _unread(deps, times, f"The frames could not be extracted: {error}")
-    images = [Image.open(io.BytesIO(frame.image_bytes)).convert("RGB") for frame in frames]
+    try:
+        images = [Image.open(io.BytesIO(frame.image_bytes)).convert("RGB") for frame in frames]
+    except (UnidentifiedImageError, OSError) as error:
+        return _unread(deps, times, f"The extracted frames could not be decoded: {error}")
     try:
         readings = await asyncio.to_thread(engine.read, images)
     except OcrError as error:
         return _unread(deps, times, f"OCR failed: {error}")
-    found = {}
+    # An engine owes one reading per image; a time it gave none for comes back unread rather
+    # than silently missing from the answer.
+    found = _unread(deps, times[len(readings):], "OCR returned no reading for this frame.")
     for time_seconds, reading in zip(times, readings):
         text = on_screen_text(reading)
         found[time_seconds] = _frame_text(
