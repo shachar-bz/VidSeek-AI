@@ -141,11 +141,12 @@ existing `FakePool` pattern and injected encoders. At least:
 Add storage tests for each new read in `test_postgres_visual_index.py` and the transcript-segment
 tests.
 
-## Deletions: ask the user before each one
+## Deletions: approved
 
-The user asked to be **asked before anything already built is deleted**. Once the new code
-works, re-check with Grep that nothing else uses each item, then ask the user to confirm the
-list below (one question is fine). Delete only what they approve.
+The user **approved all five deletions below on 2026-09-24**; do not ask again. Once the new
+code works, re-check with Grep that nothing else uses each item. If something unexpected still
+uses one, stop and ask the user before deleting that item. Anything else already built that you
+want to delete, and that is not in this table, needs the user's approval first.
 
 | # | What | Why it is no longer needed |
 |---|---|---|
@@ -178,4 +179,4 @@ Leave migrations `0023` and `0024` as they are: databases that applied them reco
   (check with `python -c "import backend...; print(__file__)"` that it imports the worktree's code).
 * Commit in logical steps (storage reads; services and tests; deletions; docs).
 * Do not merge. Open the worktree with the `open-worktree` skill and tell the user what was
-  built, what was deleted with their approval, and anything left open.
+  built, what was deleted, and anything left open.
