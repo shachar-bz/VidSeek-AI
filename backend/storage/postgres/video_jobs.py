@@ -24,6 +24,10 @@ TABLE_NAME = "video_jobs"
 # it, fixed at creation; only what the job reports about its own progress is ever rewritten.
 UPDATABLE_COLUMNS = ("status", "phase", "progress", "message", "error_code", "video_id")
 
+# The columns stored as `uuid`. psycopg reads them back as `uuid.UUID`, while `VideoJob` and
+# the `VideoJobResponse` built from it carry them as text.
+UUID_COLUMNS = ("user_id", "video_id")
+
 DEFAULT_LIST_LIMIT = 100
 
 logger = logging.getLogger(__name__)
@@ -69,10 +73,14 @@ class StoredVideoJob:
         A column added to the table by a later migration should not break a backend that has
         not been updated for it yet.
         """
+        values = {name: row.get(name) for name in COLUMN_NAMES}
+        for name in UUID_COLUMNS:
+            if values[name] is not None:
+                values[name] = str(values[name])
         return cls(
             created_at=iso_text(row["created_at"]),
             updated_at=iso_text(row["updated_at"]),
-            job=VideoJob(**{name: row.get(name) for name in COLUMN_NAMES}),
+            job=VideoJob(**values),
         )
 
 

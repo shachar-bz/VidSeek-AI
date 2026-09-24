@@ -1,5 +1,7 @@
 """Tests for the `video_jobs` table: one companion job's live status, readable by anything."""
 
+import uuid
+
 import pytest
 
 from backend.storage.postgres import PostgresVideoJobs, StoredVideoJob, VideoJob
@@ -115,6 +117,17 @@ def test_the_job_id_is_bound_as_plain_text_rather_than_a_uuid() -> None:
     jobs.delete(JOB.id)
 
     assert "::uuid" not in pool.statements[0]
+
+
+def test_uuid_columns_read_back_as_text() -> None:
+    # psycopg returns `uuid` columns as uuid.UUID; VideoJobResponse.video_id is a str and
+    # rejected the UUID, failing every poll of a finished job this process no longer held.
+    stored = StoredVideoJob.from_row(
+        {**ROW, "user_id": uuid.UUID(USER_ID), "video_id": uuid.UUID(VIDEO_ID)}
+    )
+
+    assert stored.job.user_id == USER_ID
+    assert stored.job.video_id == VIDEO_ID
 
 
 def test_a_column_this_backend_does_not_know_about_is_ignored() -> None:
