@@ -982,7 +982,9 @@ async function resumeScan(
     return;
   }
   if (job?.video_id) await recordScannedVideoId(scan.jobId, job.video_id);
+  // Marked settled first, so drawing the finished job's steps does not settle it again.
   settledJobId = scan.jobId;
+  if (job) renderJob(job);
   await settleScan(scan, job, lastError);
 }
 

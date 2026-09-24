@@ -329,6 +329,11 @@ async function seekTo(seconds: number): Promise<void> {
 }
 
 function resizeInput(): void {
+  // Empty, the box goes back to its one-row size rather than keeping a measured height.
+  if (!inputElement.value) {
+    inputElement.style.height = "";
+    return;
+  }
   inputElement.style.height = "auto";
   inputElement.style.height = `${Math.min(inputElement.scrollHeight, 132)}px`;
 }

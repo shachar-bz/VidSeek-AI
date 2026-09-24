@@ -1,4 +1,4 @@
-# VidSeek Chrome extension
+# VidSeek AI Chrome extension
 
 Build the internal Manifest V3 extension with:
 
@@ -32,3 +32,8 @@ playback. The debugger always detaches before the popup moves on.
 for a non-DRM reason (missing headers, an unusual origin): reload or replay the video, then
 click **Stop capture and retry**. It goes through the same DRM check before retrying.
 
+Once a scan starts, the panel shows its progress until the video is ready, then opens a chat
+with the video agent — the same conversations the website shows. The scan is remembered per
+signed-in user, so closing the panel or signing out does not stop or lose it: the companion
+keeps running the job, and reopening the panel (or signing back in) returns to the progress
+screen or the chat. A cited timestamp in an answer seeks the video when its tab is active.

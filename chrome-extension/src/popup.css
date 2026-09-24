@@ -372,7 +372,7 @@ textarea {
 }
 
 .view-tagline {
-  max-width: 250px;
+  max-width: 280px;
   margin: 8px auto 0;
   color: var(--muted);
   font-size: 11px;
