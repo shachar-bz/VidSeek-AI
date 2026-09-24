@@ -1,9 +1,10 @@
 # Visual Understanding Layer — Plan
 
 Status: ingestion, storage and the query-time services are implemented (branch
-`feat/visual-index-ingestion-and-search`); OCR (§3.2 step 5), the insights re-run that depends on
-it (step 6), the visual sub-agent, its tools and `investigate_visual` are not yet. §12 lists where
-the implementation departs from this design and why.
+`feat/visual-index-ingestion-and-search`), and keyframe OCR with Surya (§3.2 step 5, branch
+`feat/visual-keyframe-ocr`), not yet run on real footage. The insights re-run that depends on OCR
+(step 6), the visual sub-agent, its tools and `investigate_visual` are not implemented yet. §12
+lists where the implementation departs from this design and why.
 
 ## 1. Goal
 
@@ -96,12 +97,22 @@ general footage), in English and Hebrew:
    embeddings, segment boundaries, and each keyframe's timestamp, OCR text and OCR embedding.
    When pixels are needed at query time, they are extracted again from the Blob video (§4.2);
    the keyframe timestamp is enough to get the same frame back.
-5. **OCR.** Each keyframe first goes through a cheap "does this frame contain text?" check,
-   since general footage has many frames without any. Frames that pass get OCR through a
-   pluggable `OcrEngine` interface:
-   * v1: **Tesseract** `eng+heb` (CPU).
-   * The candidate to compare in the eval: **Surya** (GPU, more accurate on Hebrew and messy
-     text).
+5. **OCR.** Each keyframe is decoded again from the local file at its own resolution (at most
+   2048 px; the 384 px samples are too small to read) and read through a pluggable `OcrEngine`
+   interface:
+   * v1: **Surya 2** (`surya-ocr` 0.22), Hebrew and English. Its text detector runs first, on
+     the CPU, and is the cheap "does this frame contain text?" check: a frame with no text line
+     never reaches the OCR model. Frames with text are read whole-page by Surya's ~650M VLM
+     under llama.cpp's `llama-server` on the GPU, which returns blocks in reading order with a
+     confidence each.
+   * Surya cannot share the backend's environment (it needs torch >= 2.7 and Pillow < 11), so
+     it runs in a worker process of its own environment (`VIDSEEK_OCR_PYTHON`), one JSON message
+     per line over stdin/stdout. Without that setting OCR is off and keyframes stay unread.
+   * The candidate to compare in the eval: PaddleOCR detection + Tesseract recognition for
+     Hebrew crops, the lighter pipeline weighed before Surya was chosen.
+
+   Text runs **after** the index is stored and `ready`, batch by batch, so a video is searchable
+   by its frames while its text is still being read. An OCR failure never fails the index.
 
    The OCR text is indexed two ways: **pg_trgm** for exact words, and **multilingual-e5-small**
    (384-dim) for meaning. The existing MiniLM is English-only, so it is not used for OCR text.
@@ -116,7 +127,8 @@ general footage), in English and Hebrew:
 `videos.visual_status`: `pending` → `indexing` → `ready` | `failed` | `skipped`, plus
 `visual_error` and `visual_index_version`.
 
-`visual_index_version` records the models used (SigLIP, e5, OCR engine, sampling rate).
+`visual_index_version` records the models used (SigLIP, sampling rate); the OCR engine is
+recorded per keyframe instead (§12).
 Vectors from different models can't be compared, so search refuses to mix versions, and the
 version shows which videos need re-indexing after a model change.
 
@@ -270,7 +282,7 @@ backend/
 │   ├── visual_indexing/                # NEW: builds one video's index from its local file
 │   │   ├── sampling/                   # ffmpeg 0.5 fps frame stream
 │   │   ├── segments/                   # content-change segmentation, keyframe choice
-│   │   └── ocr/                        # OcrEngine protocol; tesseract/ now, surya/ later
+│   │   └── ocr/                        # OcrEngine protocol, the text a keyframe keeps; surya/ worker
 │   ├── visual_search/                  # NEW: per-video scoring, time ranges, RRF, segment/chapter tagging
 │   ├── video_frames/                   # NEW: frame at time t from Blob, grid building
 │   ├── embeddings/
@@ -303,7 +315,7 @@ and MiniLM all stay resident in 4 GB of VRAM.
 |---|---|---|
 | `video_frame_embeddings` | ~1,800 | `video_id`, `time_seconds`, `embedding vector(768)`. B-tree on `video_id`, **no ANN index**: queries are always for one video and need every score for the per-video scoring |
 | `video_visual_segments` | ~20–300 | `video_id`, `start_seconds`, `end_seconds`, `boundary_kind` (`scene_change` / `text_change`), `chapter_id` |
-| `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_embedding vector(384)` |
+| `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_confidence`, `ocr_embedding vector(384)`, `ocr_engine` |
 | `video_frame_captions` | grows with use (0 at ingestion) | `segment_id`, `time_seconds`, `caption`, `caption_embedding vector(384)`, `model`, `created_at` |
 | `videos` (new columns) | 1 | `visual_status`, `visual_error`, `visual_index_version` |
 
@@ -315,8 +327,9 @@ A small eval set of **~15 real questions over 2–3 videos**, mixing lectures an
 and covering every question type in §1. It is used to:
 
 * pick the VLM (OpenAI cheap vision vs DeepSeek vision-exp);
-* pick the OCR engine (Tesseract vs Surya), with Hebrew included. With no stored frames, the
-  comparison re-reads keyframe timestamps from local copies of the eval videos;
+* check the OCR engine (Surya vs PaddleOCR + Tesseract), with Hebrew included: accuracy and
+  seconds per keyframe on the GTX 1650. With no stored frames, the comparison re-reads keyframe
+  timestamps from local copies of the eval videos;
 * tune the z-score cutoff, the per-model floors, and the content-change thresholds (embedding
   distance, phash distance);
 * tune the grid layout of `view_sequence`. DeepSeek's 384-token image cap may make grids
@@ -353,8 +366,10 @@ Each step ships something usable. The riskiest assumption is tested first.
 2. **Seeking in a WebM file over HTTP can be slow** when it has no seek cues, and every frame the
    sub-agent looks at is a seek. Measure it; if it is slow, remux at Store time, and if it is
    still slow, add the keyframe JPEG cache.
-3. **Tesseract may be weak on Hebrew** that isn't clean slide text, such as boards or text over
-   footage. Surya is the fallback.
+3. **Surya is built for documents.** Boards, handwriting and text over footage are less proven
+   than slides, and a VLM decode per frame with text may make OCR the slowest part of indexing
+   (minutes per hour of a slide-heavy video). Its weights are free only for research, personal
+   use and startups under $5M in funding or revenue. PaddleOCR + Tesseract is the fallback.
 4. **One frame can't show an action,** so single-frame embeddings only find candidate moments
    for "picks up the cup". `view_sequence` has to confirm them.
 5. **The segment map is thin on general footage.** Until someone asks about it, a segment of
@@ -397,11 +412,24 @@ machine (GTX 1650).
 * **Captions are keyed by `video_id` + time, not `segment_id`** (§4.4, §7). A caption is paid
   for and describes a moment; keyed by segment, a re-index would cascade-delete it. The segment
   is found by time. `end_seconds` is added for a caption of a `view_sequence` grid.
-* **No OCR columns yet** (§7). `video_keyframes` holds timestamps only; `ocr_text`,
-  `ocr_language`, `ocr_embedding` and the `pg_trgm` index arrive with the OCR engine.
-  `services/visual_search/search.py` takes the OCR lists as two more inputs to the fusion.
+* **OCR columns arrive in 0024, pg_trgm in 0023** (§7). `video_keyframes` gains `ocr_text`,
+  `ocr_language`, `ocr_confidence`, `ocr_embedding`, `ocr_engine` and a GIN trigram index;
+  `services/visual_search/search.py` fuses two more lists, `ocr_words` (trigram) and
+  `ocr_meaning` (e5). A keyframe's text stands for the stretch from it to the next keyframe of
+  its segment, or the segment's end.
+* **The OCR engine is recorded per keyframe, not in `visual_index_version`** (§3.3). The frame
+  vectors do not depend on it, so turning OCR on or off, or changing engine, must not make an
+  index unsearchable. `ocr_engine` null means unread; set with `ocr_text` null, read and blank.
+* **OCR runs after the index is `ready`,** not before, and stores each batch as it is read.
+  Readings the engine was less than 0.5 sure of are dropped block by block, and the language is
+  decided by script (`he`, `en`, `mixed`, `other`). The e5 floor and margin for on-screen text
+  start at the saved captions' values (0.8, 0.05), and the trigram floor at 0.5; the eval tunes
+  them.
+* **Surya's worker is tuned for the 4 GB card:** llama.cpp rather than vLLM (which needs Docker
+  and claims most of the GPU), two parallel slots, the text detector on the CPU. Starting it the
+  first time downloads the models; after that one worker serves every video of the process.
 * **`embeddings/multilingual_text_embedding/`** instead of `ocr_text_embedding/` (§6): the same
-  e5-small model embeds saved captions now and OCR text later. Saving captions is
+  e5-small model embeds saved captions and OCR text. Saving captions is
   `services/frame_captions.py:save_frame_captions`, for `investigate_visual` to call.
 * **A text change must be stable** (§3.2 step 3). On moving footage the pHash of consecutive
   samples differs by 20-30 of 64 bits while the embedding moves ~0.015, so a hash change counts
