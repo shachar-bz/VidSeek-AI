@@ -16,10 +16,12 @@ VidSeek-AI/
 │   │       ├── get_video_outline/          # Lists the current video's chapters without their contents.
 │   │       ├── investigate_visual/         # Answers a question about what the video shows, through the visual sub-agent.
 │   │       └── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
-│   ├── visual_agent/                       # The visual sub-agent: plans a look at the video, has frames described by an image model, answers in text.
+│   ├── visual_agent/                       # The visual sub-agent: searches the visual index, plans a look at the video, has frames described by an image model, answers in text.
 │   │   └── tools/                          # Pydantic AI tools the sub-agent calls; one directory per tool.
 │   │       ├── get_transcript_window/      # What was said between two times.
 │   │       ├── read_frame_text/            # On-screen text at given times, stored or read on demand.
+│   │       ├── search_visual_moments/      # Moments showing what a query describes, through services/visual_search/.
+│   │       ├── search_visual_text/         # Moments whose on-screen text contains given words, through services/visual_search/.
 │   │       └── view_frames/                # Frames at given times, described by the image model.
 │   ├── schemas/                            # The Pydantic contract shared with the Chrome extension and the website.
 │   ├── core/                               # Cross-cutting foundations: config, errors, auth primitives, security.
