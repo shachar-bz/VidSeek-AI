@@ -141,7 +141,7 @@ def test_the_sub_agent_refuses_to_build_without_the_project_api_key(monkeypatch)
         runner.build_visual_agent()
 
 
-def test_the_planner_gets_the_three_tools_its_instructions_and_the_viewer_s_position(visual_agent) -> None:
+def test_the_planner_gets_its_tools_its_instructions_and_the_viewer_s_position(visual_agent) -> None:
     seen: dict = {}
 
     def model(messages, info: AgentInfo):
@@ -152,7 +152,13 @@ def test_the_planner_gets_the_three_tools_its_instructions_and_the_viewer_s_posi
 
     _investigate(visual_agent, model, _deps(), start_seconds=120.0, end_seconds=None)
 
-    assert seen["tools"] == ["get_transcript_window", "read_frame_text", "view_frames"]
+    assert seen["tools"] == [
+        "get_transcript_window",
+        "read_frame_text",
+        "search_visual_moments",
+        "search_visual_text",
+        "view_frames",
+    ]
     assert "You investigate what is shown in one video" in seen["instructions"]
     assert f"Question: {QUESTION}" in seen["prompt"]
     assert "02:10" in seen["prompt"]
