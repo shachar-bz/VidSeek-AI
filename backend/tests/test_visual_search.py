@@ -21,7 +21,6 @@ from backend.services.visual_search import (
     TRANSCRIPT_CHARACTERS,
     merge_into_ranges,
     normalized,
-    reciprocal_rank_fusion,
     search_visual_moments,
     search_visual_text,
     standout_frames,
@@ -622,13 +621,3 @@ def test_words_that_cannot_be_searched_for_are_refused(words) -> None:
 
     assert pool.recorded == []
 
-
-# --- rank fusion (removed with the redesign's deletions) -----------------------------------
-
-
-def test_rank_fusion_rewards_agreement_and_lets_ties_share_a_rank() -> None:
-    fused = reciprocal_rank_fusion({"image": {"a": 1, "b": 2}, "transcript": {"b": 1, "c": 1}})
-
-    assert [item.key for item in fused] == ["b", "a", "c"]
-    with pytest.raises(ValueError):
-        reciprocal_rank_fusion({"image": {"a": 0}})

@@ -24,7 +24,6 @@ from .memory_embeddings import (
     MemoryEmbedding,
     MemoryForEmbedding,
     MemoryMatch,
-    MemorySimilarity,
     PostgresMemoryEmbeddings,
 )
 from .library_views import LibraryViewRow, PostgresLibraryViews
@@ -61,7 +60,6 @@ __all__ = [
     "MemoryEmbedding",
     "MemoryForEmbedding",
     "MemoryMatch",
-    "MemorySimilarity",
     "LibraryViewRow",
     "NewChapter",
     "NewFrameEmbedding",

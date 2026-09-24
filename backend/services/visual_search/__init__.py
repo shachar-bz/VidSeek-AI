@@ -4,7 +4,6 @@
 means; `search_visual_text` finds given words written on screen. Neither needs an agent to run.
 """
 
-from .fusion import FusedItem, reciprocal_rank_fusion
 from .moment_search import DEFAULT_SETTINGS, MomentSearchSettings, join_lists, search_visual_moments
 from .moments import (
     IMAGE,
@@ -42,7 +41,6 @@ __all__ = [
     "TEXT_CHARACTERS",
     "TEXT_MEANING",
     "TRANSCRIPT_CHARACTERS",
-    "FusedItem",
     "HitRange",
     "MomentSearchSettings",
     "StandoutFrame",
@@ -54,7 +52,6 @@ __all__ = [
     "load_video_map",
     "merge_into_ranges",
     "normalized",
-    "reciprocal_rank_fusion",
     "search_visual_moments",
     "search_visual_text",
     "standout_frames",

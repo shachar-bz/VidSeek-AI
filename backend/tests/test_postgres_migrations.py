@@ -109,6 +109,10 @@ def test_a_table_is_never_created_before_the_extension_it_needs() -> None:
     # Keyframe text goes onto the keyframes 0022 creates, indexed with the extension 0023 does.
     assert names.index("0022_video_visual_index.sql") < names.index("0024_keyframe_on_screen_text.sql")
     assert names.index("0023_trigram_extension.sql") < names.index("0024_keyframe_on_screen_text.sql")
+    # The trigram index and its extension are dropped only after they were created.
+    assert names.index("0024_keyframe_on_screen_text.sql") < names.index(
+        "0026_drop_keyframe_text_trigram_index.sql"
+    )
 
 
 def test_a_fresh_database_has_every_migration_pending() -> None:
@@ -211,3 +215,15 @@ def test_the_command_line_closes_the_pool_even_when_a_migration_fails(
 
     assert migrate.main([]) == 1
     assert pool.closed is True
+
+
+def test_the_trigram_index_goes_before_the_extension_it_is_built_with() -> None:
+    [path] = [path for path in migration_files() if path.name.startswith("0026_")]
+    statements = [
+        line for line in path.read_text(encoding="utf-8").splitlines() if line and not line.startswith("--")
+    ]
+
+    assert statements == [
+        "drop index if exists public.video_keyframes_ocr_text_trgm_idx;",
+        "drop extension if exists pg_trgm;",
+    ]

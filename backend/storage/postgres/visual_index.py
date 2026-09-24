@@ -117,17 +117,6 @@ from public.video_keyframes
 where video_id = %s::uuid and ocr_text is not null
 """
 
-# How well the query's words appear somewhere in each keyframe's text: `word_similarity` scores
-# the best-matching stretch of the text, so a two-word query is not diluted by a slide full of
-# other words, and a misread letter or two still leaves most trigrams in common.
-KEYFRAME_TEXT_WORD_MATCHES_SQL = """
-select time_seconds, ocr_text, word_similarity(%s, ocr_text) as similarity
-from public.video_keyframes
-where video_id = %s::uuid and ocr_text is not null
-order by similarity desc, time_seconds
-limit %s
-"""
-
 # Every keyframe's text scored by meaning against a query vector, closest first. No limit: a
 # hit is a text that stands out from all of its video's scores, which the nearest few cannot
 # show.
@@ -400,16 +389,6 @@ class PostgresVisualIndex:
         with connection(self._pool) as open_connection:
             row = open_connection.execute(KEYFRAME_TEXT_COUNT_SQL, (video_id,)).fetchone()
         return int(row["text_count"]) if row else 0
-
-    def keyframe_text_word_matches(
-        self, video_id: str, query: str, limit: int
-    ) -> list[KeyframeTextMatch]:
-        """The keyframes whose text contains the query's words most closely, best first."""
-        with connection(self._pool) as open_connection:
-            rows = open_connection.execute(
-                KEYFRAME_TEXT_WORD_MATCHES_SQL, (query, video_id, limit)
-            ).fetchall()
-        return [_keyframe_text_match(row) for row in rows]
 
     def keyframe_texts(self, video_id: str) -> list[StoredKeyframeText]:
         """Every keyframe of this video that shows text, in time order."""
