@@ -157,7 +157,7 @@ version shows which videos need re-indexing after a model change.
 
 | Tool | What it does | Costs an image? |
 |---|---|---|
-| `list_segments(t0, t1)` | Text-only map: each segment's start/end, `boundary_kind`, chapter, OCR snippet, transcript snippet, and saved frame captions (§4.4) | No |
+| `list_segments(t0, t1)` | Text-only map: each segment's start/end, `boundary_kind`, chapter, OCR snippet and transcript snippet | No |
 | `search_visual_moments(query, range?)` | Hybrid search (§5). Returns time ranges, each with the segment it falls in | No |
 | `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
 | `view_frames(timestamps)` | Frames, downscaled (~512 px long side) | Yes, 1 per frame |
@@ -170,11 +170,10 @@ version shows which videos need re-indexing after a model change.
   * actions → `view_sequence`.
 
   Metadata first, pixels last. The stored metadata (embeddings, OCR text, segment boundaries,
-  transcript, saved captions) answers text questions and most "when does Y appear" questions by
-  itself. The image embedding is only a vector for similarity search and says nothing an LLM can
-  read about what is in the frame. So for what a frame *shows* (objects, where things are, what
-  a diagram means, actions), the sub-agent looks at the frame, unless a saved caption (§4.4)
-  already answers it.
+  transcript) answers text questions and most "when does Y appear" questions by itself. The
+  image embedding is only a vector for similarity search and says nothing an LLM can read about
+  what is in the frame. So for what a frame *shows* (objects, where things are, what a diagram
+  means, actions), the sub-agent looks at the frame.
 * **Budget per investigation:** at most **6 tool calls** and at most **8 images** (a grid counts
   as one).
   * Enforced by Pydantic AI `UsageLimits` plus an image counter in deps.
@@ -197,8 +196,7 @@ version shows which videos need re-indexing after a model change.
 ```
 VisualInvestigation {
   answer: str
-  findings: [{ start_seconds, end_seconds, chapter, observation, evidence: ocr | image | transcript | caption }]
-  frame_captions: [{ time_seconds, caption }]   # saved (§4.4), stripped before the main agent sees the result
+  findings: [{ start_seconds, end_seconds, chapter, observation, evidence: ocr | image | transcript }]
 }
 ```
 
@@ -211,28 +209,6 @@ VisualInvestigation {
 * **"Where is X when Y appears"** is answered as a place in the scene, plus the segment range and
   the chapter it falls in, e.g. "on the kitchen table — 04:12–04:30, chapter 'Preparing the
   sauce'". No bounding boxes.
-
-### 4.4 Saved captions: pay for pixels at most once
-
-No image is ever stored. When the sub-agent has to see pixels, the frame is extracted on
-demand. Whatever it learned from them is kept as metadata, so the next question about that
-part of the video reads text instead of pixels.
-
-* **What is saved.** For every frame it viewed (`view_frames`) or grid (`view_sequence`), the
-  sub-agent writes a short **general** caption in `frame_captions`: what is visible, where things
-  are, what is happening. It is not an answer to the current question, because a caption biased
-  toward one question is useless for the next. This costs only output tokens: no extra call and
-  no extra image.
-* **Where it goes.** After the run, `investigate_visual` stores each caption against its segment
-  and timestamp, with the VLM model name, and embeds it with multilingual-e5-small.
-* **How it is used.**
-  * `list_segments` shows the saved captions, so the map gets richer the more a video is asked
-    about. This softens the "thin map on general footage" risk (§10).
-  * `search_visual_moments` includes caption hits in the rank fusion (§5).
-  * The prompt tells the sub-agent to use a saved caption that answers the question before
-    looking at pixels again.
-* **Cost model.** Each part of a video is paid for at most once, and only if someone asks about
-  it. Captioning every segment at ingestion stays out of scope for v1.
 
 ## 5. Search and score thresholds
 
@@ -248,8 +224,8 @@ things in each list. Instead:
    returning the least-bad frames. Without this the sub-agent tends to invent a match.
 3. **Hits become time ranges.** Consecutive hit samples merge into ranges ("03:10–03:24,
    12:40–12:44"). Each range is tagged with the segment and chapter it falls in.
-4. **Combine by rank.** Image-embedding hits, OCR trigram hits, OCR e5 hits, saved-caption e5
-   hits (§4.4) and transcript hits are combined with **reciprocal rank fusion**. It uses only rank, so the lists' different score
+4. **Combine by rank.** Image-embedding hits, OCR trigram hits, OCR e5 hits and transcript hits
+   are combined with **reciprocal rank fusion**. It uses only rank, so the lists' different score
    scales never have to be compared.
 5. **A low floor per model** drops obvious junk. It is tuned on the eval set to favour catching
    matches, not precision: the sub-agent's look is the real acceptance step.
@@ -316,7 +292,6 @@ and MiniLM all stay resident in 4 GB of VRAM.
 | `video_frame_embeddings` | ~1,800 | `video_id`, `time_seconds`, `embedding vector(768)`. B-tree on `video_id`, **no ANN index**: queries are always for one video and need every score for the per-video scoring |
 | `video_visual_segments` | ~20–300 | `video_id`, `start_seconds`, `end_seconds`, `boundary_kind` (`scene_change` / `text_change`), `chapter_id` |
 | `video_keyframes` | ~100–300 | `segment_id`, `time_seconds`, `ocr_text` (GIN trigram index), `ocr_language`, `ocr_confidence`, `ocr_embedding vector(384)`, `ocr_engine` |
-| `video_frame_captions` | grows with use (0 at ingestion) | `segment_id`, `time_seconds`, `caption`, `caption_embedding vector(384)`, `model`, `created_at` |
 | `videos` (new columns) | 1 | `visual_status`, `visual_error`, `visual_index_version` |
 
 No images are stored: Blob keeps only the video, as today.
@@ -354,8 +329,7 @@ Each step ships something usable. The riskiest assumption is tested first.
    * The visual executor, the local-file lifetime change and `visual_status`.
    * 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
      migrations.
-3. **Search and navigate.** `search_visual_moments` (§5), `list_segments`, `view_sequence`, and
-   saved captions (§4.4).
+3. **Search and navigate.** `search_visual_moments` (§5), `list_segments` and `view_sequence`.
 4. **Enrich and evaluate.** Insights re-run with OCR text, and the eval set to set the models
    and thresholds.
 
@@ -372,14 +346,10 @@ Each step ships something usable. The riskiest assumption is tested first.
    use and startups under $5M in funding or revenue. PaddleOCR + Tesseract is the fallback.
 4. **One frame can't show an action,** so single-frame embeddings only find candidate moments
    for "picks up the cup". `view_sequence` has to confirm them.
-5. **The segment map is thin on general footage.** Until someone asks about it, a segment of
-   footage with no speech or text carries little besides its times. Saved captions (§4.4) fill
-   the map in as the video is used. If the eval shows the sub-agent still spending images on the
-   wrong segments of fresh videos, caption segments at ingestion (v2).
-6. **Saved captions can be wrong or incomplete.** A later question may trust a caption that
-   missed a detail. The sub-agent treats a caption as a lead and looks at the pixels when the
-   answer depends on a detail the caption doesn't state.
-7. **Segmentation without a shot detector can be off.** On general footage, a camera pan or a
+5. **The segment map is thin on general footage.** A segment of footage with no speech or text
+   carries little besides its times. If the eval shows the sub-agent spending images on the
+   wrong segments, caption segments at ingestion (v2).
+6. **Segmentation without a shot detector can be off.** On general footage, a camera pan or a
    person crossing the frame may still split a segment, and two similar-looking shots in a row
    may merge. The 2-sample and ~6 s rules limit this. The eval checks it against the known cuts;
    if it fails, TransNetV2 comes back for the boundaries only.
@@ -389,8 +359,10 @@ Each step ships something usable. The riskiest assumption is tested first.
 * Exact positions in the frame (bounding boxes) and grouping segments into scenes.
 * Thumbnails next to visual citations in the website (v1 keeps today's clickable timestamps).
 * Backfilling videos ingested before this ships.
-* VLM captions for every segment at ingestion (v1 saves captions only when a frame is viewed,
-  §4.4).
+* VLM captions of frames, whether for every segment at ingestion or saved from what the
+  sub-agent viewed so a moment's pixels are paid for once. The saved kind was designed and then
+  removed before the sub-agent existed (migration 0025 drops its table); bring it back if the
+  eval shows the sub-agent paying again and again to look at the same moments.
 * Chapters or memories that use visual signals (only insights are enriched).
 * Moving transcript and memory search from MiniLM (English-only) to a multilingual model.
 * Shot detection (TransNetV2). It was dropped for the time it takes (~5 min of GPU per hour of
@@ -409,9 +381,6 @@ machine (GTX 1650).
   transcript stages, so the chapters usually do not exist when segments are written, and a
   chapter's times change when the transcript is re-segmented. The chapter is read by time
   instead (`services/visual_search/video_map.py`).
-* **Captions are keyed by `video_id` + time, not `segment_id`** (§4.4, §7). A caption is paid
-  for and describes a moment; keyed by segment, a re-index would cascade-delete it. The segment
-  is found by time. `end_seconds` is added for a caption of a `view_sequence` grid.
 * **OCR columns arrive in 0024, pg_trgm in 0023** (§7). `video_keyframes` gains `ocr_text`,
   `ocr_language`, `ocr_confidence`, `ocr_embedding`, `ocr_engine` and a GIN trigram index;
   `services/visual_search/search.py` fuses two more lists, `ocr_words` (trigram) and
@@ -423,14 +392,13 @@ machine (GTX 1650).
 * **OCR runs after the index is `ready`,** not before, and stores each batch as it is read.
   Readings the engine was less than 0.5 sure of are dropped block by block, and the language is
   decided by script (`he`, `en`, `mixed`, `other`). The e5 floor and margin for on-screen text
-  start at the saved captions' values (0.8, 0.05), and the trigram floor at 0.5; the eval tunes
+  start at 0.8 and 0.05 (see the e5 note below), and the trigram floor at 0.5; the eval tunes
   them.
 * **Surya's worker is tuned for the 4 GB card:** llama.cpp rather than vLLM (which needs Docker
   and claims most of the GPU), two parallel slots, the text detector on the CPU. Starting it the
   first time downloads the models; after that one worker serves every video of the process.
-* **`embeddings/multilingual_text_embedding/`** instead of `ocr_text_embedding/` (§6): the same
-  e5-small model embeds saved captions and OCR text. Saving captions is
-  `services/frame_captions.py:save_frame_captions`, for `investigate_visual` to call.
+* **`embeddings/multilingual_text_embedding/`** instead of `ocr_text_embedding/` (§6): a name for
+  the model rather than for one use of it.
 * **A text change must be stable** (§3.2 step 3). On moving footage the pHash of consecutive
   samples differs by 20-30 of 64 bits while the embedding moves ~0.015, so a hash change counts
   only when the new picture then holds still across the confirming samples (≤ 6 bits), the way a
@@ -444,12 +412,12 @@ machine (GTX 1650).
   (0.08) drops those. Something on screen the whole time ("a padel court", 0.18 in every frame)
   stands out nowhere, so a frame at or above 0.15 is a hit whatever its z-score. Hebrew queries
   score lower than English ones (the same court: 0.11); the eval should tune both levels.
-* **Saved captions are matched against the best one, not only a floor.** e5-small's scores
-  bunch up: for the same queries, right captions scored 0.81-0.94 and wrong ones up to 0.815,
-  so a caption must clear 0.8 *and* be within 0.05 of the query's best caption. A Hebrew
-  question against an English caption scores low (0.75 for "איפה הכוס" against the cup's
-  caption); writing captions in the video's language, or both, is worth checking in the eval.
-* **Fusion is per segment.** Frames, captions and memories have different granularities, so
+* **On-screen text by meaning is matched against the best one, not only a floor.** e5-small's
+  scores bunch up: for the same queries, right short descriptions of frames scored 0.81-0.94
+  and wrong ones up to 0.815, so text must clear 0.8 *and* be within 0.05 of the query's best
+  match. A Hebrew question against English text scores low (0.75 for "איפה הכוס" against an
+  English description of the cup), which is worth checking in the eval.
+* **Fusion is per segment.** Frames, on-screen text and memories have different granularities, so
   each list ranks segments; a moment is one segment with the precise ranges that matched in it.
 * **SigLIP runs in fp32, not fp16.** On the GTX 1650 fp16 measured 2.6x slower (32 frames in
   4.8 s vs 1.8 s). Peak VRAM at batch 32 is ~1.8 GB. Indexing an hour of 1080p video costs
