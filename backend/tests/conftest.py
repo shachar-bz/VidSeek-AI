@@ -14,7 +14,8 @@ the property that makes the suite worth trusting.
 A third turns background visual indexing off. A job run in a test would otherwise hand its
 video to the job manager's visual executor, which loads SigLIP 2 and keeps the GPU -- and the
 test process -- busy long after the test itself has finished. A test about visual indexing
-turns it back on for itself.
+turns it back on for itself. A fourth keeps OCR unconfigured for the same reason: a machine
+whose environment points at a Surya install would otherwise start its worker from a test.
 """
 
 import os
@@ -54,3 +55,9 @@ def ignore_local_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
 def visual_indexing_off(monkeypatch: pytest.MonkeyPatch) -> None:
     """No job started by a test schedules a real visual index in the background."""
     monkeypatch.setenv("VIDSEEK_VISUAL_INDEXING", "false")
+
+
+@pytest.fixture(autouse=True)
+def ocr_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test starts a real Surya worker; a test about OCR hands in an engine of its own."""
+    monkeypatch.delenv("VIDSEEK_OCR_PYTHON", raising=False)

@@ -125,8 +125,13 @@ def test_a_recorded_video_is_indexed_on_the_visual_executor_which_owns_its_file(
     monkeypatch.setenv("VIDSEEK_VISUAL_INDEXING", "true")
     seen = {}
 
-    def index(video_id, local_path, *, stop_event):
-        seen.update(thread=threading.current_thread().name, video_id=video_id, existed=local_path.exists())
+    def index(video_id, local_path, *, stop_event, ocr_engine):
+        seen.update(
+            thread=threading.current_thread().name,
+            video_id=video_id,
+            existed=local_path.exists(),
+            ocr_engine=ocr_engine,
+        )
         local_path.unlink()
 
     manager = JobManager(tmp_path)
@@ -142,6 +147,8 @@ def test_a_recorded_video_is_indexed_on_the_visual_executor_which_owns_its_file(
     # The upload no longer deletes the file; the visual task is the one reading it.
     assert seen["existed"] is True
     assert not video_path.exists()
+    # No OCR environment is configured in the suite, so the task is told to leave text unread.
+    assert seen["ocr_engine"] is None
 
 
 def test_with_visual_indexing_off_nothing_is_scheduled_and_the_file_goes(
@@ -166,7 +173,7 @@ def test_a_task_the_manager_shut_down_before_running_still_deletes_its_file(tmp_
     started = threading.Event()
     release = threading.Event()
 
-    def occupy_the_worker(video_id, local_path, *, stop_event):
+    def occupy_the_worker(video_id, local_path, *, stop_event, ocr_engine):
         started.set()
         release.wait(timeout=10)
 

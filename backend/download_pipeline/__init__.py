@@ -18,7 +18,7 @@ not anything held by the process that downloaded the video.
 A sixth stage branches off after `video_storage` rather than following `insights`:
 
     video_storage -> visual_indexing (on the job manager's visual executor, in parallel)
-                     frame vectors, segments, keyframes
+                     frame vectors, segments, keyframes, then the keyframes' on-screen text
 
 `hand_over_for_visual_indexing` is called by the pipeline; `index_video_visually` is the
 background task the job manager runs, and the one stage that needs the local video file.

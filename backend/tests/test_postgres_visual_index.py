@@ -3,6 +3,7 @@
 import pytest
 
 from backend.storage.postgres import (
+    KeyframeText,
     NewFrameCaption,
     NewFrameEmbedding,
     NewVisualSegment,
@@ -170,3 +171,52 @@ def test_memory_similarities_carry_the_score_the_search_floors_on() -> None:
         ("m1", 30.0, 55.0, 0.42)
     ]
     assert pool.recorded[0].parameters == ([0.1], VIDEO_ID, [0.1], 5)
+
+
+def test_keyframe_text_is_written_onto_the_keyframe_rows_with_the_engine_that_read_it() -> None:
+    pool = FakePool()
+
+    written = PostgresVisualIndex(pool=pool).set_keyframe_text(
+        VIDEO_ID,
+        [
+            KeyframeText(0.0, "System design", "en", 0.93, [0.1, 0.2]),
+            KeyframeText(60.0, None),
+        ],
+        engine="surya-ocr-2",
+    )
+
+    assert written == 2
+    update = pool.recorded[0]
+    assert update.many and update.statement.lstrip().startswith("update public.video_keyframes")
+    assert update.parameters == [
+        ("System design", "en", 0.93, [0.1, 0.2], "surya-ocr-2", VIDEO_ID, 0.0),
+        # Read and blank: the engine is recorded so the keyframe is not read again for nothing.
+        (None, None, None, None, "surya-ocr-2", VIDEO_ID, 60.0),
+    ]
+
+
+def test_writing_no_keyframe_text_touches_nothing() -> None:
+    pool = FakePool()
+
+    assert PostgresVisualIndex(pool=pool).set_keyframe_text(VIDEO_ID, [], engine="surya-ocr-2") == 0
+    assert pool.recorded == []
+
+
+def test_keyframe_text_is_counted_and_searched_by_words_and_by_meaning() -> None:
+    match = {"time_seconds": 40.0, "ocr_text": "Load balancer", "similarity": 0.75}
+    pool = FakePool(responses=[[{"text_count": 3}], [match], [match]])
+    store = PostgresVisualIndex(pool=pool)
+
+    assert store.keyframe_text_count(VIDEO_ID) == 3
+    by_words = store.keyframe_text_word_matches(VIDEO_ID, "load balancer", 10)
+    by_meaning = store.keyframe_text_similarities(VIDEO_ID, [0.4], 10)
+
+    assert (by_words[0].time_seconds, by_words[0].text, by_words[0].similarity) == (40.0, "Load balancer", 0.75)
+    assert "word_similarity" in pool.statements[1]
+    assert pool.recorded[1].parameters == ("load balancer", VIDEO_ID, 10)
+    assert by_meaning[0].text == "Load balancer"
+    assert pool.recorded[2].parameters == ([0.4], VIDEO_ID, [0.4], 10)
+
+
+def test_a_video_with_no_keyframe_text_counts_zero() -> None:
+    assert PostgresVisualIndex(pool=FakePool()).keyframe_text_count(VIDEO_ID) == 0

@@ -72,6 +72,7 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
+from backend.services.visual_indexing.ocr import configured_ocr_engine
 from backend.storage.postgres import (
     PostgresUserVideos,
     PostgresVideoJobs,
@@ -562,10 +563,15 @@ class JobManager:
         The task deletes the local file itself when it ends. A task that never starts --
         cancelled because the manager shut down first -- cannot, so the future's callback
         does it instead; the video's row stays `pending`, which is the truth about an index
-        nobody built.
+        nobody built. The task reads keyframe text with the machine's OCR engine, when one is
+        set up; the engine and its worker process are shared by every video.
         """
         future = self._visual_executor.submit(
-            index_video_visually, video_id, local_path, stop_event=self._visual_stop
+            index_video_visually,
+            video_id,
+            local_path,
+            stop_event=self._visual_stop,
+            ocr_engine=configured_ocr_engine(),
         )
 
         def delete_if_never_run(finished: Future) -> None:
