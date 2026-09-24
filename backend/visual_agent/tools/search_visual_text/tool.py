@@ -34,17 +34,18 @@ async def search_visual_text(
 ) -> SearchedMoments | BudgetSpent:
     """Find the moments where any of these words is written on screen. Costs no image.
 
-    Each word is matched exactly as a run of letters, ignoring case and spaces, and also
-    inside longer words ("cup" finds "cupboard"). Returns up to five moments, the ones showing
-    the most different words first, each saying which words it matched. The words need not be
-    the question's: a slide's title or a label near what is asked about can mark its moment.
-    A word OCR misread is not found; search_visual_moments finds on-screen text by meaning.
+    Each word is matched as a run of characters, ignoring case and spaces but not punctuation
+    or digits ("e-mail" does not find "email"), and also inside longer words ("cup" finds
+    "cupboard"); give the spellings it may be written in. Returns up to five moments, the ones
+    showing the most different words first, each saying which words it matched. The words need
+    not be the question's: a slide's title or a label near what is asked about can mark its
+    moment. A word OCR misread is not found; search_visual_moments finds on-screen text by
+    meaning.
 
     Args:
         words: One to five words or short phrases you expect to be written on screen, in the
             language they would be written in, e.g. ["kafka", "partitions"].
         start_seconds: Where to start searching, in seconds; leave out to search from the start.
-            Narrow the search only when sure which part of the video is meant.
         end_seconds: Where to stop searching, in seconds; leave out to search to the end.
 
     Returns:
@@ -82,4 +83,4 @@ async def search_visual_text(
             note="The search failed. Read the frames with read_frame_text instead.",
             budget=deps.budget.remaining(),
         )
-    return searched_moments(deps, result, notes)
+    return searched_moments(deps, result, notes, window)

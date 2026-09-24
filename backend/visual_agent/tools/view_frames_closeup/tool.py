@@ -57,9 +57,14 @@ async def view_frames_closeup(
         What the image model saw in each frame, in order, and its answer across them.
     """
     deps = ctx.deps
+    times = list(dict.fromkeys(max(float(time_seconds), 0.0) for time_seconds in timestamps))
+    if not times:
+        return ViewedFrames(
+            note="Nothing was looked at, and no tool call was spent: no times were given.",
+            budget=deps.budget.remaining(),
+        )
     if not deps.budget.start_tool_call():
         return BudgetSpent()
-    times = list(dict.fromkeys(max(float(time_seconds), 0.0) for time_seconds in timestamps))
     notes = []
     if len(times) > MAX_FRAMES_PER_CALL:
         notes.append(f"Only the first {MAX_FRAMES_PER_CALL} times were looked at.")
@@ -72,7 +77,7 @@ async def view_frames_closeup(
         )
         times = times[:granted]
     if not times:
-        return ViewedFrames(note=" ".join(notes) or "No times were given.", budget=deps.budget.remaining())
+        return ViewedFrames(note=" ".join(notes), budget=deps.budget.remaining())
     try:
         frames = await asyncio.to_thread(
             deps.frames().frames, deps.video_id, times, long_side=CLOSEUP_LONG_SIDE

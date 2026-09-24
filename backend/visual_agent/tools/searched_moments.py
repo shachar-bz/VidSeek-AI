@@ -36,7 +36,12 @@ class SearchedMoment(BaseModel):
     end_seconds: float = Field(description="Where the moment ends, in seconds from the beginning of the video.")
     timestamps: str = Field(description="The same stretch written as MM:SS-MM:SS.")
     chapter: str | None = Field(default=None, description="The title of the chapter the moment starts in, if any.")
-    segment_index: int = Field(description="The visual segment the moment lies in: one uninterrupted shot or screen.")
+    segment_index: int = Field(
+        description=(
+            "The visual segment the moment lies in: one stretch of one shot, or of one screen while "
+            "its text stays the same."
+        )
+    )
     segment_boundary: str = Field(
         description=(
             "How the segment began: `video_start`, `scene_change` (a new shot or scene) or "
@@ -51,14 +56,25 @@ class SearchedMoment(BaseModel):
         )
     )
     on_screen_text: str | None = Field(
-        default=None, description="The text read on screen at this moment, possibly cut; None when there is none."
+        default=None,
+        description=(
+            "The text OCR read on one keyframe of this moment; it ends with … when cut, and a "
+            "moment running over several keyframes may show more. None when there is none."
+        ),
     )
     transcript: str | None = Field(
-        default=None, description="What was said while it was on screen, possibly cut; None when nothing was."
+        default=None,
+        description=(
+            "What was said while it was on screen, and for a moment under ten seconds also in the "
+            "five seconds either side; it ends with … when cut. None when nothing was said."
+        ),
     )
     peak_z_score: float | None = Field(
         default=None,
-        description="How far the best frame's picture stood out from the rest of the video; higher is a stronger match.",
+        description=(
+            "How far the best frame's picture stood out from the rest of the video; higher is a "
+            "stronger match. None when only the on-screen text matched."
+        ),
     )
     matched_words: list[str] = Field(
         default_factory=list, description="The words asked for that are written on screen here."
@@ -81,12 +97,15 @@ class SearchedMoments(BaseModel):
 
 
 def searched_moments(
-    deps: VisualDeps, result: VisualSearchResult, notes: list[str]
+    deps: VisualDeps,
+    result: VisualSearchResult,
+    notes: list[str],
+    window: tuple[float | None, float | None] = (None, None),
 ) -> SearchedMoments:
     """The service's result as the agent reads it, each moment recorded as a span it may cite."""
     notes = list(notes)
     if result.index_status in (INDEX_NOT_READY, INDEX_OUTDATED):
-        notes.append(unsearchable_note(deps, result))
+        notes.append(unsearchable_note(deps, result, window))
         return SearchedMoments(note=" ".join(notes), budget=deps.budget.remaining())
 
     moments = []
@@ -120,14 +139,24 @@ def searched_moments(
     return SearchedMoments(moments=moments, note=" ".join(notes) or None, budget=deps.budget.remaining())
 
 
-def unsearchable_note(deps: VisualDeps, result: VisualSearchResult) -> str:
-    """Why the index could not be searched, and what to do instead."""
+def unsearchable_note(
+    deps: VisualDeps,
+    result: VisualSearchResult,
+    window: tuple[float | None, float | None] = (None, None),
+) -> str:
+    """Why the index could not be searched, and where to look instead: the window searched, else the viewer's moment."""
     if result.index_status == INDEX_OUTDATED:
         reason = "The video's visual index was built with other models than the current ones, so it cannot be searched."
     else:
         status = f" (status: {result.visual_status})" if result.visual_status else ""
         reason = f"The video's visual index is not ready{status}, so it cannot be searched."
-    if deps.current_time_seconds is None:
+    start, end = window
+    if start is not None and end is not None:
+        instead = (
+            f"Look across the part searched, {format_timestamp(start)}-{format_timestamp(end)} "
+            f"({start:.1f}-{end:.1f} s), with view_sequence or read_frame_text instead."
+        )
+    elif deps.current_time_seconds is None:
         instead = "Look at the frames the question points to with view_sequence or read_frame_text instead."
     else:
         instead = (

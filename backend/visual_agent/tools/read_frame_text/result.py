@@ -41,5 +41,5 @@ class FrameTexts(BaseModel):
     """The on-screen text at each time asked for, in the same order."""
 
     texts: list[FrameText] = Field(default_factory=list)
-    note: str | None = Field(default=None, description="Why fewer times than asked for were read, if any.")
+    note: str | None = Field(default=None, description="Why fewer times than asked for were read, or none at all, when that happened.")
     budget: str = Field(description="What is left of the investigation's budget.")
