@@ -1,8 +1,8 @@
-"""multilingual-e5-small, loaded once per process: meaning vectors for on-screen text and captions.
+"""multilingual-e5-small, loaded once per process: meaning vectors for on-screen text.
 
 The shared all-MiniLM-L6-v2 (`backend/services/embeddings/model.py`) is English-only, and what
-this model embeds -- the captions the visual sub-agent saves, and on-screen text once OCR
-lands -- is as often Hebrew as English. It runs locally, like MiniLM.
+this model embeds -- the on-screen text OCR reads off keyframes -- is as often Hebrew as
+English. It runs locally, like MiniLM.
 
 e5 was trained with a role prefix on every input: `query: ` on what is searched for and
 `passage: ` on what is searched through. Leaving the prefix off measurably worsens retrieval,

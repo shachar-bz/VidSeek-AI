@@ -18,12 +18,6 @@ from .chapters import (
 )
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
-from .frame_captions import (
-    FrameCaptionMatch,
-    NewFrameCaption,
-    PostgresFrameCaptions,
-    StoredFrameCaption,
-)
 from .conversations import PostgresConversations, StoredConversation
 from .memories import NewMemory, PostgresMemories, StoredMemory
 from .memory_embeddings import (
@@ -60,7 +54,6 @@ __all__ = [
     "ChapterForEmbedding",
     "ChapterHeading",
     "ChapterWithNeighbours",
-    "FrameCaptionMatch",
     "FrameSimilarity",
     "KeyframeText",
     "KeyframeTextMatch",
@@ -70,7 +63,6 @@ __all__ = [
     "MemorySimilarity",
     "LibraryViewRow",
     "NewChapter",
-    "NewFrameCaption",
     "NewFrameEmbedding",
     "NewMemory",
     "NewUser",
@@ -81,7 +73,6 @@ __all__ = [
     "PostgresChapters",
     "PostgresComments",
     "PostgresConversations",
-    "PostgresFrameCaptions",
     "PostgresMemories",
     "PostgresMemoryEmbeddings",
     "PostgresLibraryViews",
@@ -100,7 +91,6 @@ __all__ = [
     "StoredChapterMemory",
     "StoredChapterOutline",
     "StoredConversation",
-    "StoredFrameCaption",
     "StoredMemory",
     "StoredMessage",
     "StoredPinnedAnswer",

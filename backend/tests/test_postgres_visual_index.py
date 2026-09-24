@@ -1,13 +1,11 @@
-"""Tests for the visual index and frame caption stores: the SQL they send and what they read back."""
+"""Tests for the visual index store and the memory similarity read: the SQL they send and what they read back."""
 
 import pytest
 
 from backend.storage.postgres import (
     KeyframeText,
-    NewFrameCaption,
     NewFrameEmbedding,
     NewVisualSegment,
-    PostgresFrameCaptions,
     PostgresMemoryEmbeddings,
     PostgresVisualIndex,
 )
@@ -104,60 +102,6 @@ def test_segments_are_read_with_their_keyframes_for_an_open_or_closed_window() -
     assert pool.recorded[0].parameters == (VIDEO_ID, None, None, None, None)
     assert pool.recorded[1].parameters == (VIDEO_ID, 5.0, 5.0, 9.0, 9.0)
     assert window[0].segment_id == "seg-1"
-
-
-def test_captions_are_appended_with_their_vectors_and_model() -> None:
-    pool = FakePool()
-
-    written = PostgresFrameCaptions(pool=pool).add(
-        VIDEO_ID,
-        [
-            NewFrameCaption(12.0, "A whiteboard with a diagram", [0.1], "gpt-vision"),
-            NewFrameCaption(20.0, "A man lifts a cup", [0.2], "gpt-vision", end_seconds=26.0),
-        ],
-    )
-
-    assert written == 2
-    assert pool.recorded[0].many
-    assert pool.recorded[0].parameters[1] == (
-        VIDEO_ID, 20.0, 26.0, "A man lifts a cup", [0.2], "gpt-vision"
-    )
-
-
-def test_adding_no_captions_touches_nothing() -> None:
-    pool = FakePool()
-
-    assert PostgresFrameCaptions(pool=pool).add(VIDEO_ID, []) == 0
-    assert pool.recorded == []
-
-
-def test_captions_are_read_by_window_and_scored_by_meaning() -> None:
-    pool = FakePool(
-        responses=[
-            [{"caption_count": 2}],
-            [
-                {
-                    "id": "c1",
-                    "time_seconds": 12.0,
-                    "end_seconds": None,
-                    "caption": "A whiteboard",
-                    "model": "gpt-vision",
-                    "created_at": "2026-09-23T10:00:00+00:00",
-                }
-            ],
-            [{"id": "c1", "time_seconds": 12.0, "end_seconds": None, "caption": "A whiteboard", "similarity": 0.91}],
-        ]
-    )
-    store = PostgresFrameCaptions(pool=pool)
-
-    assert store.count(VIDEO_ID) == 2
-    window = store.in_window(VIDEO_ID, start_seconds=10.0, end_seconds=14.0)
-    scored = store.similarities(VIDEO_ID, [0.3])
-
-    assert window[0].end_seconds is None and window[0].caption == "A whiteboard"
-    assert pool.recorded[1].parameters == (VIDEO_ID, 10.0, 10.0, 14.0, 14.0)
-    assert scored[0].similarity == 0.91
-    assert pool.recorded[2].parameters == ([0.3], VIDEO_ID, [0.3])
 
 
 def test_memory_similarities_carry_the_score_the_search_floors_on() -> None:

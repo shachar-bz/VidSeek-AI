@@ -1,7 +1,7 @@
 """Tests for the visual search: what counts as a hit, how lists are fused, and what comes back.
 
 The stores are answered by a `FakePool`, in the order the search reads them, and the three
-query encoders are stood in for, so each test says exactly which frames, captions and memories
+query encoders are stood in for, so each test says exactly which frames, on-screen text and memories
 matched and checks what the search made of them.
 """
 
@@ -9,7 +9,6 @@ import pytest
 
 from backend.services.visual_indexing import CURRENT_VISUAL_INDEX_VERSION
 from backend.services.visual_search import (
-    CAPTION,
     IMAGE,
     INDEX_NOT_READY,
     INDEX_OUTDATED,
@@ -55,7 +54,6 @@ def search(pool: FakePool, **options):
         "the architecture diagram",
         pool=pool,
         image_query_encoder=lambda _: [1.0],
-        caption_query_encoder=lambda _: [1.0],
         transcript_query_encoder=lambda _: [1.0],
         **options,
     )
@@ -144,7 +142,6 @@ def test_image_hits_come_back_as_ranges_tagged_with_segment_and_chapter() -> Non
             SEGMENTS,
             CHAPTERS,
             frame_scores({32.0: 0.3, 34.0: 0.28}),
-            [{"caption_count": 0}],
             [],
         ]
     )
@@ -169,7 +166,6 @@ def test_the_picture_and_the_transcript_agreeing_ranks_first() -> None:
             CHAPTERS,
             # The strongest frame is in segment 0; a weaker one is in segment 2.
             frame_scores({4.0: 0.35, 44.0: 0.25}),
-            [{"caption_count": 0}],
             # The transcript names the diagram in segment 2, and below the floor elsewhere.
             [
                 {"memory_id": "m1", "start_seconds": 38.0, "end_seconds": 50.0, "similarity": 0.6},
@@ -192,56 +188,9 @@ def test_the_picture_and_the_transcript_agreeing_ranks_first() -> None:
     assert transcript_only[0].matched_ranges == (TimeRange(38.0, 40.0),)
 
 
-def test_saved_captions_are_searched_and_reported_when_the_video_has_any() -> None:
-    pool = FakePool(
-        responses=[
-            READY_STATE,
-            SEGMENTS,
-            CHAPTERS,
-            frame_scores({}),
-            [{"caption_count": 2}],
-            [
-                {"id": "k1", "time_seconds": 24.0, "end_seconds": 30.0, "caption": "A diagram of three services on a whiteboard", "similarity": 0.88},
-                {"id": "k2", "time_seconds": 50.0, "end_seconds": None, "caption": "A kitchen", "similarity": 0.7},
-            ],
-            [],
-        ]
-    )
-
-    result = search(pool)
-
-    assert not result.image_match_found
-    assert [moment.sources for moment in result.moments] == [(CAPTION,)]
-    assert result.moments[0].caption.startswith("A diagram")
-    assert result.moments[0].matched_ranges == (TimeRange(24.0, 30.0),)
-
-
-def test_a_caption_far_behind_the_best_one_is_not_a_match_even_above_the_floor() -> None:
-    # e5 scores bunch up: an unrelated caption can clear the floor, but not by as much as the
-    # caption that actually describes the query.
-    pool = FakePool(
-        responses=[
-            READY_STATE,
-            SEGMENTS,
-            CHAPTERS,
-            frame_scores({}),
-            [{"caption_count": 2}],
-            [
-                {"id": "k1", "time_seconds": 24.0, "end_seconds": None, "caption": "A colourful fractal", "similarity": 0.905},
-                {"id": "k2", "time_seconds": 50.0, "end_seconds": None, "caption": "A white slide", "similarity": 0.803},
-            ],
-            [],
-        ]
-    )
-
-    result = search(pool)
-
-    assert [moment.caption for moment in result.moments] == ["A colourful fractal"]
-
-
 def test_nothing_found_anywhere_is_an_empty_answer_not_the_least_bad_frames() -> None:
     pool = FakePool(
-        responses=[READY_STATE, SEGMENTS, CHAPTERS, frame_scores({}), [{"caption_count": 0}], []]
+        responses=[READY_STATE, SEGMENTS, CHAPTERS, frame_scores({}), []]
     )
 
     result = search(pool)
@@ -258,7 +207,6 @@ def test_a_window_limits_where_hits_may_be_but_not_what_stands_out() -> None:
             SEGMENTS,
             CHAPTERS,
             frame_scores({4.0: 0.35, 44.0: 0.3}),
-            [{"caption_count": 0}],
             [],
         ]
     )
@@ -282,7 +230,6 @@ def test_on_screen_text_is_found_by_its_words_and_its_meaning_for_the_stretch_it
             SEGMENTS_WITH_TWO_KEYFRAMES,
             CHAPTERS,
             frame_scores({}),
-            [{"caption_count": 0}],
             [],
             [{"text_count": 2}],
             [
@@ -314,7 +261,6 @@ def test_the_last_keyframe_of_a_segment_stands_for_the_rest_of_it() -> None:
             SEGMENTS_WITH_TWO_KEYFRAMES,
             CHAPTERS,
             frame_scores({}),
-            [{"caption_count": 0}],
             [],
             [{"text_count": 1}],
             [{"time_seconds": 50.0, "ocr_text": "Questions?", "similarity": 1.0}],
@@ -332,7 +278,7 @@ def test_a_video_whose_keyframes_show_no_text_is_not_searched_for_it() -> None:
         raise AssertionError("e5 must not load for a video with no on-screen text")
 
     pool = FakePool(
-        responses=[READY_STATE, SEGMENTS, CHAPTERS, frame_scores({}), [{"caption_count": 0}], [], [{"text_count": 0}]]
+        responses=[READY_STATE, SEGMENTS, CHAPTERS, frame_scores({}), [], [{"text_count": 0}]]
     )
 
     result = search(pool, on_screen_text_query_encoder=no_model)
