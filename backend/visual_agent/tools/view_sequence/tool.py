@@ -4,14 +4,17 @@ It serves two purposes. One frame cannot show an action -- "picks up the cup" is
 frames -- so a sequence shows what happens across a window. And a window is a cheap way to find
 where in it something is shown: a search's candidate moment, or a stretch the agent is unsure of,
 is scanned at once, and the frames that show it tell the agent which moment or segment to cite or
-look at closer with `view_frames_closeup`. The tool spaces frames evenly across the window, lays them out as one timestamped
-grid (`services/video_frames/grid.py`), and asks the image model about them. The grid costs one
-image of the budget, whatever the number of frames in it.
+look at closer with `view_frames_closeup`. The tool spaces frames evenly across the window, lays
+them out as one timestamped grid (`services/video_frames/grid.py`), and asks the image model
+about them. The grid costs one image of the budget, whatever the number of frames in it.
 
-With no end given, the window is the segment the start falls in. A window is never cut at a
-scene cut: each frame is told which scene of the window it comes from, the result lists the
-scenes, and the image model is told where the cuts fall, so it does not read a cut as movement.
-Before the index is ready the scenes are not known, and the tool still works without them.
+With no end given, the window runs from the start to the end of the segment it falls in, or a
+fixed stretch when that is too short to look across. A window of one instant -- a search's
+single-frame hit passed as it came -- is widened either side rather than refused, since a search
+is accurate only to about one sample. A window is never cut at a scene cut: each frame is told
+which scene of the window it comes from, the result lists the scenes, and the image model is
+told where the cuts fall, so it does not read a cut as movement. Before the index is ready the
+scenes are not known, and the tool still works without them.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from backend.services.video_frames import (
     format_timestamp,
 )
 from backend.services.video_frames.grid import CELL_LONG_SIDE
+from backend.services.visual_indexing import SAMPLE_INTERVAL_SECONDS
 from backend.services.visual_search import VideoVisualMap
 
 from ...image_analysis import SequenceCell
@@ -42,8 +46,17 @@ DEFAULT_FRAME_COUNT = 6
 MIN_FRAME_COUNT = 2
 MAX_FRAME_COUNT = 9
 
-# The window looked at when no end is given and the video's segments are not known.
+# The window looked at when no end is given and the video's segments are not known, or the
+# segment ends too soon after the start to look across.
 WINDOW_WITHOUT_SEGMENTS_SECONDS = 10.0
+
+# The shortest stretch to its segment's end a window without an end still runs to; shorter,
+# and the fixed window is used, crossing into the next segment, so the grid is not one frame.
+SHORTEST_SEGMENT_WINDOW_SECONDS = 2.0
+
+# How far either side a window of one instant is widened: a search hit is accurate to about one
+# sample, so what it found may be that far from the time it names.
+INSTANT_WIDENING_SECONDS = SAMPLE_INTERVAL_SECONDS
 
 # A segment's end is where the next one starts, so a window running to a segment's end stops
 # this much before it to keep its last frame inside the segment.
@@ -76,10 +89,11 @@ async def view_sequence(
     Args:
         start_seconds: Where the window starts, in seconds from the beginning of the video.
         question: What to look for across the frames, as a full question that makes sense on
-            its own: the image model sees only this question and the frames. Ask what is there
-            or what happens, not whether what you expect is there.
+            its own: the image model sees only this question and the frames. Ask what is there,
+            what happens or which frames show something ("Which frames show a cup, and where
+            is it?"), not whether what you expect is there.
         end_seconds: Where the window ends; leave out to look to the end of the segment the
-            start falls in.
+            start falls in. An end equal to the start is widened two seconds either side.
         frame_count: How many frames to spread across the window, 2 to 9; 6 by default.
             Fewer for a few seconds around one moment, more for a long stretch.
 
@@ -95,7 +109,7 @@ async def view_sequence(
             note="Nothing was looked at, and no tool call was spent: the question is empty.",
             budget=deps.budget.remaining(),
         )
-    if end_seconds is not None and float(end_seconds) <= start:
+    if end_seconds is not None and float(end_seconds) < start:
         return ViewedSequence(
             note="Nothing was looked at, and no tool call was spent: the window ends before it starts.",
             budget=deps.budget.remaining(),
@@ -104,6 +118,8 @@ async def view_sequence(
         return BudgetSpent()
 
     notes = []
+    if end_seconds is not None and float(end_seconds) == start:
+        start, end_seconds = _widened_instant(start, notes)
     count = min(max(int(frame_count), MIN_FRAME_COUNT), MAX_FRAME_COUNT)
     if count != frame_count:
         notes.append(f"{count} frames were looked at, since a grid holds {MIN_FRAME_COUNT} to {MAX_FRAME_COUNT}.")
@@ -161,6 +177,7 @@ async def view_sequence(
         end_seconds=times[-1],
         frames=[
             SequenceFrame(
+                frame=position + 1,
                 time_seconds=cell.time_seconds,
                 timestamp=format_timestamp(cell.time_seconds),
                 scene=cell.scene,
@@ -186,9 +203,26 @@ def _default_end(video_map: VideoVisualMap | None, start: float, notes: list[str
         end = start + WINDOW_WITHOUT_SEGMENTS_SECONDS
         notes.append(f"No end was given, so the window runs {WINDOW_WITHOUT_SEGMENTS_SECONDS:g} s, to {format_timestamp(end)}.")
         return end
-    end = max(start, segment.end_seconds - SEGMENT_END_MARGIN_SECONDS)
+    end = segment.end_seconds - SEGMENT_END_MARGIN_SECONDS
+    if end - start < SHORTEST_SEGMENT_WINDOW_SECONDS:
+        end = start + WINDOW_WITHOUT_SEGMENTS_SECONDS
+        notes.append(
+            "No end was given, and its segment ends too soon after the start, so the window runs "
+            f"{WINDOW_WITHOUT_SEGMENTS_SECONDS:g} s, to {format_timestamp(end)}."
+        )
+        return end
     notes.append(f"No end was given, so the window runs to the end of its segment, {format_timestamp(end)}.")
     return end
+
+
+def _widened_instant(time_seconds: float, notes: list[str]) -> tuple[float, float]:
+    """A window of one instant widened either side, so the grid looks around what a search named."""
+    start = max(time_seconds - INSTANT_WIDENING_SECONDS, 0.0)
+    end = time_seconds + INSTANT_WIDENING_SECONDS
+    notes.append(
+        f"The window was one instant, so it was widened to {format_timestamp(start)}-{format_timestamp(end)}."
+    )
+    return start, end
 
 
 def _scene_ranges(

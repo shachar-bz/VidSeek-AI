@@ -55,12 +55,18 @@ async def read_frame_text(
         timestamps: The times to read, in seconds from the beginning of the video; at most six.
 
     Returns:
-        The text at each time, in the same order; `text` is None where nothing is written.
+        The text at each time, in the same order; `text` is None where nothing is written,
+        and where it could not be read (`source` is `unread`, and the note says why).
     """
     deps = ctx.deps
+    times = list(dict.fromkeys(max(float(time_seconds), 0.0) for time_seconds in timestamps))
+    if not times:
+        return FrameTexts(
+            note="Nothing was read, and no tool call was spent: no times were given.",
+            budget=deps.budget.remaining(),
+        )
     if not deps.budget.start_tool_call():
         return BudgetSpent()
-    times = list(dict.fromkeys(max(float(time_seconds), 0.0) for time_seconds in timestamps))
     note = None
     if len(times) > MAX_TIMESTAMPS_PER_CALL:
         note = f"Only the first {MAX_TIMESTAMPS_PER_CALL} times were read."

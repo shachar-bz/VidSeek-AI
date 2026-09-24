@@ -34,19 +34,18 @@ async def search_visual_moments(
 ) -> SearchedMoments | BudgetSpent:
     """Find the moments of the video that show what a query describes. Costs no image.
 
-    Searches by the picture of every frame and by what the text written on screen means, over
-    the whole video or the window given. Returns up to ten moments, best first, each with its
-    times, chapter, on-screen text and what was said then. Describe whatever best marks the
-    moment, which need not be what the question asks about: the diagram on the Kafka slide may
-    be found as "a slide about Kafka". A moment marked needs_look matched only by its picture:
-    it resembles the query, which is not the same as showing it. Look at it with view_sequence
-    before saying what it shows; until then it cannot be cited.
+    Searches by the picture of a frame sampled every two seconds and by what the text written
+    on screen means, over the whole video or the window given. Returns up to ten moments, those
+    found both ways first, each with its times, chapter, on-screen text and what was said then.
+    Describe whatever best marks the moment, which need not be what the question asks about:
+    the diagram on the Kafka slide may be found as "a slide about Kafka". A moment marked
+    needs_look matched only by its picture: it resembles the query, which is not the same as
+    showing it, and it cannot be cited until you have looked at it.
 
     Args:
         query: What is shown, described in plain words in any language, e.g. "a diagram of
             servers and a queue" or "a cup on the table".
         start_seconds: Where to start searching, in seconds; leave out to search from the start.
-            Narrow the search only when sure which part of the video is meant.
         end_seconds: Where to stop searching, in seconds; leave out to search to the end.
 
     Returns:
@@ -80,4 +79,4 @@ async def search_visual_moments(
             note="The search failed. Look at the frames with view_sequence instead.",
             budget=deps.budget.remaining(),
         )
-    return searched_moments(deps, result, [])
+    return searched_moments(deps, result, [], window)

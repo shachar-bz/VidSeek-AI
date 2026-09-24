@@ -278,15 +278,25 @@ def test_with_no_images_left_nothing_is_extracted() -> None:
     assert deps.spans == []
 
 
-def test_no_times_is_a_spent_call_that_looks_at_nothing() -> None:
+def test_no_times_looks_at_nothing_and_spends_nothing() -> None:
     source = FakeFrameSource()
     deps = _deps(frame_source=source)
 
     result = _view(deps, [])
 
-    assert result.note == "No times were given."
+    assert result.note == "Nothing was looked at, and no tool call was spent: no times were given."
     assert source.calls == []
-    assert deps.budget.tool_calls_used == 1
+    assert (deps.budget.tool_calls_used, deps.budget.images_used) == (0, 0)
+
+
+def test_reading_no_times_reads_nothing_and_spends_nothing() -> None:
+    deps = _deps()
+
+    result = _read_text(deps, [])
+
+    assert result.texts == []
+    assert result.note == "Nothing was read, and no tool call was spent: no times were given."
+    assert deps.budget.tool_calls_used == 0
 
 
 @pytest.mark.parametrize(
@@ -654,7 +664,10 @@ def test_pieces_past_the_character_cap_are_left_out_and_uncitable() -> None:
     result = _transcript(deps, 0.0, 40.0)
 
     assert len(result.pieces) == 2
-    assert result.note == "Only the first 2 pieces are given; the rest were too long."
+    assert result.note == (
+        "Only the first 2 pieces are given: the window holds more than 6000 characters. "
+        "Read the rest with a window starting after them."
+    )
     assert deps.spans == [(0.0, 10.0), (10.0, 20.0)]
 
 

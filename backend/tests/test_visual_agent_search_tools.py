@@ -171,6 +171,18 @@ def test_an_index_not_ready_sends_the_agent_to_the_current_moment(search: str) -
     assert deps.budget.tool_calls_used == 1
 
 
+@pytest.mark.parametrize("search", ["moments", "text"])
+def test_an_index_not_ready_sends_the_agent_to_the_window_searched_rather_than_the_current_moment(search: str) -> None:
+    pool = FakePool(responses=[[{"visual_status": "indexing", "visual_error": None, "visual_index_version": None}]])
+    deps = _deps(pool)
+    window = {"start_seconds": 300.0, "end_seconds": 360.0}
+
+    result = _search_moments(deps, **window) if search == "moments" else _search_text(deps, ["kafka"], **window)
+
+    assert "05:00-06:00 (300.0-360.0 s)" in result.note
+    assert "02:10" not in result.note
+
+
 def test_an_outdated_index_is_not_searched_and_with_no_position_the_agent_is_told_where_else_to_look() -> None:
     pool = FakePool(responses=[[{"visual_status": "ready", "visual_error": None, "visual_index_version": "clip@1fps"}]])
 

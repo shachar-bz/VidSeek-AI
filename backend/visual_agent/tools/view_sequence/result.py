@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 class SequenceFrame(BaseModel):
     """One cell of the grid, which scene it is in, and what the image model saw there."""
 
+    frame: int = Field(
+        description="The cell's number in the grid, counted from 1: the number the image model's answer names it by."
+    )
     time_seconds: float = Field(description="When the frame is shown, in seconds from the beginning of the video.")
     timestamp: str = Field(description="The same time written as MM:SS or H:MM:SS.")
     scene: int | None = Field(

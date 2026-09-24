@@ -166,6 +166,36 @@ def test_with_no_end_the_window_runs_to_the_end_of_the_start_s_segment() -> None
     assert "to the end of its segment, 00:39" in result.note
 
 
+def test_with_no_end_and_its_segment_about_to_end_the_window_runs_the_fixed_stretch() -> None:
+    source = FakeFrameSource()
+
+    result = _view(_deps(frame_source=source), 39.0, frame_count=3)
+
+    assert source.calls[0]["times"] == [39.0, 44.0, 49.0]
+    assert "segment ends too soon after the start, so the window runs 10 s, to 00:49" in result.note
+
+
+def test_a_window_of_one_instant_is_widened_either_side() -> None:
+    source = FakeFrameSource()
+    deps = _deps(frame_source=source)
+
+    result = _view(deps, 26.0, end_seconds=26.0, frame_count=3)
+
+    assert source.calls[0]["times"] == [24.0, 26.0, 28.0]
+    assert "widened to 00:24-00:28" in result.note
+    assert deps.budget.tool_calls_used == 1
+
+
+def test_each_frame_carries_its_number_in_the_grid() -> None:
+    result = _view(_deps(), 22.0, end_seconds=26.0, frame_count=3)
+
+    assert [(frame.frame, frame.observation) for frame in result.frames] == [
+        (1, "Cell 1"),
+        (2, "Cell 2"),
+        (3, "Cell 3"),
+    ]
+
+
 # --- scene cuts -----------------------------------------------------------------------------
 
 

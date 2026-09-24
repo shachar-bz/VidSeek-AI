@@ -53,7 +53,10 @@ def get_transcript_window(
     for segment in segments:
         characters += len(segment.text)
         if pieces and characters > MAX_CHARACTERS:
-            notes.append(f"Only the first {len(pieces)} pieces are given; the rest were too long.")
+            notes.append(
+                f"Only the first {len(pieces)} pieces are given: the window holds more than "
+                f"{MAX_CHARACTERS} characters. Read the rest with a window starting after them."
+            )
             break
         deps.record_span(segment.start_seconds, segment.end_seconds)
         pieces.append(
