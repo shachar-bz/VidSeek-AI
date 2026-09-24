@@ -6,9 +6,10 @@ Status: ingestion, storage and the query-time services are implemented (branch
 `feat/visual-search-tools`), build step 1 of §9 (branch `feat/visual-sub-agent`): the visual
 sub-agent with `view_frames`, `read_frame_text` and `get_transcript_window`, and the main agent's
 `investigate_visual`, and the two search tools of step 3 (branch
-`feat/visual-agent-search-tools`): `search_visual_moments` and `search_visual_text`. The search
-tools have not run on real footage yet. The insights re-run that depends on OCR (step 6), and the
-rest of step 3 (`list_segments`, `view_sequence`) are not implemented yet. §12 lists where the implementation
+`feat/visual-agent-search-tools`): `search_visual_moments` and `search_visual_text`, and
+`view_sequence` (branch `feat/visual-view-sequence`). The search tools and `view_sequence` have
+not run on real footage yet. The insights re-run that depends on OCR (step 6), and
+`list_segments` are not implemented yet. §12 lists where the implementation
 departs from this design and why.
 
 ## 1. Goal
@@ -177,7 +178,7 @@ version shows which videos need re-indexing after a model change.
 | `search_visual_text(words, range?)` | Search on-screen text for up to 5 given words (§5.2). Up to 5 moments | No |
 | `read_frame_text(timestamps)` | Stored OCR text of keyframes, or OCR of any other timestamp on demand | No |
 | `view_frames(timestamps, question)` | Frames, downscaled (~512 px long side), described by the image model | Yes, 1 per frame |
-| `view_sequence(t0, t1, n)` | n frames across a window as **one grid image**. Defaults to the segment's range and never crosses a `scene_change` boundary | Yes, 1 per grid |
+| `view_sequence(t0, question, t1?, n)` | n frames across a window as **one grid image**, described by the image model. Defaults to the segment's range; a window across a `scene_change` boundary is kept, and each frame says which scene it is from | Yes, 1 per grid |
 | `get_transcript_window(t0, t1)` | What was said in that window | No |
 
 * **Tool choice by question type** (in the prompt):
@@ -420,8 +421,8 @@ Each step ships something usable. The riskiest assumption is tested first.
      migrations.
 3. **Search and navigate.** `search_visual_moments` and `search_visual_text` (§5), `list_segments`
    and `view_sequence`.
-   * *The two searches are built as sub-agent tools (branch `feat/visual-agent-search-tools`);
-     `list_segments` and `view_sequence` are not.*
+   * *The two searches are built as sub-agent tools (branch `feat/visual-agent-search-tools`),
+     and `view_sequence` (branch `feat/visual-view-sequence`); `list_segments` is not.*
 4. **Enrich and evaluate.** Insights re-run with OCR text, and the eval set to set the models
    and thresholds.
 
@@ -576,3 +577,15 @@ machine (GTX 1650).
   outdated spends the call and tells the planner to look at the viewer's current moment. A
   search that raises (an encoder that fails to load) is logged and reported as failed, like
   `view_frames` does for the image model.
+* **`view_sequence` keeps a window across a cut** (§4.2). The design stopped a window at a
+  `scene_change` boundary; the window is now kept whole, and each frame carries the scene of the
+  window it comes from (a run of segments between cuts: a `text_change` stays inside a scene).
+  The result lists the scenes with their full ranges, and the image model is told where the cuts
+  fall so it does not read one as movement. What the frames show is citable from the first to
+  the last frame of each scene, never across a cut. With no end given, the window runs to 0.5 s
+  before the end of the start's segment (so its last frame stays in the segment), or 10 s when
+  the index is not ready; the tool works without scenes then. 2 to 9 frames, 6 by default,
+  extracted at the grid's 320 px cell size.
+* **A sequence has its own image model instructions** (`SEQUENCE_ANALYSIS_PROMPT`): how to read
+  a grid, what changes from cell to cell, and that a cut is not an action. `view_frames` keeps
+  its prompt unchanged.
