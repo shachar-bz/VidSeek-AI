@@ -411,8 +411,8 @@ Each step ships something usable. The riskiest assumption is tested first.
      `get_transcript_window`, plus the main agent's `investigate_visual`.
    * This already answers "what's on screen now" with no index. Test image delivery to the image
      model here, and measure Blob seek latency to decide whether a frame cache is needed.
-   * *Built (branch `feat/visual-sub-agent`), except the two measurements, which need a stored
-     video.*
+   * *Built (branch `feat/visual-sub-agent`) and measured (§12): images reach `gpt-6-luna`, and a
+     batch of 6 frames comes out of Blob in ~1.5 s, so no frame cache.*
 2. **Build the index.**
    * The visual executor, the local-file lifetime change and `visual_status`.
    * 0.5 fps sampling, SigLIP embeddings, segments, keyframe choice, OCR, and
@@ -424,8 +424,8 @@ Each step ships something usable. The riskiest assumption is tested first.
 
 ## 10. Risks to verify early
 
-1. **Image delivery to `gpt-6-luna`** through Pydantic AI's `BinaryContent` has not run against
-   the real model yet. (DeepSeek, the earlier candidate with its 384-token image cap, was dropped.)
+1. **Image delivery to `gpt-6-luna`** through Pydantic AI's `BinaryContent`: *verified* (§12).
+   DeepSeek, the earlier candidate with its 384-token image cap, was dropped.
 2. **Seeking in a WebM file over HTTP can be slow** when it has no seek cues, and every frame the
    sub-agent looks at is a seek. Measure it; if it is slow, remux at Store time, and if it is
    still slow, add the keyframe JPEG cache.
@@ -523,9 +523,10 @@ machine (GTX 1650).
 * **SigLIP runs in fp32, not fp16.** On the GTX 1650 fp16 measured 2.6x slower (32 frames in
   4.8 s vs 1.8 s). Peak VRAM at batch 32 is ~1.8 GB. Indexing an hour of 1080p video costs
   ~85 s of decode and ~105 s of embedding, about 3 minutes.
-* **Frame extraction latency** (§4.2, risk 2): 6 frames from a local 1080p MP4 in 0.65 s.
-  Over a Blob SAS link it is not measured yet; `python -m backend.services.video_frames.measure_latency
-  <video_id>` measures it against a stored video.
+* **Frame extraction latency** (§4.2, risk 2): 6 frames from a local 1080p MP4 in 0.65 s. Over a
+  Blob SAS link, on a stored 21-minute WebM: one frame in 0.69 s (median), 6 in parallel in 1.51 s,
+  inside the 1-2 s the design allowed, so there is no frame cache.
+  `python -m backend.services.video_frames.measure_latency <video_id>` measures it again.
 * **`VIDSEEK_VISUAL_INDEXING=false`** turns ingestion off on a machine without a GPU; its videos
   are marked `skipped`. Videos recorded before migration 0022 are marked `skipped` with
   `ingested_before_visual_indexing`.
@@ -555,3 +556,12 @@ machine (GTX 1650).
 * **`investigate_visual` never fails the main agent's turn.** An exception in the sub-agent (the
   model provider down, a missing key) is logged and returned as an answer saying the visual
   investigation failed.
+* **Both models are called through the Responses API** (`OpenAIResponsesModel`), not Chat
+  Completions: `gpt-6-sol` and `gpt-6-luna` answer a Chat Completions request that carries
+  function tools with HTTP 400 while they reason, and Pydantic AI carries structured output
+  through a tool. The main conversation agent had the same failure and was moved too.
+* **Measured live** on a stored lecture: the image model describes a frame in ~4 s; "what is this
+  diagram?" at 05:00 took ~15 s through the main agent (the investigation ~9 s: one call, one
+  image), and the answer's citation passed the check. A question about what was said did not
+  call `investigate_visual`. At 512 px the image model misread a slide title ("Nan to Tetris");
+  `read_frame_text` is the tool for exact text.
