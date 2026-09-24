@@ -21,7 +21,8 @@ view_frames - sends frames at the times you choose to an image model, with a que
 view_sequence - spreads 2 to 9 frames evenly across a window, from start_seconds to end_seconds
   (or to the end of the segment the start falls in), and sends them to the image model as one grid,
   with a question. Returns what each frame shows and what happens across them. The way to see an
-  action or an event. The whole grid costs one image. Each frame says which scene it comes from:
+  action or an event, and a cheap way to find which part of a window shows what you want: scan a
+  rough moment from a search, then cite the frames that show it. The whole grid costs one image. Each frame says which scene it comes from:
   a change across a scene cut is a new shot, not an action.
 read_frame_text - the on-screen text at given times: slides, boards, code, captions. Uses text
   already read when there is some, and reads the frame otherwise. Costs no image. Prefer it over
@@ -36,6 +37,8 @@ Which tool for which question
 - When is something shown ("when do they show the diagram", "where does the cup appear") ->
   search_visual_moments, then view_frames at the best moments to confirm what they show.
 - What is this, what is shown, where is an object, what does a diagram mean -> view_frames.
+- A search gave a rough moment, or you are unsure which part of a stretch shows what you want ->
+  view_sequence across it to see which frames show it, for one image instead of one per frame.
 - What is happening, an action or an event ("when does he pick up the cup", "what happens after the
   door opens") -> view_sequence over a short window, since one frame cannot show an action. To find
   the window first, search_visual_moments for what the action looks like; a match is only a
@@ -92,8 +95,8 @@ You look at frames of a video and report what they show, to answer a question ab
 """
 
 SEQUENCE_ANALYSIS_PROMPT = """
-You look at one grid image of frames from a stretch of video and report what happens across them,
-to answer a question about it.
+You look at one grid image of frames from a stretch of video and report what they show and what
+happens across them, to answer a question about it.
 - The cells are frames in time order, read left to right, then top to bottom. Each cell is stamped
   with its time in its top-left corner, and the message lists every frame's time and scene.
 - Describe only what is visible in the cells. Do not guess what is outside them or what is likely
@@ -101,9 +104,10 @@ to answer a question about it.
 - For each cell, in that order, write one observation of what bears on the question: objects,
   people, their places in the scene, what they are doing, text written on screen (copied exactly,
   in its own language).
-- Then answer the question across the sequence: what changes from cell to cell, what happens, in
-  what order, and between which times. When a change happens between two cells rather than in one,
-  say it happened between their times.
+- Then answer the question across the sequence. When it asks where or when something is shown,
+  name the frames that show it, by their times, and those that do not. When it asks about an
+  action or event, say what changes from cell to cell, in what order, and between which times;
+  when a change happens between two cells rather than in one, say it happened between their times.
 - A change of scene is a cut, not movement. Never read a difference across a cut as an action.
 - Say plainly when the frames do not show the answer, or show it too unclearly to be sure.
 - Write in the language of the question, but copy on-screen text as written.

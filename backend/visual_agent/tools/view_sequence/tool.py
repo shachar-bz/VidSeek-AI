@@ -1,9 +1,12 @@
-"""A Pydantic AI tool that shows the image model frames across a window as one grid, to see an action.
+"""A Pydantic AI tool that shows the image model frames across a window as one grid.
 
-One frame cannot show an action -- "picks up the cup" is a change between frames -- so this tool
-spaces frames evenly across a window, lays them out as one timestamped grid
-(`services/video_frames/grid.py`), and asks the image model what happens across them. The grid
-costs one image of the budget, whatever the number of frames in it.
+It serves two purposes. One frame cannot show an action -- "picks up the cup" is a change between
+frames -- so a sequence shows what happens across a window. And a window is a cheap way to find
+where in it something is shown: a search's candidate moment, or a stretch the agent is unsure of,
+is scanned at once, and the frames that show it tell the agent which moment or segment to cite or
+look at closer. The tool spaces frames evenly across the window, lays them out as one timestamped
+grid (`services/video_frames/grid.py`), and asks the image model about them. The grid costs one
+image of the budget, whatever the number of frames in it.
 
 With no end given, the window is the segment the start falls in. A window is never cut at a
 scene cut: each frame is told which scene of the window it comes from, the result lists the
@@ -59,10 +62,13 @@ async def view_sequence(
     end_seconds: float | None = None,
     frame_count: int = DEFAULT_FRAME_COUNT,
 ) -> ViewedSequence | BudgetSpent:
-    """Look at frames spread across a window, as one grid, and say what happens across them.
+    """Look at frames spread across a window, as one grid, and say what they show and what happens.
 
-    For actions and events: one frame cannot show someone picking something up, or what changes
-    after a door opens. The frames are spaced evenly from the start to the end, both included.
+    Two uses. For actions and events: one frame cannot show someone picking something up, or
+    what changes after a door opens. And to find where something is shown inside a window: when
+    a search gives a rough moment, or you are not sure which part of a stretch shows what you
+    want, scan it here and see which frames show it, then cite those times or look closer with
+    view_frames. The frames are spaced evenly from the start to the end, both included.
     The whole grid costs one image. Each frame says which scene of the window it comes from;
     when the window crosses a cut, a change across it is a new scene, not an action.
 
