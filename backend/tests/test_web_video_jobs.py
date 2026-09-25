@@ -229,14 +229,18 @@ def run_to_completion(
     """
     video_path = download_root / "video.mp4"
     video_path.write_bytes(b"video")
-    result = PipelineResult(
-        video_path=video_path,
-        transcript_text_path=None,
-        transcript_json_path=None,
-        transcript_source="page_transcript",
-        transcript_error=transcript_error,
-        normalized_transcript=transcript,
-    )
+
+    # The job moves Chrome's file into its workspace first, so the result names where it went.
+    def processed(*, video, **_):
+        return PipelineResult(
+            video_path=video.video_path,
+            transcript_text_path=None,
+            transcript_json_path=None,
+            transcript_source="page_transcript",
+            transcript_error=transcript_error,
+            normalized_transcript=transcript,
+        )
+
     with patch("backend.services.video_download.jobs.validate_remote_url"):
         created = manager.create(direct_request())
     with (
@@ -246,7 +250,7 @@ def run_to_completion(
             "backend.services.video_download.jobs.validate_local_media_path",
             return_value=video_path,
         ),
-        patch("backend.download_pipeline.acquisition.process_downloaded_video", return_value=result),
+        patch("backend.download_pipeline.acquisition.process_downloaded_video", side_effect=processed),
         patch("backend.download_pipeline.video_storage.upload_job_video", **upload),
         patch(
             "backend.download_pipeline.video_storage.record_job_video",

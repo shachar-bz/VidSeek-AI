@@ -107,7 +107,11 @@ def _complete_a_browser_download(manager: JobManager, tmp_path: Path) -> Path:
         created = manager.create(request)
     with (
         patch("backend.services.video_download.jobs.validate_local_media_path", return_value=video_path),
-        patch("backend.download_pipeline.acquisition.process_downloaded_video", return_value=acquired(video_path)),
+        # The job moves the file into its workspace first, so the result names wherever it went.
+        patch(
+            "backend.download_pipeline.acquisition.process_downloaded_video",
+            side_effect=lambda *, video, **_: acquired(video.video_path),
+        ),
         patch("backend.download_pipeline.video_storage.upload_job_video", return_value=STORED),
         patch("backend.download_pipeline.video_storage.record_job_video", return_value=SimpleNamespace(id=VIDEO_ID)),
     ):
@@ -172,7 +176,10 @@ def test_a_task_the_manager_shut_down_before_running_still_deletes_its_file(tmp_
     started = threading.Event()
     release = threading.Event()
 
+    indexed = []
+
     def occupy_the_worker(video_id, local_path, *, stop_event, ocr_engine):
+        indexed.append(local_path)
         started.set()
         release.wait(timeout=10)
 
@@ -191,8 +198,12 @@ def test_a_task_the_manager_shut_down_before_running_still_deletes_its_file(tmp_
 
     # Shutting down tells the running index to stop at its next frame.
     assert manager._visual_stop.is_set()
-    assert not queued.exists()
-    assert running.exists()
+    # Both files moved into the visual queue when they were scheduled. The one never run is
+    # gone from it; the one still being read is not.
+    queue = tmp_path / "visual-queue"
+    assert not running.exists() and not queued.exists()
+    assert list(queue.iterdir()) == indexed
+    assert indexed[0].exists()
 
 
 def test_the_visual_indexing_switch_reads_true_and_false_and_nothing_else(

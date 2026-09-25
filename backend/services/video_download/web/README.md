@@ -13,7 +13,9 @@ when captions or a published transcript are unavailable.
    ```dotenv
    VIDSEEK_EXTENSION_IDS=the_extension_id
    ELEVENLABS_API_KEY_TRANSCRIPT=your_key
-   # Optional; this must match Chrome's Downloads/VidSeek directory.
+   # Optional; this must match Chrome's Downloads/VidSeek directory. Each job works in
+   # its own jobs/<job_id> folder under it, deleted when the job ends, and the companion
+   # empties jobs/ and visual-queue/ when it starts; keep nothing of your own in either.
    VIDSEEK_DOWNLOAD_ROOT=C:\Users\you\Downloads\VidSeek
    # Required for a job to finish: Blob Storage is where a finished video is uploaded,
    # and the local copy is deleted once it is there. A job fails at the upload step
