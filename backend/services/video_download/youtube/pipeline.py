@@ -24,7 +24,11 @@ from .transcript import CAPTIONS_SOURCE, ELEVENLABS_SOURCE, YouTubeTranscript
 
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "downloads"
 DEFAULT_CAPTION_LANGUAGES = ("en",)
-DEFAULT_COMMENT_LIMIT = 100
+# Up to three of YouTube's "Top comments" pages (100 each, 1 quota unit each), re-ranked by
+# likes: one page is only YouTube's own first hundred, and a longer sample is what lets the
+# conversation agent see more than the handful of comments that went viral first.
+DEFAULT_COMMENT_LIMIT = 300
+DEFAULT_COMMENT_PAGES = 3
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +43,10 @@ class YouTubeDownloadResult:
     video_path: str
     transcript: YouTubeTranscript
     transcript_path: str
-    comments: list[CommentEntry]
+    # None when the fetch itself failed, as distinct from an empty list: the fetch ran and
+    # there was nothing, or comments are disabled. Only the second may clear what a previous
+    # scan of the same video stored.
+    comments: list[CommentEntry] | None
     comments_path: str | None
 
 
@@ -49,18 +56,21 @@ def _raise_if_cancelled(cancel_event: threading.Event | None) -> None:
         raise DownloadCancelled("Job cancelled")
 
 
-def _write_comments(video_id: str, output_dir: Path, limit: int) -> tuple[list[CommentEntry], str | None]:
+def _write_comments(
+    video_id: str, output_dir: Path, limit: int
+) -> tuple[list[CommentEntry] | None, str | None]:
     """Fetch and store the top comments, or give up on them without losing the video.
 
     Comments need their own API key and their own quota, and a video whose download and
     transcript both succeeded should not be reported as a failure because that key is
-    missing or the quota is spent.
+    missing or the quota is spent. A failed fetch comes back as None rather than an empty
+    list, so a rescan whose fetch failed keeps the comments an earlier scan stored.
     """
     try:
-        comments = fetch_top_comments(video_id, limit=limit)
+        comments = fetch_top_comments(video_id, limit=limit, max_pages=DEFAULT_COMMENT_PAGES)
     except (RuntimeError, OSError) as error:
         logger.warning("Could not fetch comments for %s: %s", video_id, error)
-        return [], None
+        return None, None
 
     comments_path = output_dir / f"{video_id}.comments.json"
     comments_path.write_text(

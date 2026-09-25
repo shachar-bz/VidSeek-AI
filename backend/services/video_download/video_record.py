@@ -66,7 +66,8 @@ def record_job_video(
     it is kept over the tab title, which is only what the browser tab happened to say.
 
     `comments` is None for every pipeline but YouTube's, which is the only one with
-    anything to fetch; an empty sequence still means something (the fetch ran and found
+    anything to fetch, and for a YouTube fetch that failed, which leaves whatever a previous
+    run stored alone; an empty sequence still means something (the fetch ran and found
     nothing) and is written as that, clearing any comments a previous run left behind.
 
     `user_id` is None for a job the route never had a signed-in account for, and the video

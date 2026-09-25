@@ -11,6 +11,10 @@ title alongside its own text, so the join it reads is only complete once stage t
 written both. Chapters are embedded second and would work in either order; keeping them
 second means the more important of the two — the memories are what a semantic search
 actually matches against — is attempted first when something is about to go wrong.
+
+A YouTube video's comments are embedded separately, by `embed_comments`, because they do not
+wait on a transcript: they are stored with the video, and a video no transcript could be
+divided for still has comments worth searching.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from .result import EMBEDDING_FAILED
+from .result import COMMENT_EMBEDDING_FAILED, EMBEDDING_FAILED
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,14 @@ class EmbeddedVideo:
 
     memory_count: int = 0
     chapter_count: int = 0
+    problems: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class EmbeddedComments:
+    """How many comment vectors this run wrote, and whether it managed to write them."""
+
+    comment_count: int = 0
     problems: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -58,3 +70,20 @@ def embed_video(video_id: str, *, pool=None) -> EmbeddedVideo:
         return EmbeddedVideo(problems=(EMBEDDING_FAILED,))
 
     return EmbeddedVideo(memory_count=memory_count, chapter_count=chapter_count)
+
+
+def embed_comments(video_id: str, *, pool=None) -> EmbeddedComments:
+    """Embed and store this video's comments, reporting a failure rather than raising.
+
+    The comments stay stored and readable whatever happens here; a failure only costs the
+    agent searching them by topic, which falls back to the best-liked ones.
+    """
+    # Imported here for the reason `embed_video` gives: it loads a sentence-transformers model.
+    from backend.services.embeddings.comment_embedding import embed_comments_for_video
+
+    try:
+        comment_count = embed_comments_for_video(video_id, pool=pool)
+    except Exception:
+        logger.exception("Embedding the comments of video %s failed", video_id)
+        return EmbeddedComments(problems=(COMMENT_EMBEDDING_FAILED,))
+    return EmbeddedComments(comment_count=comment_count)

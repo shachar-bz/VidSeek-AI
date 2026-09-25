@@ -16,6 +16,7 @@ from .chapters import (
     StoredChapterMemory,
     StoredChapterOutline,
 )
+from .comment_embeddings import CommentEmbedding, PostgresCommentEmbeddings
 from .comments import PostgresComments
 from .connection import build_pool, connection, iso_text, shared_pool
 from .conversations import PostgresConversations, StoredConversation
@@ -55,6 +56,7 @@ __all__ = [
     "ChapterForEmbedding",
     "ChapterHeading",
     "ChapterWithNeighbours",
+    "CommentEmbedding",
     "FrameSimilarity",
     "KeyframeText",
     "KeyframeTextMatch",
@@ -71,6 +73,7 @@ __all__ = [
     "PinnedAnswerForVideo",
     "PostgresChapterEmbeddings",
     "PostgresChapters",
+    "PostgresCommentEmbeddings",
     "PostgresComments",
     "PostgresConversations",
     "PostgresMemories",

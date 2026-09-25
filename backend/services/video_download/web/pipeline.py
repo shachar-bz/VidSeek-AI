@@ -55,9 +55,9 @@ class PipelineResult:
 
     # The comments themselves, carried the same way and for the same reason: whatever
     # records the job in the database writes what the YouTube pipeline actually fetched
-    # instead of re-reading `comments_path` off disk. Empty rather than None whenever the
-    # YouTube pipeline ran, since it always attempts the fetch and treats a failure or a
-    # video with comments disabled the same way: nothing found, not nothing attempted.
+    # instead of re-reading `comments_path` off disk. Empty when the YouTube pipeline's fetch
+    # found nothing or comments are disabled; None when there was no fetch, or it failed,
+    # which is what keeps a failed rescan from clearing the comments already stored.
     comments: tuple[CommentEntry, ...] | None = None
 
     # What the platform itself calls the video, set only by the YouTube pipeline: yt-dlp

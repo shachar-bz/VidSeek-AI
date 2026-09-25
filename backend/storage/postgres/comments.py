@@ -83,6 +83,26 @@ class PostgresComments:
             ).fetchall()
         return [_from_row(row) for row in rows]
 
+    def top_liked(self, video_id: str, limit: int) -> list[CommentEntry]:
+        """This video's `limit` best-liked comments, best first."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                f"select * from public.{TABLE_NAME} "
+                "where video_id = %s::uuid order by like_count desc limit %s",
+                (video_id, limit),
+            ).fetchall()
+        return [_from_row(row) for row in rows]
+
+    def count(self, video_id: str) -> int:
+        """How many comments this video has stored; zero for any non-YouTube video."""
+        with connection(self._pool) as open_connection:
+            row = open_connection.execute(
+                f"select count(*) as comment_count from public.{TABLE_NAME} "
+                "where video_id = %s::uuid",
+                (video_id,),
+            ).fetchone()
+        return int(row["comment_count"]) if row else 0
+
     def delete(self, video_id: str) -> None:
         """Forget this video's comments, leaving the video itself alone."""
         with connection(self._pool) as open_connection:

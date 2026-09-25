@@ -37,6 +37,10 @@ CHAPTER_GROUPING_FAILED = "chapter_grouping_failed"
 # anything this run still holds.
 EMBEDDING_FAILED = "embedding_failed"
 
+# The YouTube comments are stored but have no vectors, so the conversation agent can read the
+# best-liked of them but cannot search them by topic. Re-runnable on its own, like the above.
+COMMENT_EMBEDDING_FAILED = "comment_embedding_failed"
+
 # The video's durable chapters and memories remain available, but the summary, takeaways
 # and suggested questions could not be generated or stored.
 INSIGHT_GENERATION_FAILED = "insight_generation_failed"
@@ -73,6 +77,7 @@ class ProcessedVideo:
     chapter_count: int = 0
     memory_embedding_count: int = 0
     chapter_embedding_count: int = 0
+    comment_embedding_count: int = 0
 
     # In the order the stages hit them, so the first is the earliest thing that went wrong
     # and therefore the one most likely to explain the rest.

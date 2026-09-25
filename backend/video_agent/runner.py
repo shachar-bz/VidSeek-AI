@@ -35,12 +35,13 @@ from backend.core import config
 from backend.storage.postgres import StoredMessage
 
 from . import citations
-from .prompt import SYSTEM_PROMPT
+from .prompt import SYSTEM_PROMPT, VIEWER_COMMENTS_PROMPT
 from .tools.deps import ConversationDeps
 from .tools.get_chapter_context import get_chapter_context
 from .tools.get_memory_context import get_memory_context
 from .tools.get_video_info import get_video_info
 from .tools.get_video_outline import get_video_outline
+from .tools.get_viewer_comments import viewer_comments_tool
 from .tools.investigate_visual import investigate_visual
 from .tools.memories_semantic_search import memories_semantic_search
 
@@ -60,6 +61,8 @@ TOOLS = (
     get_chapter_context,
     get_memory_context,
     investigate_visual,
+    # Offered only for a video with stored YouTube comments; see its `prepare`.
+    viewer_comments_tool,
 )
 
 
@@ -106,7 +109,8 @@ class ConversationAgentRunner(Protocol):
 
 
 def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
-    """Build the production agent with its five transcript tools and its one visual tool."""
+    """Build the production agent: five transcript tools, one visual tool, and the comments
+    tool a YouTube video with stored comments is offered."""
 
     # The Responses API rather than Chat Completions: gpt-6-sol refuses function tools on
     # Chat Completions while it reasons, which failed every conversation.
@@ -216,6 +220,10 @@ def _model_history(
     ]
     if deps is not None and not deps.timestamps_reliable:
         converted.append(ModelRequest(parts=[SystemPromptPart(content=PARTIAL_TIMING_PROMPT)]))
+    # Told about only where the tool is offered, so a prompt never describes a tool the model
+    # cannot see.
+    if deps is not None and deps.has_comments:
+        converted.append(ModelRequest(parts=[SystemPromptPart(content=VIEWER_COMMENTS_PROMPT)]))
     for message in history:
         if message.role == "user":
             converted.append(ModelRequest(parts=[UserPromptPart(content=message.content)]))
@@ -231,7 +239,7 @@ def _summarize_result(content: object) -> str:
         return f"{len(content)} result{'s' if len(content) != 1 else ''}"
     if hasattr(content, "model_dump"):
         data = content.model_dump()
-        for key in ("chapters", "memories", "segments", "matches", "findings"):
+        for key in ("chapters", "memories", "segments", "matches", "findings", "comments"):
             value = data.get(key)
             if isinstance(value, list):
                 return f"{len(value)} {key}"
