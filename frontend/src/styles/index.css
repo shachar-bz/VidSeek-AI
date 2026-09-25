@@ -1658,6 +1658,7 @@ h3 {
 
 .video-player__frame {
   position: relative;
+  container-type: inline-size;
   background: #08080c;
 }
 
@@ -1717,6 +1718,29 @@ h3 {
   border: 0;
   background: transparent;
   cursor: pointer;
+}
+
+/* From 1441px wide (always the case in fullscreen) Chrome switches to its large control
+   bar: 64px slots, 17px in from the right edge and 25px up from the bottom. The overlay
+   follows, and the empty slot for the CC control grows to match. */
+@container (min-width: 1441px) {
+  .video-player__frame--with-captions video::-webkit-media-controls-fullscreen-button {
+    margin-left: 64px;
+  }
+
+  .video-player__controls {
+    bottom: 25px;
+    right: 145px;
+    width: 64px;
+    height: 64px;
+  }
+
+  .video-player__fullscreen-hitbox {
+    bottom: 25px;
+    right: 81px;
+    width: 64px;
+    height: 64px;
+  }
 }
 
 .video-player__frame:hover .video-player__controls,
