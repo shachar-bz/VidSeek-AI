@@ -70,6 +70,7 @@ VidSeek-AI/
 │   ├── src/                                # Background worker, side panel (inspect, scan, chat), page and frame discovery, and the companion API client.
 │   └── tests/                              # Extension helper unit tests.
 └── frontend/                               # The VidSeek website: a React + Vite single-page app.
+    ├── public/                             # Files served as-is from the site root: the favicons.
     ├── src/                                # The app root, the route table and the directories below.
     │   ├── api/                            # The wire contract, and the one place fetch is called.
     │   ├── auth/                           # Signed-in account state and the route guards built on it.
