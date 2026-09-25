@@ -17,7 +17,7 @@ EMBEDDINGS = [
         start_seconds=0.0,
         end_seconds=30.0,
         embedding=[0.1, 0.2, 0.3],
-        model="all-MiniLM-L6-v2",
+        model="intfloat/multilingual-e5-small",
         dimensions=3,
     ),
     ChapterEmbedding(
@@ -25,7 +25,7 @@ EMBEDDINGS = [
         start_seconds=30.0,
         end_seconds=90.0,
         embedding=[0.4, 0.5, 0.6],
-        model="all-MiniLM-L6-v2",
+        model="intfloat/multilingual-e5-small",
         dimensions=3,
     ),
 ]
@@ -55,7 +55,7 @@ def test_a_chapter_embedding_carries_its_timing_model_and_dimensions() -> None:
         0.0,
         30.0,
         [0.1, 0.2, 0.3],
-        "all-MiniLM-L6-v2",
+        "intfloat/multilingual-e5-small",
         3,
     )
 

@@ -400,8 +400,9 @@ the local file.
 
 **Models in one process.** Each model is loaded once per process (like
 `services/embeddings/model.py`) and inference runs behind a lock. The SigLIP text encoder serves
-chat queries while the indexing thread may be using the image encoder. SigLIP-base, e5-small,
-and MiniLM all stay resident in 4 GB of VRAM.
+chat queries while the indexing thread may be using the image encoder. SigLIP-base and e5-small
+both stay resident in 4 GB of VRAM (e5-small also embeds memories and chapters since MiniLM was
+removed).
 
 ## 7. Storage
 
@@ -487,7 +488,6 @@ Each step ships something usable. The riskiest assumption is tested first.
   removed before the sub-agent existed (migration 0025 drops its table); bring it back if the
   eval shows the sub-agent paying again and again to look at the same moments.
 * Chapters or memories that use visual signals (only insights are enriched).
-* Moving transcript and memory search from MiniLM (English-only) to a multilingual model.
 * Shot detection (TransNetV2). It was dropped for the time it takes (~5 min of GPU per hour of
   video on the GTX 1650, the slowest part of indexing) and because its value over content-change segmentation is
   unproven. Bring it back only if the eval shows segments missing real cuts or splitting on

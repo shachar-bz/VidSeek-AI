@@ -39,11 +39,11 @@ VidSeek-AI/
 │   │   │       └── word_timed/             # Transcription and word alignment run together as one pipeline.
 │   │   ├── forced_alignment/               # Times an already-known transcript against a video via ElevenLabs' hosted forced aligner.
 │   │   ├── transcripts/                    # The normalized timestamped transcript every source is converted into.
-│   │   ├── embeddings/                     # Shared sentence-transformers embedding model, loaded once per process.
+│   │   ├── embeddings/                     # Text and image embedding models, each loaded once per process, and the pipelines that store vectors.
 │   │   │   ├── chapter_embedding/          # Embeds a video's chapters and stores the vectors.
 │   │   │   ├── memory_embedding/           # Embeds a video's memories and stores the vectors.
 │   │   │   ├── image_embedding/            # SigLIP 2: frame vectors and the text queries scored against them.
-│   │   │   └── multilingual_text_embedding/ # multilingual-e5-small, for on-screen text.
+│   │   │   └── multilingual_text_embedding/ # multilingual-e5-small: memories, chapters and on-screen text, in Hebrew or English.
 │   │   ├── visual_indexing/                # Builds one video's visual index from its local file; no database.
 │   │   │   ├── sampling/                   # The ffmpeg decode pass (one shrunken frame every two seconds), and keyframes at full size.
 │   │   │   ├── segments/                   # Content-change segmentation and keyframe choice.

@@ -28,12 +28,12 @@ def test_embed_chapters_for_video_embeds_each_chapter_and_stores_the_result(monk
 
     embedded_texts = []
 
-    def fake_embed_text(text: str) -> list[float]:
-        embedded_texts.append(text)
-        return [0.1, 0.2, 0.3]
+    def fake_embed_passages(texts: list[str]) -> list[list[float]]:
+        embedded_texts.extend(texts)
+        return [[0.1, 0.2, 0.3] for _ in texts]
 
     monkeypatch.setattr(
-        "backend.services.embeddings.chapter_embedding.pipeline.embed_text", fake_embed_text
+        "backend.services.embeddings.chapter_embedding.pipeline.embed_passages", fake_embed_passages
     )
 
     written = embed_chapters_for_video(VIDEO_ID, pool=pool)
@@ -46,6 +46,7 @@ def test_embed_chapters_for_video_embeds_each_chapter_and_stores_the_result(monk
     stored = pool.recorded[1].parameters[0]
     assert stored[0] == rows[0]["chapter_id"]
     assert stored[4] == [0.1, 0.2, 0.3]
+    assert stored[5] == "intfloat/multilingual-e5-small"
     assert stored[6] == 3
 
 

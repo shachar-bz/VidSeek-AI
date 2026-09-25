@@ -40,12 +40,12 @@ def test_embed_memories_for_video_embeds_each_memory_and_stores_the_result(monke
 
     embedded_texts = []
 
-    def fake_embed_text(text: str) -> list[float]:
-        embedded_texts.append(text)
-        return [0.1, 0.2, 0.3]
+    def fake_embed_passages(texts: list[str]) -> list[list[float]]:
+        embedded_texts.extend(texts)
+        return [[0.1, 0.2, 0.3] for _ in texts]
 
     monkeypatch.setattr(
-        "backend.services.embeddings.memory_embedding.pipeline.embed_text", fake_embed_text
+        "backend.services.embeddings.memory_embedding.pipeline.embed_passages", fake_embed_passages
     )
 
     written = embed_memories_for_video(VIDEO_ID, pool=pool)
@@ -60,6 +60,7 @@ def test_embed_memories_for_video_embeds_each_memory_and_stores_the_result(monke
     stored = pool.recorded[1].parameters[0]
     assert stored[0] == rows[0]["memory_id"]
     assert stored[3] == [0.1, 0.2, 0.3]
+    assert stored[4] == "intfloat/multilingual-e5-small"
     assert stored[5] == 3
 
 

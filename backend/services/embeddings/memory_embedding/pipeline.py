@@ -1,7 +1,8 @@
 """Embeds a video's memories and stores the vectors in `memory_embeddings`.
 
 Reads each memory from PostgreSQL (`memories`, joined to its chapter for `title`), embeds
-`text.build_embedding_text`'s rendering of it with the shared model, and writes the result
+`text.build_embedding_text`'s rendering of it with multilingual-e5-small as a passage, so a
+question in Hebrew or English finds a memory in either, and writes the result
 back, keyed on the memory. `PostgresMemoryEmbeddings.replace` is what makes this safe to run
 again after memories or chapters change: it overwrites every memory's vector in place and
 drops any the run no longer produced.
@@ -14,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.services.embeddings.model import MODEL_NAME, embed_text
+from backend.services.embeddings.multilingual_text_embedding import MODEL_NAME, embed_passages
 from backend.storage.postgres import MemoryEmbedding, PostgresMemoryEmbeddings
 
 from .text import build_embedding_text
@@ -27,10 +28,9 @@ def embed_memories_for_video(video_id: str, *, pool=None) -> int:
     store = PostgresMemoryEmbeddings(pool=pool)
     memories = store.memories_for_video(video_id)
 
+    texts = [build_embedding_text(memory.chapter_title, memory.summary, memory.text) for memory in memories]
     embeddings = []
-    for memory in memories:
-        text = build_embedding_text(memory.chapter_title, memory.summary, memory.text)
-        vector = embed_text(text)
+    for memory, vector in zip(memories, embed_passages(texts)):
         embeddings.append(
             MemoryEmbedding(
                 memory_id=memory.memory_id,

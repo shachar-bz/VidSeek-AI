@@ -124,12 +124,12 @@ class PostgresMemoryEmbeddings:
         ]
 
     def nearest_memories(
-        self, video_id: str, embedding: Sequence[float], limit: int
+        self, video_id: str, embedding: Sequence[float], limit: int, *, model: str
     ) -> list[MemoryMatch]:
         """This video's memories whose vectors are closest to `embedding`, nearest first.
 
-        Ordered by cosine distance (`<=>`), which is what all-MiniLM-L6-v2 is trained for
-        and what `backend.services.embeddings` produces vectors for.
+        Ordered by cosine distance (`<=>`), which is what multilingual-e5-small is trained
+        for.
 
         Filtered on `memory_embeddings.video_id` rather than through `memories`, which is
         the reason 0010_memory_embeddings_video_chapter.sql put that column here: one
@@ -139,8 +139,11 @@ class PostgresMemoryEmbeddings:
         `memories_for_video`'s is -- a memory embedded before the grouping stage ran has no
         chapter, and it is still a legitimate match.
 
-        `model` is not filtered on. Only one embedding model writes this table today, and a
-        second one arriving is a migration's problem rather than a silent predicate here.
+        Only rows written by `model`, the model `embedding` came from, are compared: two
+        models' vectors of the same width share the column but not a meaning, so ranking one
+        against the other returns plausible-looking noise. A video still holding an older
+        model's vectors finds nothing until it is re-embedded
+        (`backend.download_pipeline.reembed_stale_videos`).
         """
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
@@ -150,9 +153,9 @@ class PostgresMemoryEmbeddings:
                 f"from public.{TABLE_NAME} e "
                 "join public.memories m on m.id = e.memory_id "
                 "left join public.chapters c on c.id = m.chapter_id "
-                "where e.video_id = %s::uuid "
+                "where e.video_id = %s::uuid and e.model = %s "
                 "order by e.embedding <=> %s::vector limit %s",
-                (video_id, list(embedding), limit),
+                (video_id, model, list(embedding), limit),
             ).fetchall()
         return [
             MemoryMatch(
@@ -188,6 +191,15 @@ class PostgresMemoryEmbeddings:
                 )
         logger.info("Stored %d memory embeddings for video %s", len(rows), video_id)
         return len(rows)
+
+    def video_ids_embedded_with_other_models(self, model: str) -> list[str]:
+        """Every video with at least one memory vector written by a model other than `model`."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                f"select distinct video_id from public.{TABLE_NAME} where model <> %s",
+                (model,),
+            ).fetchall()
+        return [str(row["video_id"]) for row in rows]
 
     def delete(self, video_id: str) -> None:
         """Forget this video's memory embeddings, leaving the memories themselves alone."""

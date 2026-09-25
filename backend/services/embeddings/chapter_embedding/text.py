@@ -6,5 +6,5 @@ A chapter's own contribution is its `title` and `summary` (see
 
 
 def build_embedding_text(title: str, summary: str) -> str:
-    """Render one chapter's title and summary as the text passed to `embed_text`."""
+    """Render one chapter's title and summary as the passage passed to `embed_passages`."""
     return f"chapter title: {title}\nchapter summary: {summary}"

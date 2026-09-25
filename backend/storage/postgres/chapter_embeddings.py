@@ -116,6 +116,15 @@ class PostgresChapterEmbeddings:
         logger.info("Stored %d chapter embeddings for video %s", len(rows), video_id)
         return len(rows)
 
+    def video_ids_embedded_with_other_models(self, model: str) -> list[str]:
+        """Every video with at least one chapter vector written by a model other than `model`."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(
+                f"select distinct video_id from public.{TABLE_NAME} where model <> %s",
+                (model,),
+            ).fetchall()
+        return [str(row["video_id"]) for row in rows]
+
     def delete(self, video_id: str) -> None:
         """Forget this video's chapter embeddings, leaving the chapters themselves alone."""
         with connection(self._pool) as open_connection:

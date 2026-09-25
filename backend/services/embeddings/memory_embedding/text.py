@@ -9,7 +9,7 @@ title to give, so that line is left out rather than written empty.
 
 
 def build_embedding_text(chapter_title: str | None, summary: str, text: str) -> str:
-    """Render one memory's chapter title, summary, and raw text as the text passed to `embed_text`."""
+    """Render one memory's chapter title, summary, and raw text as the passage passed to `embed_passages`."""
     lines = []
     if chapter_title:
         lines.append(f"chapter title: {chapter_title}")
