@@ -9,6 +9,7 @@ import {
   isYouTubeUrl,
   mergeDiscoveryResults,
   originPatterns,
+  pageOriginPatterns,
   resolveSelectedGroup
 } from "../src/discovery";
 import type { FrameDiscoveryResult } from "../src/discovery";
@@ -38,6 +39,25 @@ describe("media discovery helpers", () => {
       "https://app.example/*",
       "https://captions.example/*",
       "https://media.example/*"
+    ]);
+  });
+
+  it("separates the page and its video frame from CDN and caption hosts", () => {
+    const discovery: DiscoveryResult = {
+      page_url: "https://www.ted.com/talks/1",
+      frame_url: "https://player.ted.com/embed/1",
+      page_title: "Talk",
+      drm_detected: false,
+      media_candidates: [
+        { kind: "hls", url: "https://hls.ted.com/master.m3u8", mime_type: "", source: "capture" }
+      ],
+      caption_candidates: [
+        { url: "https://captions.example/en.vtt", format: "vtt", is_active: true, is_manual: true, is_visible_transcript: false }
+      ]
+    };
+    expect(pageOriginPatterns(discovery).sort()).toEqual([
+      "https://player.ted.com/*",
+      "https://www.ted.com/*"
     ]);
   });
 
