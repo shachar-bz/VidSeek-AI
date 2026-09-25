@@ -20,6 +20,7 @@ import {
   isYouTubeUrl,
   mergeDiscoveryResults,
   originPatterns,
+  pageOriginPatterns,
   resolveSelectedGroup,
 } from "./discovery";
 import type { FrameDiscoveryResult, VideoGroup } from "./discovery";
@@ -606,7 +607,15 @@ const EMPTY_BROWSER_CONTEXT: BrowserContext = {
   user_agent: "",
 };
 
-/** Requests the site/CDN origins a discovery result touches; YouTube needs none of them. */
+/**
+ * Requests the site/CDN origins a discovery result touches; YouTube needs none of them.
+ *
+ * Only the page's own site is required. A CDN or caption host adds its cookies and caption
+ * bodies when Chrome allows it, and the scan goes ahead without them when it does not. That
+ * is what happens after a playback check: the check was already allowed the page, and the
+ * stream it found usually lives on a CDN host (hls.ted.com for www.ted.com) that the scan's
+ * prompt then asks for on its own. Refusing that host must not stop the scan.
+ */
 async function grantSiteAccess(
   discoveryValue: DiscoveryResult,
 ): Promise<string[]> {
@@ -619,13 +628,26 @@ async function grantSiteAccess(
   const origins = originPatterns(discoveryValue).filter(
     (origin) => !youtube || !isYouTubeUrl(origin),
   );
+  const permissions = youtube ? [] : ["cookies"];
   const existing = await chrome.permissions.getAll();
-  const granted = await chrome.permissions.request({
-    permissions: youtube ? [] : ["cookies"],
-    origins,
+  const granted = await chrome.permissions.request({ permissions, origins });
+  if (granted)
+    return origins.filter((origin) => !existing.origins?.includes(origin));
+  // Chrome grants a request whole or not at all, so nothing new was granted here.
+  const requiredOrigins = pageOriginPatterns(discoveryValue).filter((origin) =>
+    origins.includes(origin),
+  );
+  const hasRequired = await chrome.permissions.contains({
+    permissions,
+    origins: requiredOrigins,
   });
-  if (!granted) throw new Error("Site/CDN access was not granted");
-  return origins.filter((origin) => !existing.origins?.includes(origin));
+  if (!hasRequired) {
+    const hosts = requiredOrigins.map((origin) => new URL(origin).hostname);
+    throw new Error(
+      `Chrome didn't allow VidSeek to read ${hosts.join(", ")}. Press the button again and choose Allow in Chrome's prompt.`,
+    );
+  }
+  return [];
 }
 
 async function startDownload(): Promise<void> {

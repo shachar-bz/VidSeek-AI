@@ -27,14 +27,29 @@ export function classifyMediaUrl(url: string, mimeType = ""): MediaKind | null {
 }
 
 export function originPatterns(discovery: DiscoveryResult): string[] {
-  const urls = [
-    discovery.frame_url || discovery.page_url,
-    discovery.page_url,
+  return toOriginPatterns([
+    ...pageUrls(discovery),
     ...discovery.media_candidates.map((item) => item.url),
     ...discovery.caption_candidates.flatMap((item) =>
       item.url ? [item.url] : [],
     ),
-  ];
+  ]);
+}
+
+/**
+ * The origins of the page and the frame playing the video, leaving out the CDN and caption
+ * hosts. The site's own cookies come from these; a CDN's cookies and caption bodies only
+ * add to what the scan gets.
+ */
+export function pageOriginPatterns(discovery: DiscoveryResult): string[] {
+  return toOriginPatterns(pageUrls(discovery));
+}
+
+function pageUrls(discovery: DiscoveryResult): string[] {
+  return [discovery.frame_url || discovery.page_url, discovery.page_url];
+}
+
+function toOriginPatterns(urls: string[]): string[] {
   const patterns = new Set<string>();
   for (const value of urls) {
     try {
