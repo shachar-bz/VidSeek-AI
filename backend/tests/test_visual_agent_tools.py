@@ -20,7 +20,7 @@ from backend.services.video_frames import (
     FrameExtractionError,
     VideoNotStoredError,
 )
-from backend.services.visual_indexing.ocr import FrameReading, OcrError, TextBlock
+from backend.services.ocr import FrameReading, OcrError, TextBlock
 from backend.storage.postgres import StoredKeyframe
 from backend.tests.fake_postgres import FakePool
 from backend.visual_agent.budget import MAX_IMAGES, MAX_TOOL_CALLS

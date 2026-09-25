@@ -1,8 +1,8 @@
-"""What an OCR engine is to visual indexing: frames in, the text each one shows out.
+"""What an OCR engine is to its callers: frames in, the text each one shows out.
 
-Indexing depends on this interface rather than on Surya, so an engine can be swapped or
-compared in the eval (VISUAL_UNDERSTANDING_PLAN.md §8) without touching the stage that stores
-what it read. An engine returns blocks as it read them, in reading order; turning them into
+Visual indexing and the visual agent's `read_frame_text` depend on this interface rather than
+on Surya, so an engine can be swapped or compared in the eval (VISUAL_UNDERSTANDING_PLAN.md §8)
+without touching the stage that stores what it read. An engine returns blocks as it read them, in reading order; turning them into
 the one piece of text a keyframe stores is `text.py`'s job and the same for every engine.
 """
 

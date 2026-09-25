@@ -21,7 +21,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from .ocr import OcrEngine, OnScreenText, on_screen_text
+from ..ocr import OcrEngine, OnScreenText, on_screen_text
 from .sampling import SamplingStopped, decode_frame_at
 
 # Keyframes handed to the engine at once: as many as Surya's worker reads in parallel, twice.

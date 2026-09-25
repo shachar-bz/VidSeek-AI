@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 from backend.download_pipeline.result import CHAPTER_GROUPING_FAILED, SEGMENTATION_FAILED
 from backend.download_pipeline.segmentation import segment_and_store
-from backend.semantic_segmentation.chapters import VideoChapter, VideoChapters
-from backend.semantic_segmentation.memories import VideoMemories, VideoMemory
+from backend.services.semantic_segmentation.chapters import VideoChapter, VideoChapters
+from backend.services.semantic_segmentation.memories import VideoMemories, VideoMemory
 from backend.services.transcripts import (
     NormalizedTranscript,
     TimingFidelity,

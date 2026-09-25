@@ -15,7 +15,7 @@ part of the video. No test here reaches the network.
 
 import pytest
 
-from backend.semantic_segmentation.chapters import (
+from backend.services.semantic_segmentation.chapters import (
     ChapterBoundary,
     ChapterGroupingError,
     MemoryIndex,
@@ -26,7 +26,7 @@ from backend.semantic_segmentation.chapters import (
     request_boundaries,
     validate_boundaries,
 )
-from backend.semantic_segmentation.memories import VideoMemories, VideoMemory
+from backend.services.semantic_segmentation.memories import VideoMemories, VideoMemory
 from backend.services.transcripts import TranscriptSegment
 
 MEMORY_SUMMARIES = [

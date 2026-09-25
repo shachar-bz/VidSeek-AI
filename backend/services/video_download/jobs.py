@@ -82,7 +82,7 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
-from backend.services.visual_indexing.ocr import configured_ocr_engine
+from backend.services.ocr import configured_ocr_engine
 from backend.storage.postgres import (
     PostgresUserVideos,
     PostgresVideoJobs,

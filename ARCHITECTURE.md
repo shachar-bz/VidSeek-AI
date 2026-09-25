@@ -47,9 +47,12 @@ VidSeek-AI/
 │   │   │   └── multilingual_text_embedding/ # multilingual-e5-small: memories, chapters, comments and on-screen text, in Hebrew or English.
 │   │   ├── visual_indexing/                # Builds one video's visual index from its local file; no database.
 │   │   │   ├── sampling/                   # The ffmpeg decode pass (one shrunken frame every two seconds), and keyframes at full size.
-│   │   │   ├── segments/                   # Content-change segmentation and keyframe choice.
-│   │   │   └── ocr/                        # The OCR engine interface and the text a keyframe keeps.
-│   │   │       └── surya/                  # Surya 2, run in a worker process of its own Python environment.
+│   │   │   └── segments/                   # Content-change segmentation and keyframe choice.
+│   │   ├── ocr/                            # The OCR engine interface and the text a keyframe keeps; read at indexing and at query time.
+│   │   │   └── surya/                      # Surya 2, run in a worker process of its own Python environment.
+│   │   ├── semantic_segmentation/          # What a transcript becomes once transcription is done.
+│   │   │   ├── memories/                   # Stage two: a transcript divided into semantic memories by an LLM.
+│   │   │   └── chapters/                   # Stage three: memories grouped into higher-level chapters by an LLM.
 │   │   ├── visual_search/                  # Finds a video's moments matching a text query, placed in segment and chapter.
 │   │   ├── video_frames/                   # Frames of a stored video, extracted on demand from Blob Storage.
 │   │   ├── shot_detection/                 # Shot boundary detection services, plus the script that compares them.
@@ -60,9 +63,6 @@ VidSeek-AI/
 │   │   └── video_download/                 # Video acquisition, one package per source; the job manager and shared record and upload steps sit at this level.
 │   │       ├── web/                        # Authenticated non-YouTube download and transcript pipeline.
 │   │       └── youtube/                    # Downloads a YouTube video, its transcript and its top comments.
-│   ├── semantic_segmentation/              # What a transcript becomes once transcription is done.
-│   │   ├── memories/                       # Stage two: a transcript divided into semantic memories by an LLM.
-│   │   └── chapters/                       # Stage three: memories grouped into higher-level chapters by an LLM.
 │   ├── download_pipeline/                  # The order one video runs through: download, store, segment, embed, and visual indexing beside them.
 │   └── tests/                              # Automated backend companion tests.
 ├── chrome-extension/                       # Internal Manifest V3 video download extension.
@@ -130,7 +130,7 @@ The rules bind production code. Tests (`backend/tests/`, `frontend/tests/`,
   from anywhere but the stored video, because no frame is ever stored.
 * `services/visual_indexing/` touches no database; `download_pipeline/visual_indexing.py`
   stores what it builds and is the one stage that owns, and deletes, the local video file.
-* `services/visual_indexing/ocr/surya/worker.py` runs in Surya's own Python environment, not
+* `services/ocr/surya/worker.py` runs in Surya's own Python environment, not
   the backend's, and imports nothing from `backend`. The backend reaches Surya only through
   that worker's stdin and stdout (`ocr/surya/engine.py`), and never imports `surya`; its
   dependencies are in `ocr/surya/requirements.txt`, not in `backend/requirements.txt`.

@@ -159,7 +159,7 @@ sentence-transformers>=3.0
 # and extracts frames from Blob Storage on demand. 4.49 is the first transformers with SigLIP 2.
 # OCR (Surya) is not installed here: it needs torch >= 2.7 and Pillow < 11, so it runs in a worker
 # process of its own environment, whose dependencies are in
-# backend/services/visual_indexing/ocr/surya/requirements.txt (see VIDSEEK_OCR_PYTHON). Removing
+# backend/services/ocr/surya/requirements.txt (see VIDSEEK_OCR_PYTHON). Removing
 # the module removes that file with backend/services/visual_indexing/.
 transformers>=4.49
 pillow

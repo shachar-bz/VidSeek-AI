@@ -1,6 +1,6 @@
 """The text a memory is embedded from.
 
-A memory's own contribution is its `summary` (see `backend.semantic_segmentation.memories`)
+A memory's own contribution is its `summary` (see `backend.services.semantic_segmentation.memories`)
 and its raw `text`; its chapter's `title` is included alongside them so the vector also
 carries the broader section a memory belongs to, which is often what a search query names
 rather than the memory's own narrower point. A memory not yet grouped into a chapter has no

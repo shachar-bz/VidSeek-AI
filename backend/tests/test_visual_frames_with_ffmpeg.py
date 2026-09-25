@@ -35,7 +35,7 @@ from backend.services.visual_indexing import (
     build_visual_index,
     read_keyframe_text,
 )
-from backend.services.visual_indexing.ocr import FrameReading, TextBlock
+from backend.services.ocr import FrameReading, TextBlock
 from backend.services.visual_indexing.sampling import decode_frame_at, sample_frames
 from backend.services.visual_indexing.segments import SCENE_CHANGE, VIDEO_START
 
