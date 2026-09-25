@@ -133,6 +133,45 @@ describe("library page", () => {
     expect(screen.getByText(/re-adding the video later restores its shared video content and artifacts/i)).toBeTruthy();
     expect(screen.getByText(/chat history is permanently lost/i)).toBeTruthy();
   });
+
+  it("saves a typed tag even when Add tag was not pressed first", async () => {
+    const ready = {
+      video_id: "video-1",
+      job_id: null,
+      title: "Tag me",
+      custom_title: null,
+      source_site: "example.com",
+      source_url: "https://example.com/video",
+      duration_seconds: 90,
+      tags: ["existing"],
+      added_at: "2026-09-19T10:00:00Z",
+      stage: "ready",
+      progress: 1,
+      status_message: "Ready",
+      error_code: null,
+      conversation_count: 0
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/library/tags") return Promise.resolve(jsonResponse({ tags: ["existing"] }));
+      if (url === "/v1/library/events") return Promise.resolve(dataStream([]));
+      if (url.startsWith("/v1/library?")) return Promise.resolve(jsonResponse({ videos: [ready], total: 1, limit: 5, offset: 0 }));
+      if (url === "/v1/library/video-1" && init?.method === "PATCH") {
+        return Promise.resolve(jsonResponse({ ...ready, ...JSON.parse(String(init.body)) }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter><LibraryPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit tags for Tag me" }));
+    fireEvent.change(screen.getByLabelText("Tags", { selector: "input" }), { target: { value: " fresh " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(screen.getByText("fresh", { selector: ".library-row .tag" })).toBeTruthy());
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ tags: ["existing", "fresh"] });
+  });
 });
 
 describe("library shell notifications", () => {
