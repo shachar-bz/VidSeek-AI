@@ -38,7 +38,7 @@ from backend.services.visual_indexing import (
     build_visual_index,
     read_keyframe_text,
 )
-from backend.services.visual_indexing.ocr import OcrEngine
+from backend.services.ocr import OcrEngine
 from backend.services.visual_indexing.segments import VisualSegment
 from backend.storage.postgres import (
     KeyframeText,

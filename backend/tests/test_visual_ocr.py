@@ -17,7 +17,7 @@ import pytest
 from PIL import Image
 
 from backend.services.visual_indexing import SamplingStopped, keyframe_text, read_keyframe_text
-from backend.services.visual_indexing.ocr import (
+from backend.services.ocr import (
     ENGLISH,
     HEBREW,
     MIXED,
@@ -29,9 +29,9 @@ from backend.services.visual_indexing.ocr import (
     on_screen_text,
     script_language,
 )
-from backend.services.visual_indexing.ocr.surya import ENGINE_NAME, SuryaOcrEngine, html_to_text
-from backend.services.visual_indexing.ocr.surya import worker as surya_worker
-from backend.services.visual_indexing.ocr.surya.engine import WORKER_ENVIRONMENT_DEFAULTS
+from backend.services.ocr.surya import ENGINE_NAME, SuryaOcrEngine, html_to_text
+from backend.services.ocr.surya import worker as surya_worker
+from backend.services.ocr.surya.engine import WORKER_ENVIRONMENT_DEFAULTS
 
 
 def frame(colour: str = "white") -> Image.Image:

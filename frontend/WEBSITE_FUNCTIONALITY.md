@@ -363,7 +363,7 @@ same ones.
 
 **`chapters`, `memories`, `memory_embeddings` and `chapter_embeddings` are empty in every
 deployment, because nothing writes them.** The tables exist, the stores expose reads,
-`backend/semantic_segmentation/` can produce memories and chapters, and
+`backend/services/semantic_segmentation/` can produce memories and chapters, and
 `backend/services/embeddings/` can embed them — but none of it is called from the request path.
 
 Needed, in order:

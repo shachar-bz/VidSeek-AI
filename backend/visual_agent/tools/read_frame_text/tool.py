@@ -28,7 +28,7 @@ from backend.services.video_frames import (
     VideoNotStoredError,
     format_timestamp,
 )
-from backend.services.visual_indexing.ocr import OcrError, on_screen_text
+from backend.services.ocr import OcrError, on_screen_text
 from backend.storage.postgres import PostgresVisualIndex, StoredKeyframe
 
 from ..budget_spent import BudgetSpent

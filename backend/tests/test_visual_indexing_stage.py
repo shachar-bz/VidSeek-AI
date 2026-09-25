@@ -32,7 +32,7 @@ from backend.services.visual_indexing import (
     NoFramesToIndex,
     SamplingStopped,
 )
-from backend.services.visual_indexing.ocr import OcrError, OnScreenText
+from backend.services.ocr import OcrError, OnScreenText
 from backend.services.visual_indexing.segments import SCENE_CHANGE, VIDEO_START, VisualSegment
 from backend.tests.fake_postgres import FakePool
 

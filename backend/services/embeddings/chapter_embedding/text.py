@@ -1,7 +1,7 @@
 """The text a chapter is embedded from.
 
 A chapter's own contribution is its `title` and `summary` (see
-`backend.semantic_segmentation.chapters`); both come from the `chapters` table.
+`backend.services.semantic_segmentation.chapters`); both come from the `chapters` table.
 """
 
 

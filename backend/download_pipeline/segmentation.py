@@ -24,8 +24,8 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from backend.semantic_segmentation.chapters import VideoChapters, group_memories
-from backend.semantic_segmentation.memories import VideoMemories, segment_transcript
+from backend.services.semantic_segmentation.chapters import VideoChapters, group_memories
+from backend.services.semantic_segmentation.memories import VideoMemories, segment_transcript
 from backend.services.transcripts import NormalizedTranscript
 from backend.storage.postgres import (
     NewChapter,

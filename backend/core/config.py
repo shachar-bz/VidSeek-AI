@@ -122,7 +122,7 @@ def ocr_python_path() -> Path | None:
 
     Surya needs a newer torch and an older Pillow than this backend runs on, so it cannot be
     installed next to it; on-screen text is read by a worker process started with this
-    interpreter instead (`services/visual_indexing/ocr/surya/`). Unset means OCR is off on
+    interpreter instead (`services/ocr/surya/`). Unset means OCR is off on
     this machine: videos are still indexed visually, and their keyframes are left unread.
     """
     configured = get("VIDSEEK_OCR_PYTHON")

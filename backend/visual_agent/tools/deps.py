@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from backend.services.video_frames import VideoFrameSource
-from backend.services.visual_indexing.ocr import OcrEngine, configured_ocr_engine
+from backend.services.ocr import OcrEngine, configured_ocr_engine
 from backend.services.visual_search import VideoVisualMap, ready_video_map
 from backend.storage.postgres import (
     PostgresChapters,
