@@ -30,13 +30,16 @@ class ViewerComment(BaseModel):
 
 
 class ViewerComments(BaseModel):
-    """The comments that answer one call, most-liked first."""
+    """The comments that answer one call."""
 
-    comments: list[ViewerComment] = Field(description="Most-liked first.")
+    comments: list[ViewerComment] = Field(
+        description="Most-liked first, or, for matched_by similarity, closest to the topic first."
+    )
     matched_by: Literal["top_liked", "similarity", "top_liked_fallback"] = Field(
         description=(
             "top_liked: no topic was asked for, these are the most-liked comments. "
-            "similarity: only comments about the topic asked for. "
+            "similarity: the comments closest in meaning to the topic asked for; some may "
+            "still be off topic, so use only the ones actually about it. "
             "top_liked_fallback: this video's comments cannot be searched by topic, so these "
             "are the most-liked comments, whether or not they are about the topic."
         )

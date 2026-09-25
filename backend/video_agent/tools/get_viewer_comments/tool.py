@@ -23,11 +23,6 @@ MAX_COMMENTS = 20
 # Where a comment is cut, so one essay-length comment cannot crowd out the other nineteen.
 MAX_TEXT_CHARS = 500
 
-# The cosine similarity (multilingual-e5-small, normalized) a comment must reach to count as
-# being about the topic asked for. e5 scores unrelated text high -- 0.7 and above is common
-# -- so the cut sits well above that.
-MIN_SIMILARITY = 0.82
-
 
 def get_viewer_comments(ctx: RunContext[ConversationDeps], query: str | None = None) -> ViewerComments:
     """Read what YouTube commenters said about this video: their reactions and opinions.
@@ -42,9 +37,9 @@ def get_viewer_comments(ctx: RunContext[ConversationDeps], query: str | None = N
             "the price"). Leave it out for the most-liked comments overall.
 
     Returns:
-        Up to twenty comments, most-liked first, each with its like and reply count, plus how
-        they were chosen and how many comments the video has stored. Empty when no comment
-        is about the topic asked for.
+        Up to twenty comments, each with its like and reply count, plus how they were chosen
+        and how many comments the video has stored. Without a query, the most-liked first;
+        with one, the closest in meaning first, and some of them may still be off topic.
     """
     video_id = ctx.deps.video_id
     comments = PostgresComments(ctx.deps.pool)
@@ -60,9 +55,7 @@ def get_viewer_comments(ctx: RunContext[ConversationDeps], query: str | None = N
             comments.top_liked(video_id, MAX_COMMENTS), "top_liked_fallback", total_stored
         )
 
-    matches = embeddings.most_liked_matching(
-        video_id, embed_query(query), min_similarity=MIN_SIMILARITY, limit=MAX_COMMENTS
-    )
+    matches = embeddings.nearest(video_id, embed_query(query), MAX_COMMENTS)
     return _result(matches, "similarity", total_stored)
 
 

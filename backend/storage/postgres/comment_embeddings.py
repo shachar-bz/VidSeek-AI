@@ -1,8 +1,8 @@
 """The `comment_embeddings` table: one vector per YouTube comment, for searching them by meaning.
 
-`replace` fills it and `most_liked_matching` is the search the conversation agent's
-`get_viewer_comments` tool runs. The vectors are multilingual-e5-small's, L2-normalized, so
-cosine similarity is `1 - (a <=> b)`.
+`replace` fills it and `nearest` is the search the conversation agent's
+`get_viewer_comments` tool runs. The vectors are multilingual-e5-small's, L2-normalized, and
+compared by cosine distance (`<=>`).
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0027_comment_embeddings.sql` applied.
 """
@@ -78,18 +78,12 @@ class PostgresCommentEmbeddings:
             ).fetchone()
         return bool(row and row["embedded"])
 
-    def most_liked_matching(
-        self,
-        video_id: str,
-        embedding: Sequence[float],
-        *,
-        min_similarity: float,
-        limit: int,
-    ) -> list[CommentEntry]:
-        """The best-liked of this video's comments at least `min_similarity` close to `embedding`.
+    def nearest(self, video_id: str, embedding: Sequence[float], limit: int) -> list[CommentEntry]:
+        """This video's `limit` comments closest in meaning to `embedding`, closest first.
 
-        Filtered by meaning and then ranked by likes, not by closeness: once a comment is about
-        the topic, how many people agreed with it is what says how representative it is.
+        No similarity cutoff: on short comments e5 scores filler ("First!", "great video") as
+        close to any topic as the comments actually about it, so no fixed number separates
+        the two. The caller reads the shortlist and judges which comments are on topic.
         """
         with connection(self._pool) as open_connection:
             rows = open_connection.execute(
@@ -97,8 +91,7 @@ class PostgresCommentEmbeddings:
                 f"from public.{TABLE_NAME} e "
                 "join public.comments c on c.id = e.comment_id "
                 "where e.video_id = %s::uuid "
-                "and 1 - (e.embedding <=> %s::vector) >= %s "
-                "order by c.like_count desc limit %s",
-                (video_id, list(embedding), min_similarity, limit),
+                "order by e.embedding <=> %s::vector limit %s",
+                (video_id, list(embedding), limit),
             ).fetchall()
         return [_from_row(row) for row in rows]

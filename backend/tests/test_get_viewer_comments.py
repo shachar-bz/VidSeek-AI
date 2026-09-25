@@ -10,7 +10,6 @@ from backend.video_agent.tools.deps import ConversationDeps
 from backend.video_agent.tools.get_viewer_comments import (
     MAX_COMMENTS,
     MAX_TEXT_CHARS,
-    MIN_SIMILARITY,
     get_viewer_comments,
     only_for_a_video_with_comments,
     viewer_comments_tool,
@@ -87,25 +86,18 @@ def test_a_blank_query_is_treated_as_no_query(embedded_queries) -> None:
     assert embedded_queries == []
 
 
-def test_a_query_is_filtered_by_meaning_and_ranked_by_likes(embedded_queries) -> None:
+def test_a_query_returns_the_comments_closest_in_meaning_with_no_cutoff(embedded_queries) -> None:
+    """No similarity cutoff: e5 scores filler as close as real matches, so the agent judges."""
     result, pool = _call(
-        [[{"comment_count": 2}], [{"embedded": True}], COMMENT_ROWS[:1]], query="the ending"
+        [[{"comment_count": 2}], [{"embedded": True}], COMMENT_ROWS], query="the ending"
     )
 
     assert embedded_queries == ["the ending"]
     assert result.matched_by == "similarity"
-    assert [comment.text for comment in result.comments] == ["The ending was rushed"]
+    assert len(result.comments) == 2
     search = pool.recorded[2]
-    assert search.parameters == (VIDEO_ID, QUERY_VECTOR, MIN_SIMILARITY, MAX_COMMENTS)
-    assert "order by c.like_count desc" in search.statement
-
-
-def test_no_comment_about_the_topic_is_an_empty_answer_not_the_top_liked(embedded_queries) -> None:
-    result, _ = _call([[{"comment_count": 2}], [{"embedded": True}], []], query="the weather")
-
-    assert result.matched_by == "similarity"
-    assert result.comments == []
-    assert result.total_stored == 2
+    assert search.parameters == (VIDEO_ID, QUERY_VECTOR, MAX_COMMENTS)
+    assert "order by e.embedding <=> %s::vector" in search.statement
 
 
 def test_a_video_whose_comments_were_never_embedded_falls_back_to_the_top_liked(
