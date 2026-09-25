@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 import { getPlaybackUrl } from "../../api/video";
 import {
@@ -72,19 +72,24 @@ export function VideoPlayer({
 
   // The video element is never the fullscreen element: the frame around it is, so the CC
   // control stays on screen there. Chrome only offers its own captions entry through an
-  // overflow menu, which is why the player carries a button of its own.
-  useEffect(() => {
-    function readFullscreen() {
-      const frame = frameRef.current;
-      // The browser's own fullscreen button targets the video element, which would drop
-      // the CC overlay, so redirect that fullscreen request to the frame around it.
-      if (frame && document.fullscreenElement === videoRef.current) {
-        void document.exitFullscreen().then(() => frame.requestFullscreen()).catch(() => undefined);
-      }
+  // overflow menu, which is why the player carries a button of its own. The frame has to
+  // be requested from the click itself: a request made after the video went fullscreen no
+  // longer has the user activation the browser requires, and is refused.
+  function toggleFullscreen() {
+    const frame = frameRef.current;
+    if (!frame) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    } else {
+      void frame.requestFullscreen().catch(() => undefined);
     }
-    document.addEventListener("fullscreenchange", readFullscreen);
-    return () => document.removeEventListener("fullscreenchange", readFullscreen);
-  }, []);
+  }
+
+  function onVideoDoubleClick(event: MouseEvent<HTMLVideoElement>) {
+    // Chrome's double-click default makes the video element fullscreen; take the frame instead.
+    event.preventDefault();
+    toggleFullscreen();
+  }
 
   function applyCaptionMode() {
     const track = videoRef.current ? captionTrack(videoRef.current) : null;
@@ -195,6 +200,7 @@ export function VideoPlayer({
           preload="metadata"
           aria-label={title}
           onLoadedMetadata={onLoadedMetadata}
+          onDoubleClick={onVideoDoubleClick}
           onTimeUpdate={(event) => onTimeChange(event.currentTarget.currentTime)}
         >
           {captionsUrl ? (
@@ -220,6 +226,15 @@ export function VideoPlayer({
             </button>
           ) : null}
         </div>
+        {/* Sits over the browser's own fullscreen button, whose icon shows through, so its
+            click reaches the frame's fullscreen instead of the video's. */}
+        <button
+          className="video-player__fullscreen-hitbox"
+          type="button"
+          title="Full screen"
+          aria-label="Full screen"
+          onClick={toggleFullscreen}
+        />
       </div>
       {error ? <p className="video-player__notice" role="status">Playback refresh failed. The current link may continue working.</p> : null}
     </div>
