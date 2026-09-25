@@ -138,9 +138,10 @@ email-validator>=2.0
 
 # --- shared embeddings module ---
 # Remove this block together with backend/services/embeddings/ if the module is dropped.
-# all-MiniLM-L6-v2 runs locally through sentence-transformers: no API key and no per-call
-# cost. It downloads its checkpoint to the local cache on first use and runs on the GPU
-# when there is one, the CPU otherwise. torch is already a dependency above.
+# multilingual-e5-small (memories, chapters and on-screen text) runs locally through
+# sentence-transformers: no API key and no per-call cost. It downloads its checkpoint to the
+# local cache on first use and runs on the GPU when there is one, the CPU otherwise. torch is
+# already a dependency above.
 sentence-transformers>=3.0
 # --- end shared embeddings module ---
 

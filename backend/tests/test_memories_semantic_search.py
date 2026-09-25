@@ -54,11 +54,11 @@ def embedded_queries(monkeypatch) -> list[str]:
     """Records what was embedded, so a test never loads the real model's checkpoint."""
     recorded: list[str] = []
 
-    def fake_embed_text(text: str) -> list[float]:
+    def fake_embed_query(text: str) -> list[float]:
         recorded.append(text)
         return QUERY_VECTOR
 
-    monkeypatch.setattr(tool_module, "embed_text", fake_embed_text)
+    monkeypatch.setattr(tool_module, "embed_query", fake_embed_query)
     return recorded
 
 
@@ -71,7 +71,8 @@ def _search(query: str, rows: list[dict]) -> tuple[list, FakePool]:
 def test_the_query_is_embedded_as_written(embedded_queries) -> None:
     """Rows were indexed as a `chapter title: ... / memory summary: ...` string, but the
     query is embedded raw: it has no chapter title to give, so framing it the same way
-    would only ever match the shape an ungrouped memory has.
+    would only ever match the shape an ungrouped memory has. (`embed_query` adds e5's
+    `query: ` prefix itself.)
     """
     _search("why does alignment need mono audio?", ROWS)
 
@@ -84,7 +85,9 @@ def test_the_search_is_scoped_to_the_video_in_deps_and_asks_for_five(embedded_qu
     """
     _, pool = _search("mono audio", ROWS)
 
-    assert pool.recorded[0].parameters == (VIDEO_ID, QUERY_VECTOR, TOP_K)
+    assert pool.recorded[0].parameters == (
+        VIDEO_ID, "intfloat/multilingual-e5-small", QUERY_VECTOR, TOP_K
+    )
     assert TOP_K == 5
 
 
@@ -114,3 +117,10 @@ def test_a_video_with_nothing_embedded_yields_no_hits_rather_than_an_error(embed
     hits, _ = _search("anything at all", [])
 
     assert hits == []
+
+
+def test_only_vectors_from_the_query_model_are_compared(embedded_queries) -> None:
+    """A video still holding MiniLM vectors must not have them ranked against an e5 query."""
+    _, pool = _search("mono audio", ROWS)
+
+    assert "e.model = %s" in pool.statements[0]

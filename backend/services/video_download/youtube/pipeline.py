@@ -94,13 +94,14 @@ def _build_transcript(video_path: str, url: str, output_dir: Path, languages: tu
         normalize_fn = (
             normalize_words if fetched.timing_fidelity == TimingFidelity.WORD else normalize_caption_cues
         )
-        normalized = normalize_fn(fetched.segments, source=CAPTIONS_SOURCE)
+        normalized = normalize_fn(fetched.segments, source=CAPTIONS_SOURCE, language=fetched.language)
         if normalized is not None:
             return YouTubeTranscript(
                 source=CAPTIONS_SOURCE,
                 text=" ".join(segment.text for segment in fetched.segments),
                 segments=fetched.segments,
                 normalized=normalized,
+                language=fetched.language,
             )
 
     logger.info("No timed YouTube captions available for %s; transcribing with ElevenLabs", url)
@@ -109,6 +110,7 @@ def _build_transcript(video_path: str, url: str, output_dir: Path, languages: tu
         source=ELEVENLABS_SOURCE,
         text=result.speech_text,
         elevenlabs_result=result,
+        language=result.language_code,
         normalized=normalize_words(
             result.words, source=ELEVENLABS_SOURCE, language=result.language_code
         ),

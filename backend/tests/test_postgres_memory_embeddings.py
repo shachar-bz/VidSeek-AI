@@ -17,14 +17,14 @@ EMBEDDINGS = [
         memory_id=MEMORY_ID_1,
         chapter_id=CHAPTER_ID,
         embedding=[0.1, 0.2, 0.3],
-        model="all-MiniLM-L6-v2",
+        model="intfloat/multilingual-e5-small",
         dimensions=3,
     ),
     MemoryEmbedding(
         memory_id=MEMORY_ID_2,
         chapter_id=None,
         embedding=[0.4, 0.5, 0.6],
-        model="all-MiniLM-L6-v2",
+        model="intfloat/multilingual-e5-small",
         dimensions=3,
     ),
 ]
@@ -53,7 +53,7 @@ def test_a_memory_embedding_carries_its_chapter_model_and_dimensions() -> None:
         VIDEO_ID,
         CHAPTER_ID,
         [0.1, 0.2, 0.3],
-        "all-MiniLM-L6-v2",
+        "intfloat/multilingual-e5-small",
         3,
     )
 
@@ -167,16 +167,17 @@ MATCH_ROWS = [
 ]
 
 QUERY_VECTOR = [0.7, 0.8, 0.9]
+MODEL = "intfloat/multilingual-e5-small"
 
 
 def test_search_orders_by_cosine_distance_and_filters_to_the_one_video() -> None:
     store, pool = _store(MATCH_ROWS)
-    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
 
     statement = pool.statements[0]
     assert "e.embedding <=> %s::vector" in statement
-    assert "where e.video_id = %s::uuid" in statement
-    assert pool.recorded[0].parameters == (VIDEO_ID, QUERY_VECTOR, 5)
+    assert "where e.video_id = %s::uuid and e.model = %s" in statement
+    assert pool.recorded[0].parameters == (VIDEO_ID, MODEL, QUERY_VECTOR, 5)
 
 
 def test_search_reaches_the_video_through_the_embeddings_table_not_through_memories() -> None:
@@ -184,7 +185,7 @@ def test_search_reaches_the_video_through_the_embeddings_table_not_through_memor
     for exactly this: filtering through `memories` instead would join the whole table first.
     """
     store, pool = _store(MATCH_ROWS)
-    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
 
     statement = pool.statements[0]
     assert "m.video_id" not in statement
@@ -196,7 +197,7 @@ def test_search_keeps_a_memory_that_was_never_grouped_into_a_chapter() -> None:
     chapter join is a left one and its title comes back as None rather than dropping the row.
     """
     store, pool = _store(MATCH_ROWS)
-    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
 
     assert "left join public.chapters" in pool.statements[0]
     assert [match.chapter_title for match in matches] == ["The transcription pipeline", None]
@@ -204,7 +205,7 @@ def test_search_keeps_a_memory_that_was_never_grouped_into_a_chapter() -> None:
 
 def test_search_answers_with_what_was_said_and_when() -> None:
     store, _ = _store(MATCH_ROWS)
-    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
 
     assert len(matches) == len(MATCH_ROWS)
     first = matches[0]
@@ -217,7 +218,7 @@ def test_search_answers_with_what_was_said_and_when() -> None:
 
 def test_search_leaves_the_chapter_id_none_when_ungrouped() -> None:
     store, _ = _store(MATCH_ROWS)
-    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5)
+    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
 
     assert matches[1].chapter_id is None
 
@@ -225,4 +226,12 @@ def test_search_leaves_the_chapter_id_none_when_ungrouped() -> None:
 def test_search_of_a_video_with_nothing_embedded_returns_no_matches() -> None:
     store, _ = _store([])
 
-    assert store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5) == []
+    assert store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL) == []
+
+
+def test_videos_holding_another_models_vectors_are_listed_once_each() -> None:
+    store, pool = _store([{"video_id": VIDEO_ID}])
+
+    assert store.video_ids_embedded_with_other_models(MODEL) == [VIDEO_ID]
+    assert "select distinct video_id" in pool.statements[0]
+    assert pool.recorded[0].parameters == (MODEL,)

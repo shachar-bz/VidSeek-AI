@@ -44,10 +44,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FetchedCaptions:
-    """A caption track's segments, at whatever granularity it actually measured."""
+    """A caption track's segments, at whatever granularity it actually measured.
+
+    `language` is the code YouTube files the track under (`he`, `en-US`, ...), which is the
+    language the captions are written in.
+    """
 
     segments: list[CaptionSegment]
     timing_fidelity: TimingFidelity
+    language: str | None = None
 
 
 def _match_language(tracks: dict, language: str) -> str | None:
@@ -266,4 +271,4 @@ def fetch_captions(
         "automatic" if is_automatic else "hand-written",
         timing_fidelity.value,
     )
-    return FetchedCaptions(segments=segments, timing_fidelity=timing_fidelity)
+    return FetchedCaptions(segments=segments, timing_fidelity=timing_fidelity, language=language_code)

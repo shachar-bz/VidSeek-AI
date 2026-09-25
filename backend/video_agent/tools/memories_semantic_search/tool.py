@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic_ai import RunContext
 
-from backend.services.embeddings import embed_text
+from backend.services.embeddings.multilingual_text_embedding import MODEL_NAME, embed_query
 from backend.storage.postgres import PostgresMemoryEmbeddings
 
 from ..deps import ConversationDeps
@@ -32,7 +32,7 @@ def memories_semantic_search(ctx: RunContext[ConversationDeps], query: str) -> l
         searchable content.
     """
     store = PostgresMemoryEmbeddings(ctx.deps.pool)
-    matches = store.nearest_memories(ctx.deps.video_id, embed_text(query), TOP_K)
+    matches = store.nearest_memories(ctx.deps.video_id, embed_query(query), TOP_K, model=MODEL_NAME)
     return [
         MemorySearchHit(
             memory_id=match.memory_id,

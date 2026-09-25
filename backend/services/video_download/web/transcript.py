@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -23,6 +24,10 @@ from .structured import parse_json_captions
 
 MIN_VISIBLE_TRANSCRIPT_CHARACTERS = 80
 FORCED_ALIGNMENT_SOURCE = "forced_alignment"
+
+# A BCP 47-shaped tag (`he`, `en-US`, `zh-Hans`), as yt-dlp puts it between a subtitle
+# file's name and its extension: `clip.he.vtt`.
+SUBTITLE_LANGUAGE_TAG = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
 
 logger = logging.getLogger(__name__)
 
@@ -123,12 +128,22 @@ def choose_supplied_transcript(candidates: list[CaptionCandidate], preferred_lan
     return untimed
 
 
+def subtitle_file_language(path: Path) -> str | None:
+    """The language yt-dlp named a subtitle file after, or None if its name carries none."""
+    suffixes = path.suffixes
+    if len(suffixes) < 2:
+        return None
+    tag = suffixes[-2].lstrip(".")
+    return tag if SUBTITLE_LANGUAGE_TAG.match(tag) else None
+
+
 def transcript_from_subtitle_files(paths: list[Path]) -> TranscriptArtifact | None:
     """Use the first valid subtitle file produced by yt-dlp."""
     for path in sorted(paths, key=lambda item: item.suffix.lower() not in {".vtt", ".srt"}):
         candidate = CaptionCandidate(
             text=path.read_text(encoding="utf-8", errors="replace"),
             format=path.suffix.lstrip("."),
+            language=subtitle_file_language(path),
             is_manual=True,
         )
         result = transcript_from_caption(candidate)

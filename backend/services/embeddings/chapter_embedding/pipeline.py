@@ -1,7 +1,7 @@
 """Embeds a video's chapters and stores the vectors in `chapter_embeddings`.
 
 Reads each chapter from PostgreSQL (`chapters`), embeds `text.build_embedding_text`'s
-rendering of it with the shared model, and writes the result back, keyed on the chapter.
+rendering of it with multilingual-e5-small as a passage, and writes the result back, keyed on the chapter.
 `PostgresChapterEmbeddings.replace` is what makes this safe to run again after chapters
 change: it overwrites every chapter's vector in place and drops any the run no longer
 produced.
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.services.embeddings.model import MODEL_NAME, embed_text
+from backend.services.embeddings.multilingual_text_embedding import MODEL_NAME, embed_passages
 from backend.storage.postgres import ChapterEmbedding, PostgresChapterEmbeddings
 
 from .text import build_embedding_text
@@ -27,10 +27,9 @@ def embed_chapters_for_video(video_id: str, *, pool=None) -> int:
     store = PostgresChapterEmbeddings(pool=pool)
     chapters = store.chapters_for_video(video_id)
 
+    texts = [build_embedding_text(chapter.title, chapter.summary) for chapter in chapters]
     embeddings = []
-    for chapter in chapters:
-        text = build_embedding_text(chapter.title, chapter.summary)
-        vector = embed_text(text)
+    for chapter, vector in zip(chapters, embed_passages(texts)):
         embeddings.append(
             ChapterEmbedding(
                 chapter_id=chapter.chapter_id,

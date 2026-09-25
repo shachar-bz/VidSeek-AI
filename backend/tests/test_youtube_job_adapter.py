@@ -65,6 +65,21 @@ def test_caption_transcript_is_written_where_the_extension_looks(tmp_path: Path)
     assert result.transcript_error is None
 
 
+
+def test_caption_transcript_keeps_the_track_language(tmp_path: Path) -> None:
+    segments = [CaptionSegment(text="shalom", start_seconds=0.0, end_seconds=1.5)]
+    transcript = YouTubeTranscript(
+        source="youtube_captions",
+        text="shalom",
+        segments=segments,
+        normalized=normalize_caption_cues(segments, source="youtube_captions", language="he"),
+        language="he",
+    )
+    result, _ = _run(tmp_path, _result(tmp_path, transcript, None))
+
+    assert result.normalized_transcript.language == "he"
+    assert '"language": "he"' in result.transcript_json_path.read_text(encoding="utf-8")
+
 def test_elevenlabs_transcript_keeps_its_language_and_full_result(tmp_path: Path) -> None:
     scribe = TranscriptionResult(
         video_path="abc.mp4",

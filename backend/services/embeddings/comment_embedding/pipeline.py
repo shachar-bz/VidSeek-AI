@@ -1,9 +1,8 @@
 """Embeds a video's YouTube comments and stores the vectors in `comment_embeddings`.
 
 Reads the comments back from PostgreSQL rather than taking them from a caller, so it can be
-run again on its own. multilingual-e5-small rather than the shared MiniLM, because comment
-sections are as often Hebrew as English; all of a video's comments go through it as one
-batch, since there are at most a few hundred of them and each is short.
+run again on its own. multilingual-e5-small, because comment sections are as often Hebrew as
+English; all of a video's comments go through it as one batch, since there are at most a few hundred of them and each is short.
 
 Needs AZURE_DATABASE_URL in `backend/.env`, and `0027_comment_embeddings.sql` applied.
 """
