@@ -278,10 +278,14 @@ function MetadataDialog({ video, mode, suggestions, onClose, onSaved }: {
     setError(null);
   }, [video, mode]);
 
-  function addTag() {
+  // A tag still sitting in the input counts as added, so Save never drops what was typed.
+  function tagsWithDraft(): string[] {
     const next = tagDraft.trim();
-    if (!next || tags.includes(next)) return;
-    setTags((current) => [...current, next]);
+    return !next || tags.includes(next) ? tags : [...tags, next];
+  }
+
+  function addTag() {
+    setTags(tagsWithDraft());
     setTagDraft("");
   }
 
@@ -292,7 +296,7 @@ function MetadataDialog({ video, mode, suggestions, onClose, onSaved }: {
     setError(null);
     const update: UpdateLibraryLinkRequest = mode === "rename"
       ? { custom_title: title.trim() || null }
-      : { tags };
+      : { tags: tagsWithDraft() };
     try {
       onSaved(await updateLibraryVideo(video.video_id, update));
     } catch (caught) {
