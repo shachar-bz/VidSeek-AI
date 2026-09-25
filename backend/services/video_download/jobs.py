@@ -26,11 +26,21 @@ the transcript stages -- and a job's slot frees when those finish. The visual ex
 the visual indexing the pipeline hands over right after Store, so the next job's transcript
 stages may overlap this video's indexing, while two indexing runs never share the GPU. A job
 reports done without waiting for its index; `videos.visual_status` tracks that separately.
+
+Every file a run writes lives in a folder of its own, `jobs/<job_id>` under the download root:
+the video, a download's `.part` fragments, subtitles, transcripts, comments and the thumbnail,
+and a file Chrome downloaded, which is moved in when the run starts. The folder is deleted
+when the run ends, however it ends, so no route or failure has to know which files it made.
+The one file that outlives a run is the video handed to visual indexing, which moves to
+`visual-queue` first and is deleted by the visual task. Nothing in either folder survives a
+restart that anything could use -- jobs and the visual queue are both in memory -- so a new
+manager empties both, which clears up after a process that crashed or was killed.
 """
 
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -88,6 +98,13 @@ logger = logging.getLogger(__name__)
 
 TRANSCRIPTION_FAILED = "transcription_failed"
 UPLOAD_FAILED = "upload_failed"
+PROCESSING_FAILED = "processing_failed"
+
+# The download root's two folders this module owns, and empties when it starts. Nothing else
+# under the root is touched: Chrome saves into the root itself, and the transcript store
+# keeps its own folder beside these.
+JOB_WORKSPACES_DIRECTORY_NAME = "jobs"
+VISUAL_INDEXING_QUEUE_DIRECTORY_NAME = "visual-queue"
 
 # The acquisition mode a deduplicated job reports: it never chose one of the three real
 # routes, because it never downloaded anything.
@@ -225,6 +242,28 @@ def _response_from_persisted_job(job: VideoJob) -> VideoJobResponse:
     )
 
 
+def _delete_local_path(path: Path) -> None:
+    """Delete a file or a whole folder, logging rather than raising if it will not go.
+
+    A file another process still has open -- an ffmpeg a cancel did not wait for, on Windows
+    -- is the usual reason; the next manager to start clears whatever this one left.
+    """
+    try:
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
+    except OSError:
+        logger.exception("Deleting the local copy %s failed", path)
+
+
+def _empty_directory(directory: Path) -> None:
+    """Create `directory` if it is missing, and delete everything already inside it."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for child in directory.iterdir():
+        _delete_local_path(child)
+
+
 def _blob_name_for_video(video_id: str | None) -> str | None:
     """The blob name a job's recorded video lives under, or None.
 
@@ -243,6 +282,12 @@ class JobManager:
     def __init__(self, download_root: Path):
         self.download_root = download_root
         self.download_root.mkdir(parents=True, exist_ok=True)
+        self._job_workspaces = download_root / JOB_WORKSPACES_DIRECTORY_NAME
+        self._visual_indexing_queue = download_root / VISUAL_INDEXING_QUEUE_DIRECTORY_NAME
+        # Whatever is in these was left by an earlier process, whose jobs and visual queue
+        # died with it.
+        _empty_directory(self._job_workspaces)
+        _empty_directory(self._visual_indexing_queue)
         self._jobs: dict[str, _Job] = {}
         self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vidseek-job")
@@ -360,8 +405,7 @@ class JobManager:
         """This job's current status, from memory while it runs and from the database after.
 
         With a database configured, a job falls out of `self._jobs` once it reaches a
-        status nothing can still act on (`_finish`, `_fail` on a non-retryable outcome,
-        `_mark_cancelled`, an outright cancel), and a deduplicated job is never in it at all
+        status nothing can still act on (`_finish`, `_mark_cancelled`, an outright cancel), and a deduplicated job is never in it at all
         -- so a caller asking about either has to be answered from `video_jobs` instead.
         Without one, eviction never happens and this dictionary answers everything, exactly
         as it always has.
@@ -513,18 +557,28 @@ class JobManager:
         would not help, since that route never used the browser's request in the first place
         -- and neither can a file Chrome already downloaded, whose video is on disk and
         whose failure was therefore in processing it.
+
+        Everything the run writes goes in its own workspace folder, and the folder is deleted
+        once the run ends, whatever ended it. A file Chrome downloaded is moved in first, so
+        it goes with the rest.
         """
         with self._lock:
             job = self._require(job_id)
             if job.status == JobStatus.CANCELLED:
+                if local_path is not None:
+                    _delete_local_path(local_path)
                 return
             job.status = JobStatus.RUNNING
             request, acquisition_mode, user_id = job.request, job.acquisition_mode, job.user_id
+        workspace = self._job_workspaces / job_id
         try:
+            workspace.mkdir(parents=True, exist_ok=True)
+            if local_path is not None:
+                local_path = Path(shutil.move(local_path, workspace / local_path.name))
             processed = run_download_pipeline(
                 ROUTE_BY_ACQUISITION_MODE[acquisition_mode],
                 request=request,
-                download_root=self.download_root,
+                download_root=workspace,
                 job_id=job_id,
                 acquisition_mode=acquisition_mode,
                 cancel_event=job.cancel_event,
@@ -554,20 +608,31 @@ class JobManager:
                 error,
                 acquisition_mode=acquisition_mode,
                 can_capture=can_capture_on_failure,
-                local_path=local_path,
             )
         else:
             self._finish(job_id, processed)
+        finally:
+            _delete_local_path(workspace)
 
     def _schedule_visual_indexing(self, video_id: str, local_path: Path) -> None:
         """Queue one stored video's visual index on the visual executor, which now owns its file.
 
-        The task deletes the local file itself when it ends. A task that never starts --
+        The file moves out of its job's workspace into the visual queue first, because the
+        workspace is deleted when the run ends and the index is built after that. The task
+        deletes the local file itself when it ends. A task that never starts --
         cancelled because the manager shut down first -- cannot, so the future's callback
         does it instead; the video's row stays `pending`, which is the truth about an index
         nobody built. The task reads keyframe text with the machine's OCR engine, when one is
         set up; the engine and its worker process are shared by every video.
         """
+        self._visual_indexing_queue.mkdir(parents=True, exist_ok=True)
+        # A name of its own rather than the video id's, so indexing one video twice cannot
+        # overwrite a copy the first task is still reading.
+        local_path = Path(
+            shutil.move(
+                local_path, self._visual_indexing_queue / f"{uuid.uuid4().hex}{local_path.suffix}"
+            )
+        )
         future = self._visual_executor.submit(
             index_video_visually,
             video_id,
@@ -589,23 +654,18 @@ class JobManager:
         *,
         acquisition_mode: str,
         can_capture: bool,
-        local_path: Path | None,
     ) -> None:
         """Report a run that never got as far as a stored video, in the route's own terms.
 
-        A file Chrome already downloaded is the one route whose failure here is partial
-        rather than total: the video is on disk and stays there, so the job keeps it and
-        says the transcript processing is what went wrong.
+        A file Chrome already downloaded was obtained, so what failed was processing it. The
+        file went with the run's workspace: nothing would ever have read it again.
         """
-        if local_path is not None:
-            with self._lock:
-                self._require(job_id).video_path = str(local_path)
+        if acquisition_mode == "browser_download":
             self._fail(
                 job_id,
-                "transcript_failed",
-                f"Video retained; transcript processing failed ({type(error).__name__})",
+                PROCESSING_FAILED,
+                f"Processing the Chrome download failed ({type(error).__name__})",
                 can_capture=False,
-                partial=True,
             )
             return
         attempt = DOWNLOAD_FAILURE_BY_ACQUISITION_MODE.get(
@@ -631,17 +691,11 @@ class JobManager:
         acquired = processed.acquired
         with self._lock:
             job = self._require(job_id)
-            # The video now lives in Blob Storage. The local copy made for transcription is
-            # visual indexing's until it is deleted, and nothing the extension should use.
+            # The video now lives in Blob Storage and its transcript and comments in the
+            # database. The local files made on the way go with the run's workspace -- the
+            # video once visual indexing is done with it -- so no path is reported.
             job.video_path = None
-            job.transcript_text_path = (
-                str(acquired.transcript_text_path) if acquired.transcript_text_path else None
-            )
-            job.transcript_json_path = (
-                str(acquired.transcript_json_path) if acquired.transcript_json_path else None
-            )
             job.transcript_source = acquired.transcript_source
-            job.comments_path = str(acquired.comments_path) if acquired.comments_path else None
             job.video_storage_key = processed.stored_video.name
             job.video_id = processed.video_id
             job.phase = JobPhase.COMPLETE
@@ -676,24 +730,19 @@ class JobManager:
         message: str,
         *,
         can_capture: bool,
-        partial: bool = False,
     ) -> None:
         with self._lock:
             job = self._require(job_id)
-            job.status = JobStatus.PARTIAL_SUCCESS if partial else JobStatus.FAILED
+            job.status = JobStatus.FAILED
             job.error_code = code
             job.message = message
             job.can_capture = can_capture
-            if partial:
-                job.phase = JobPhase.COMPLETE
-                job.progress = 1.0
             self._discard_secrets(job_id)
-            persisted = self._persist(job)
-            # FAILED, unlike PARTIAL_SUCCESS, is not evicted: `retry_with_capture` accepts a
-            # captured request for exactly this status, and needs the same `_Job` -- its
-            # caption text kept for the retry, among other things -- still in the dictionary.
-            if partial and persisted:
-                del self._jobs[job_id]
+            # FAILED, unlike the finished statuses, is not evicted: `retry_with_capture`
+            # accepts a captured request for exactly this status, and needs the same `_Job`
+            # -- its caption text kept for the retry, among other things -- still in the
+            # dictionary.
+            self._persist(job)
 
     def _mark_cancelled(self, job_id: str) -> None:
         with self._lock:
