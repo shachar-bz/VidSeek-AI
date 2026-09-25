@@ -62,6 +62,7 @@ def _artifact(result: YouTubeDownloadResult) -> TranscriptArtifact:
                 for segment in transcript.segments
             ],
             normalized=transcript.normalized,
+            language=transcript.language,
         )
 
     scribe = transcript.elevenlabs_result
@@ -102,7 +103,7 @@ def run_youtube_job(
     if supplied and supplied.is_timed:
         options["supplied_transcript"] = YouTubeTranscript(
             source=CAPTIONS_SOURCE, text=supplied.text, segments=supplied.segments,
-            normalized=supplied.normalized,
+            normalized=supplied.normalized, language=supplied.language,
         )
     result = download_youtube_video(
         request.page_url,

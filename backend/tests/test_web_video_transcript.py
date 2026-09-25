@@ -11,6 +11,8 @@ from backend.services.video_download.web.transcript import (
     choose_supplied_transcript,
     parse_ttml,
     parse_webvtt_or_srt,
+    subtitle_file_language,
+    transcript_from_subtitle_files,
 )
 
 
@@ -108,3 +110,21 @@ def test_forced_alignment_failure_falls_through_to_none(tmp_path: Path) -> None:
 
     assert result is None
 
+
+def test_subtitle_file_language_is_read_from_the_yt_dlp_file_name() -> None:
+    assert subtitle_file_language(Path("clip-abc123.he.vtt")) == "he"
+    assert subtitle_file_language(Path("My.Talk-abc.en-US.srt")) == "en-US"
+    # No language between the name and the extension, or something that is not one.
+    assert subtitle_file_language(Path("clip.vtt")) is None
+    assert subtitle_file_language(Path("Talk v2.5-abc.vtt")) is None
+
+
+def test_downloaded_subtitle_file_keeps_its_language(tmp_path: Path) -> None:
+    path = tmp_path / "clip.he.vtt"
+    path.write_text("WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nשלום לכולם\n", encoding="utf-8")
+
+    artifact = transcript_from_subtitle_files([path])
+
+    assert artifact is not None and artifact.is_timed
+    assert artifact.language == "he"
+    assert artifact.normalized.language == "he"

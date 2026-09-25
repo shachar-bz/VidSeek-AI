@@ -38,6 +38,9 @@ class YouTubeTranscript:
     Exactly one of `segments` and `elevenlabs_result` is ever filled, and `source` says
     which to read: caption segments for `youtube_captions`, the full Scribe result — words,
     speakers and audio events — for `elevenlabs`.
+
+    `language` is what the source said the speech is in: the caption track's language, or
+    the one Scribe detected. None when the source did not say.
     """
 
     source: TranscriptSource
@@ -45,6 +48,7 @@ class YouTubeTranscript:
     segments: list[CaptionSegment] = field(default_factory=list)
     elevenlabs_result: "TranscriptionResult | None" = None
     normalized: NormalizedTranscript | None = None
+    language: str | None = None
 
     @property
     def is_from_captions(self) -> bool:

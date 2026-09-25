@@ -69,3 +69,33 @@ def test_a_normally_timed_caption_track_is_used_as_is() -> None:
     transcribe.assert_not_called()
     assert transcript.source == "youtube_captions"
     assert transcript.is_timed
+
+
+def test_the_caption_track_language_reaches_the_transcript() -> None:
+    """The track's language is what `videos.transcript_language` is later written from."""
+    fetched = FetchedCaptions(
+        segments=[CaptionSegment(text="שלום לכולם", start_seconds=0.0, end_seconds=1.5)],
+        timing_fidelity=TimingFidelity.CAPTION,
+        language="he",
+    )
+
+    with patch.object(pipeline, "fetch_captions", return_value=fetched):
+        transcript = pipeline._build_transcript(
+            "abc.mp4", "https://youtu.be/abc", Path("out"), ("he", "en")
+        )
+
+    assert transcript.language == "he"
+    assert transcript.normalized.language == "he"
+
+
+def test_the_scribe_language_reaches_the_transcript() -> None:
+    with (
+        patch.object(pipeline, "fetch_captions", return_value=None),
+        patch.object(pipeline, "transcribe_video", return_value=_elevenlabs_result()),
+    ):
+        transcript = pipeline._build_transcript(
+            "abc.mp4", "https://youtu.be/abc", Path("out"), ("en",)
+        )
+
+    assert transcript.language == "en"
+    assert transcript.normalized.language == "en"
