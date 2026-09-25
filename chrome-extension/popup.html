@@ -60,20 +60,26 @@
 
       <section id="inspect-view" class="view" hidden>
         <div class="view-hero">
-          <h1 class="view-title">Inspect video</h1>
+          <h1 class="view-title">Find a video</h1>
           <p class="view-tagline">Find the video on this tab, then chat with AI about it</p>
         </div>
         <div class="status-card">
-          <p id="status">Open the page with your video, then inspect it.</p>
+          <p id="status">Open the page with your video, then click Find video.</p>
           <div id="details"></div>
+          <ol id="check-steps" class="check-steps" hidden>
+            <li>Click <strong>Start playback check</strong>.</li>
+            <li>Reload the page, skip any ads, and play the video for a few seconds.</li>
+            <li>Come back here and click <strong>I played it, continue</strong>.</li>
+          </ol>
         </div>
         <fieldset id="video-picker" hidden></fieldset>
         <div class="view-actions">
-          <button id="inspect" type="button" class="pill pill--dark">Inspect video</button>
-          <button id="download" type="button" class="pill pill--dark" hidden>Grant access and scan</button>
-          <button id="verify" type="button" class="pill pill--dark" hidden>Verify &amp; play</button>
-          <button id="stop-verify" type="button" class="pill pill--dark" hidden>Finish verification</button>
-          <button id="cancel-verify" type="button" class="pill pill--light" hidden>Cancel</button>
+          <button id="download" type="button" class="pill pill--dark" hidden>Scan video</button>
+          <button id="verify" type="button" class="pill pill--dark" hidden>Start playback check</button>
+          <button id="stop-verify" type="button" class="pill pill--dark" hidden>I played it, continue</button>
+          <p id="action-hint" class="action-hint"></p>
+          <button id="inspect" type="button" class="pill pill--dark">Find video</button>
+          <button id="cancel-verify" type="button" class="pill pill--light" hidden>Cancel check</button>
         </div>
       </section>
 
@@ -99,8 +105,8 @@
           when it's done.
         </p>
         <div class="view-actions">
-          <button id="capture" type="button" class="pill pill--dark" hidden>Capture difficult player</button>
-          <button id="stop-capture" type="button" class="pill pill--dark" hidden>Stop capture and retry</button>
+          <button id="capture" type="button" class="pill pill--dark" hidden>Retry with a playback check</button>
+          <button id="stop-capture" type="button" class="pill pill--dark" hidden>I played it, retry</button>
           <button id="scan-another" type="button" class="pill pill--dark" hidden>Scan another video</button>
           <button id="cancel" type="button" class="pill pill--light" hidden>Cancel scan</button>
         </div>

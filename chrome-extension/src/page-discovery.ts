@@ -363,6 +363,9 @@ export function discoverPage(): DiscoveryResult {
     g.drm_detected ||= Boolean(video.mediaKeys);
     if (Number.isFinite(video.duration) && video.duration > 0)
       g.media_duration_seconds = video.duration;
+    // Lets the picker point at the video the user is watching right now.
+    if (!video.paused && !video.ended && video.currentTime > 0)
+      g.media_playing = true;
     for (const track of video.querySelectorAll("track")) {
       if (!["captions", "subtitles"].includes(track.kind)) continue;
       if (track.getAttribute("src"))

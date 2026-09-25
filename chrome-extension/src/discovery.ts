@@ -337,7 +337,108 @@ function expandVideoFrames(
 export interface VideoGroup {
   frameId: number;
   label: string;
+  /** A second, quieter line under the label: what sets this choice apart. */
+  detail?: string;
+  /** The choice most likely to be the video the user means; the picker selects it first. */
+  recommended?: boolean;
   result: DiscoveryResult;
+}
+
+/** 754 → "12:34", 4000 → "1:06:40". */
+export function formatDuration(totalSeconds: number): string {
+  const seconds = Math.round(totalSeconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const rest = String(seconds % 60).padStart(2, "0");
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
+    : `${minutes}:${rest}`;
+}
+
+export interface CapturedSourceChoice {
+  candidate: MediaCandidate;
+  label: string;
+  detail: string;
+  recommended: boolean;
+}
+
+// A clip this short, and this much shorter than the longest one seen, is almost never the
+// video the user came for.
+const SHORT_CLIP_SECONDS = 90;
+const SHORT_CLIP_RATIO = 3;
+// Less than this is the player buffering ahead, not the user watching.
+const MIN_PLAYED_SECONDS = 1;
+
+/**
+ * Names the videos a playback check captured, longest first. A stream carries no title, and
+ * a URL means nothing to the user, so each is marked by what they can recognise: whether
+ * they played it during the check, and how long it runs (the talk runs for minutes, the ad
+ * or sponsor intro before it for seconds).
+ */
+export function describeCapturedSources(
+  candidates: MediaCandidate[],
+): CapturedSourceChoice[] {
+  const ordered = [...candidates].sort(
+    (left, right) =>
+      (right.duration_seconds ?? -1) - (left.duration_seconds ?? -1),
+  );
+  const longest = ordered[0]?.duration_seconds;
+  const measured = ordered.filter((candidate) => candidate.duration_seconds);
+  const played = (candidate: MediaCandidate): boolean =>
+    (candidate.played_seconds ?? 0) >= MIN_PLAYED_SECONDS;
+  const anyPlayed = ordered.some(played);
+  // Without lengths to compare, the one the user played the most is the best guess.
+  const mostPlayed = ordered.reduce<MediaCandidate | undefined>(
+    (best, candidate) =>
+      played(candidate) &&
+      (candidate.played_seconds ?? 0) > (best?.played_seconds ?? 0)
+        ? candidate
+        : best,
+    undefined,
+  );
+  return ordered.map((candidate, index) => {
+    const duration = candidate.duration_seconds;
+    const facts = [duration ? formatDuration(duration) : "length unknown"];
+    if (candidate.max_height) facts.push(`up to ${candidate.max_height}p`);
+
+    const marks: string[] = [];
+    if (played(candidate))
+      marks.push(`You played ${formatDuration(candidate.played_seconds!)} of it`);
+    else if (anyPlayed) marks.push("Not played during the check");
+    const recommended =
+      measured.length > 1 ? index === 0 : candidate === mostPlayed;
+    if (recommended && measured.length > 1)
+      marks.push("longest, most likely the main video");
+    else if (
+      measured.length > 1 &&
+      longest &&
+      duration &&
+      duration < SHORT_CLIP_SECONDS &&
+      duration * SHORT_CLIP_RATIO <= longest
+    )
+      marks.push("short, probably an ad or intro");
+    const detail = marks.length
+      ? capitalize(marks.join(", "))
+      : `Streamed from ${hostnameOf(candidate.url)}`;
+    return {
+      candidate,
+      label: `Video ${index + 1} · ${facts.join(" · ")}`,
+      detail,
+      recommended,
+    };
+  });
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "this page";
+  }
 }
 
 function isEmptyFrameResult(result: DiscoveryResult): boolean {
@@ -349,19 +450,40 @@ function isEmptyFrameResult(result: DiscoveryResult): boolean {
   );
 }
 
+/**
+ * The video's own title where the page gives it one (structured data, an aria-label, an
+ * embed's document title). Otherwise its place in the list: the tab's title is the same for
+ * every video on the page, so it would not tell them apart.
+ */
 function describeVideoGroup(
   result: DiscoveryResult,
-  frameId: number,
+  position: number,
   topPageTitle: string,
 ): string {
   if (isYouTubeUrl(result.page_url))
     return `YouTube: ${result.page_title.replace(/ - YouTube$/, "")}`;
   if (result.page_title && result.page_title !== topPageTitle)
     return result.page_title;
-  const mediaCount = `${result.media_candidates.length} media source(s)`;
-  return frameId === 0
-    ? `Main page (${mediaCount})`
-    : `Embedded player (${mediaCount})`;
+  return `Video ${position}`;
+}
+
+/** What the user can check against the page: is it the one playing, how long, and where. */
+function describeVideoGroupDetail(
+  result: DiscoveryResult,
+  frameId: number,
+): string {
+  const marks: string[] = [];
+  if (result.media_playing) marks.push("Playing now");
+  const duration = result.media_duration_seconds;
+  if (duration && Number.isFinite(duration)) marks.push(formatDuration(duration));
+  if (frameId === 0 || isYouTubeUrl(result.page_url)) {
+    if (!marks.length) marks.push("In the page itself");
+  } else {
+    marks.push(
+      `embedded from ${hostnameOf(result.frame_url || result.page_url)}`,
+    );
+  }
+  return capitalize(marks.join(" · "));
 }
 
 /**
@@ -385,11 +507,19 @@ export function findVideoGroups(
         Boolean(frame.result),
     )
     .filter((frame) => !isEmptyFrameResult(frame.result))
-    .map((frame) => ({
+    .map((frame, index) => ({
       frameId: frame.frameId,
-      label: describeVideoGroup(frame.result, frame.frameId, topPageTitle),
+      label: describeVideoGroup(frame.result, index + 1, topPageTitle),
+      detail: describeVideoGroupDetail(frame.result, frame.frameId),
+      recommended: Boolean(frame.result.media_playing),
       result: frame.result,
     }));
+  // Two videos carrying the same title still need telling apart.
+  const labels = groups.map((group) => group.label);
+  for (const [index, group] of groups.entries()) {
+    if (labels.filter((label) => label === group.label).length > 1)
+      group.label = `${group.label} (${index + 1})`;
+  }
   return groups.length > 1 ? groups : undefined;
 }
 
