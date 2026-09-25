@@ -34,6 +34,7 @@ from backend.schemas.conversations import (
     ToolResultEvent,
 )
 from backend.storage.postgres import (
+    PostgresComments,
     PostgresConversations,
     PostgresLibraryViews,
     PostgresMessages,
@@ -78,6 +79,10 @@ def video_records_store(request: Request) -> PostgresVideoRecords:
     return request.app.state.video_records_store
 
 
+def comments_store(request: Request) -> PostgresComments:
+    return request.app.state.comments_store
+
+
 def agent_runner(request: Request) -> ConversationAgentRunner:
     return request.app.state.conversation_agent_runner
 
@@ -92,6 +97,7 @@ Pins = Annotated[PostgresPinnedAnswers, Depends(pinned_answers_store)]
 UserVideos = Annotated[PostgresUserVideos, Depends(user_videos_store)]
 LibraryViews = Annotated[PostgresLibraryViews, Depends(library_views)]
 VideoRecords = Annotated[PostgresVideoRecords, Depends(video_records_store)]
+Comments = Annotated[PostgresComments, Depends(comments_store)]
 Runner = Annotated[ConversationAgentRunner, Depends(agent_runner)]
 Generations = Annotated[GenerationRegistry, Depends(generation_registry)]
 User = Annotated[StoredUser, Depends(current_user)]
@@ -188,6 +194,7 @@ async def send_message(
     pins: Pins,
     views: LibraryViews,
     video_records: VideoRecords,
+    comments: Comments,
     runner: Runner,
     generations: Generations,
 ) -> StreamingResponse:
@@ -221,6 +228,7 @@ async def send_message(
         messages=messages,
         pins=pins,
         timestamps_reliable=_timestamps_reliable(conversation.video_id, video_records),
+        has_comments=comments.count(conversation.video_id) > 0,
         current_time_seconds=body.current_time_seconds,
         player_paused=body.player_paused,
     )
@@ -259,6 +267,7 @@ async def _answer_stream(
     messages: PostgresMessages,
     pins: PostgresPinnedAnswers,
     timestamps_reliable: bool,
+    has_comments: bool = False,
     current_time_seconds: float | None = None,
     player_paused: bool | None = None,
 ) -> AsyncIterator[str]:
@@ -273,6 +282,7 @@ async def _answer_stream(
     deps = ConversationDeps(
         video_id=conversation.video_id,
         timestamps_reliable=timestamps_reliable,
+        has_comments=has_comments,
         current_time_seconds=current_time_seconds,
         player_paused=player_paused,
         pool=getattr(messages, "_pool", None),

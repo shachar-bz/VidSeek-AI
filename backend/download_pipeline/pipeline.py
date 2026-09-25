@@ -3,7 +3,8 @@
 1. Acquire — download the video and get a timed transcript beside it, whichever of the
    three ways it has to be obtained (`acquisition`).
 2. Store — upload the video to Blob Storage, and describe it, its transcript and its
-   comments in the database (`video_storage`).
+   comments in the database (`video_storage`). A YouTube video's comments are embedded right
+   after, before anything that needs a transcript (`embedding.embed_comments`).
 3. Segment — divide the transcript into memories, group those into chapters, store both
    (`segmentation`).
 4. Embed — turn the memories and chapters into vectors (`embedding`).
@@ -43,7 +44,7 @@ from yt_dlp.utils import DownloadCancelled
 from backend.schemas.video_jobs import CreateVideoJobRequest, JobPhase
 
 from .acquisition import AcquisitionRoute, acquire_video
-from .embedding import embed_video
+from .embedding import embed_comments, embed_video
 from .insights import generate_and_store_insights
 from .result import ProcessedVideo
 from .segmentation import segment_and_store
@@ -117,6 +118,15 @@ def run_download_pipeline(
         pool=pool,
     )
 
+    # Only when this run's fetch brought comments back: None means the fetch failed and the
+    # comments and vectors an earlier scan stored are kept as they are, and an empty fetch
+    # has already cleared both.
+    comment_embedding_count = 0
+    if storage.video_id is not None and acquired.comments:
+        embedded_comments = embed_comments(storage.video_id, pool=pool)
+        comment_embedding_count = embedded_comments.comment_count
+        problems.extend(embedded_comments.problems)
+
     reason = _reason_to_stop_after_storage(acquired, storage.video_id, cancel_event)
     if reason is not None:
         logger.info("Video %s is stored but not indexed: %s", storage.stored_video.name, reason)
@@ -124,6 +134,7 @@ def run_download_pipeline(
             acquired=acquired,
             stored_video=storage.stored_video,
             video_id=storage.video_id,
+            comment_embedding_count=comment_embedding_count,
             problems=tuple(problems),
         )
 
@@ -140,6 +151,7 @@ def run_download_pipeline(
             video_id=storage.video_id,
             memory_count=segmented.memory_count,
             chapter_count=segmented.chapter_count,
+            comment_embedding_count=comment_embedding_count,
             problems=tuple(problems),
         )
 
@@ -154,6 +166,7 @@ def run_download_pipeline(
             video_id=storage.video_id,
             memory_count=segmented.memory_count,
             chapter_count=segmented.chapter_count,
+            comment_embedding_count=comment_embedding_count,
             memory_embedding_count=embedded.memory_count,
             chapter_embedding_count=embedded.chapter_count,
             problems=tuple(problems),
@@ -169,6 +182,7 @@ def run_download_pipeline(
         video_id=storage.video_id,
         memory_count=segmented.memory_count,
         chapter_count=segmented.chapter_count,
+        comment_embedding_count=comment_embedding_count,
         memory_embedding_count=embedded.memory_count,
         chapter_embedding_count=embedded.chapter_count,
         problems=tuple(problems),

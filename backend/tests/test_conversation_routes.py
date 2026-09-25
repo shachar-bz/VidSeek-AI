@@ -149,6 +149,14 @@ class MemoryVideoRecords:
         return type("StoredVideo", (), {"video": video})()
 
 
+class MemoryComments:
+    def __init__(self, count: int = 0) -> None:
+        self.comment_count = count
+
+    def count(self, video_id):
+        return self.comment_count if video_id == VIDEO_ID else 0
+
+
 class FakeRunner:
     def __init__(self, events) -> None:
         self.events = events
@@ -162,7 +170,7 @@ class FakeRunner:
             yield event
 
 
-def _app(*, ready=True, linked=True, runner=None, timing_fidelity="word"):
+def _app(*, ready=True, linked=True, runner=None, timing_fidelity="word", comment_count=0):
     app = FastAPI()
     app.include_router(routes.router)
     app.dependency_overrides[current_user] = lambda: USER
@@ -174,6 +182,7 @@ def _app(*, ready=True, linked=True, runner=None, timing_fidelity="word"):
         ready=ready, linked=linked, timing_fidelity=timing_fidelity
     )
     app.state.video_records_store = MemoryVideoRecords(timing_fidelity)
+    app.state.comments_store = MemoryComments(comment_count)
     app.state.conversation_agent_runner = runner or FakeRunner([TextFragment("answer")])
     app.state.generation_registry = GenerationRegistry()
     return app
@@ -316,6 +325,21 @@ def test_both_ready_and_partial_completed_videos_are_chat_capable() -> None:
 
         assert response.status_code == 200
         assert runner.runs[0][2].timestamps_reliable is expected_reliable
+
+
+def test_the_agent_is_told_whether_the_video_has_comments() -> None:
+    """Only a video with stored comments is offered the comments tool, decided once per run."""
+    for comment_count, expected in ((0, False), (37, True)):
+        runner = FakeRunner([TextFragment("answer")])
+        app = _app(runner=runner, comment_count=comment_count)
+        with TestClient(app) as client:
+            conversation_id = _create(client)
+            client.post(
+                f"/v1/conversations/{conversation_id}/messages",
+                json={"content": "What do people think?"},
+            )
+
+        assert runner.runs[0][2].has_comments is expected
 
 
 def test_the_players_position_reaches_the_agent_with_the_question() -> None:

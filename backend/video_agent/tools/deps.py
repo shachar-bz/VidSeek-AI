@@ -14,6 +14,10 @@ class ConversationDeps:
     video_id: str
     timestamps_reliable: bool = True
 
+    # Whether the video has stored YouTube comments. Decides whether the agent is offered
+    # `get_viewer_comments` at all, so it is read once per run rather than on every step.
+    has_comments: bool = False
+
     # Where the viewer's player was when the question was sent, in seconds; None when the
     # page gave no position. What a deictic question ("what is this?") points at.
     current_time_seconds: float | None = None

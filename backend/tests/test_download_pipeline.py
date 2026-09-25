@@ -267,3 +267,60 @@ def test_insights_publish_the_final_processing_phase_after_embedding() -> None:
         JobPhase.INSIGHTS,
     ]
     assert progress[-1] == (JobPhase.INSIGHTS, 0.99, "Generating video insights")
+
+
+COMMENT_EMBED_PATH = "backend.download_pipeline.pipeline.embed_comments"
+
+
+def _acquired_with_comments(comments, *, transcript=TRANSCRIPT) -> PipelineResult:
+    from dataclasses import replace
+
+    return replace(_acquired(transcript=transcript), comments=comments)
+
+
+def _a_comment():
+    from backend.services.video_download.youtube.comments import CommentEntry
+
+    return CommentEntry(
+        id="c1", author="A", text="great", like_count=3, reply_count=0,
+        published_at="2026-09-14T10:00:00+00:00",
+    )
+
+
+@pytest.mark.parametrize("comments", [None, ()])
+def test_comments_are_embedded_only_when_this_run_fetched_some(comments) -> None:
+    """None is a failed fetch, which keeps an earlier scan's vectors; empty already cleared them."""
+    from backend.download_pipeline.embedding import EmbeddedComments
+
+    with patch(COMMENT_EMBED_PATH, return_value=EmbeddedComments(comment_count=1)) as embed:
+        processed, *_ = _run(acquired=_acquired_with_comments(comments))
+
+    embed.assert_not_called()
+    assert processed.comment_embedding_count == 0
+
+
+def test_fetched_comments_are_embedded_even_when_there_is_no_transcript() -> None:
+    from backend.download_pipeline.embedding import EmbeddedComments
+
+    with patch(COMMENT_EMBED_PATH, return_value=EmbeddedComments(comment_count=1)) as embed:
+        processed, calls, *_ = _run(
+            acquired=_acquired_with_comments(
+                (_a_comment(),), transcript=None
+            )
+        )
+
+    embed.assert_called_once_with(VIDEO_ID, pool=None)
+    assert processed.comment_embedding_count == 1
+    assert calls == ["acquire", "store"]
+
+
+def test_comments_that_could_not_be_embedded_are_a_problem_not_a_failure() -> None:
+    from backend.download_pipeline.embedding import EmbeddedComments
+    from backend.download_pipeline.result import COMMENT_EMBEDDING_FAILED
+
+    failed = EmbeddedComments(problems=(COMMENT_EMBEDDING_FAILED,))
+    with patch(COMMENT_EMBED_PATH, return_value=failed):
+        processed, calls, *_ = _run(acquired=_acquired_with_comments((_a_comment(),)))
+
+    assert processed.problems == (COMMENT_EMBEDDING_FAILED,)
+    assert calls == ["acquire", "store", "segment", "embed", "insights"]

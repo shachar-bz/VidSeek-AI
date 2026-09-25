@@ -16,6 +16,7 @@ from backend.services.video_download.jobs import JobManager
 from backend.storage.blob.video_storage import BlobVideoStorage
 from backend.storage.postgres import (
     PostgresChapters,
+    PostgresComments,
     PostgresConversations,
     PostgresLibraryViews,
     PostgresMessages,
@@ -49,6 +50,7 @@ def create_app(
     conversations_store: PostgresConversations | None = None,
     messages_store: PostgresMessages | None = None,
     video_records_store: PostgresVideoRecords | None = None,
+    comments_store: PostgresComments | None = None,
     blob_video_storage: BlobVideoStorage | None = None,
     conversation_agent_runner: ConversationAgentRunner | None = None,
     generation_registry: GenerationRegistry | None = None,
@@ -109,6 +111,9 @@ def create_app(
     )
     app.state.video_records_store = (
         video_records_store if video_records_store is not None else PostgresVideoRecords()
+    )
+    app.state.comments_store = (
+        comments_store if comments_store is not None else PostgresComments()
     )
     # Blob settings are required only by playback. Keeping an absent default lazy preserves
     # startup for a local companion with no storage configuration.

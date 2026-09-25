@@ -150,3 +150,12 @@ def test_fetched_comments_are_carried_through_rather_than_re_read_from_disk(
         _result(tmp_path, transcript, str(tmp_path / "abc.comments.json"), comments=comments),
     )
     assert result.comments == tuple(comments)
+
+
+def test_a_failed_comments_fetch_is_carried_as_none_not_as_no_comments(tmp_path: Path) -> None:
+    """None is what tells the database write to keep the comments an earlier scan stored."""
+    transcript = YouTubeTranscript(source="youtube_captions", text="x")
+    download = _result(tmp_path, transcript, None)
+    object.__setattr__(download, "comments", None)
+    result, _ = _run(tmp_path, download)
+    assert result.comments is None
