@@ -48,21 +48,14 @@ export function discoverPage(): DiscoveryResult {
     /(?:doubleclick\.net|2mdn\.net|googlesyndication\.com|\/web_video_ads\/|\/vast(?:[/.?]|$))/i.test(
       u,
     );
-  // `playedByElement`: a `<video>` already loaded this URL itself, so it is a file even
-  // without an extension -- a streamed video reaches the element as a `blob:` instead.
-  const classify = (
-    url: string,
-    mime = "",
-    playedByElement = false,
-  ): MediaKind | null => {
+  const classify = (url: string, mime = ""): MediaKind | null => {
     if (!http(url) || adUrl(url) || /\.(?:m4s|ts|aac)(?:[?#]|$)/i.test(url))
       return null;
     if (/\.m3u8(?:[?#]|$)/i.test(url) || /mpegurl/i.test(mime)) return "hls";
     if (/\.mpd(?:[?#]|$)/i.test(url) || /dash\+xml/i.test(mime)) return "dash";
     if (
       /\.(mp4|m4v|webm|mov|mkv)(?:[?#]|$)/i.test(url) ||
-      /^video\/(?!mp2t)/i.test(mime) ||
-      playedByElement
+      /^video\/(?!mp2t)/i.test(mime)
     )
       return "direct";
     return null;
@@ -96,10 +89,9 @@ export function discoverPage(): DiscoveryResult {
     value: string,
     mime = "",
     source = "structured",
-    playedByElement = false,
   ): void => {
     const url = absolute(value),
-      kind = classify(url, mime, playedByElement);
+      kind = classify(url, mime);
     if (
       !kind ||
       g.media_candidates.some((c) => c.url === url) ||
@@ -365,16 +357,24 @@ export function discoverPage(): DiscoveryResult {
       groups.push(g);
     }
     // `type` is a `<source>` attribute, never a `<video>` one: a URL takes its MIME type
-    // from the `<source>` that names it, if any.
+    // from the `<source>` that names it, or else from the response the element got for it.
+    // The browser reports that only for a same-origin or CORS response, so an extensionless
+    // cross-origin URL stays unclassified and is left to the playback check. Having loaded
+    // is no evidence of a file: Chrome plays an HLS playlist natively, too.
     const sourceElements = [...video.querySelectorAll("source")];
-    const loaded = video.readyState >= 1 && !video.error;
+    // `contentType` is newer than this TypeScript version's DOM types.
+    const servedType = (url: string): string =>
+      (
+        performance.getEntriesByName(url) as (PerformanceEntry & {
+          contentType?: string;
+        })[]
+      ).find((entry) => entry.contentType)?.contentType || "";
     for (const src of sources)
       addMedia(
         g,
         src,
-        sourceElements.find((s) => s.src === src)?.type || "",
+        sourceElements.find((s) => s.src === src)?.type || servedType(src),
         "video",
-        loaded && src === video.currentSrc,
       );
     g.drm_detected ||= Boolean(video.mediaKeys);
     if (Number.isFinite(video.duration) && video.duration > 0)

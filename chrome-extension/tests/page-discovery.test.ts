@@ -165,30 +165,39 @@ it("resource identity preserves video query parameters but ignores expiring sign
 
 describe("a native <video> source's MIME type", () => {
   const signed = "https://cdn.example/stream?token=abc";
-  const loadedFrom = (video: HTMLVideoElement, url: string): void => {
-    Object.defineProperty(video, "currentSrc", { value: url });
-    Object.defineProperty(video, "readyState", { value: 1 });
+  const servedAs = (contentType: string): void => {
+    vi.spyOn(performance, "getEntriesByName").mockReturnValue([
+      { contentType } as unknown as PerformanceEntry,
+    ]);
   };
 
   it("takes each URL's type from the <source> that names it", () => {
     const webm = "https://cdn.example/course.webm?sig=one";
     document.body.innerHTML = `<video><source src="${webm}" type="video/webm"></video>`;
-    loadedFrom(document.querySelector("video")!, webm);
     expect(discoverPage().videos![0]!.media_candidates).toEqual([
       expect.objectContaining({ url: webm, kind: "direct", mime_type: "video/webm" }),
     ]);
   });
 
-  it("keeps an extensionless <video src> the element has already loaded", () => {
+  it("keeps an extensionless <video src> the browser reports was served as video", () => {
     document.body.innerHTML = `<video src="${signed}"></video>`;
-    loadedFrom(document.querySelector("video")!, signed);
+    servedAs("video/mp4");
     expect(discoverPage().videos![0]!.media_candidates).toEqual([
-      expect.objectContaining({ url: signed, kind: "direct", source: "video" }),
+      expect.objectContaining({ url: signed, kind: "direct", mime_type: "video/mp4" }),
     ]);
   });
 
-  it("still drops an extensionless <video src> nothing has loaded yet", () => {
+  it("classifies an extensionless playlist Chrome plays natively as HLS, not a file", () => {
     document.body.innerHTML = `<video src="${signed}"></video>`;
+    servedAs("application/vnd.apple.mpegurl");
+    expect(discoverPage().videos![0]!.media_candidates).toEqual([
+      expect.objectContaining({ url: signed, kind: "hls" }),
+    ]);
+  });
+
+  it("leaves an extensionless <video src> with no reported type to the playback check", () => {
+    document.body.innerHTML = `<video src="${signed}"></video>`;
+    servedAs("");
     expect(discoverPage().videos![0]!.media_candidates).toEqual([]);
   });
 });
