@@ -197,8 +197,22 @@ export function discoverPage(): DiscoveryResult {
       obj.video && typeof obj.video === "object"
         ? (obj.video as Record<string, unknown>)
         : undefined;
+    // A nested `video` object is not enough on its own. TED, for example, puts
+    // `{ translation, video: { id, talkExtras } }` inside its transcript data. Treating
+    // that relationship as a second playable item creates a phantom picker choice and
+    // separates the real <video> element from the page's VideoObject. The containing
+    // object must also identify the media item; feed entries such as TikTok's carry their
+    // id/title beside the nested playback data, while transcript metadata does not.
+    const identifiesNestedVideo = Boolean(
+      video &&
+        (obj.mediaId != null ||
+          obj.id != null ||
+          obj.title != null ||
+          obj.name != null ||
+          obj.desc != null),
+    );
     const isVideo = Boolean(
-      video ||
+      identifiesNestedVideo ||
       obj.mediaType === "MEDIA_VIDEO" ||
       obj["@type"] === "VideoObject",
     );
