@@ -265,11 +265,50 @@ export function discoverPage(): DiscoveryResult {
     }
   };
 
+  // Next.js writes `__NEXT_DATA__` once, for the page the server rendered, and never
+  // rewrites it on a client-side navigation. After following a link from one TED talk to
+  // another it still holds the first talk's transcript and files, which would be sent as
+  // the second talk's. The script names the route it was rendered for (`page`, with
+  // `query` filling its dynamic segments), so data for another path is skipped. A route
+  // that cannot be rebuilt is kept rather than guessed at.
+  const describesAnotherPage = (script: HTMLScriptElement): boolean => {
+    if (script.id !== "__NEXT_DATA__") return false;
+    let data: { page?: unknown; query?: Record<string, unknown>; locale?: unknown };
+    try {
+      data = JSON.parse(script.textContent || "");
+    } catch {
+      return false;
+    }
+    if (typeof data.page !== "string") return false;
+    let unresolved = false;
+    const rendered = data.page
+      .replace(/\[\[?(\.\.\.)?([^\]]+)\]\]?/g, (_, _spread, name: string) => {
+        const value = data.query?.[name];
+        if (Array.isArray(value)) return value.join("/");
+        if (typeof value === "string") return value;
+        unresolved = true;
+        return "";
+      })
+      .replace(/\/+$/, "");
+    if (unresolved) return false;
+    let current: string;
+    try {
+      current = decodeURIComponent(location.pathname).replace(/\/+$/, "");
+    } catch {
+      return false;
+    }
+    // A locale or basePath prefix comes before the route itself.
+    return !(
+      current === rendered ||
+      (rendered !== "" && current.endsWith(rendered)) ||
+      (rendered === "" && current === `/${String(data.locale ?? "")}`)
+    );
+  };
   for (const script of query<HTMLScriptElement>(
     'script[type="application/json"],script[type="application/ld+json"],script:not([src])',
   )) {
     const text = script.textContent || "";
-    if (text.length > 2_000_000) continue;
+    if (text.length > 2_000_000 || describesAnotherPage(script)) continue;
     if (/^\s*[\[{]/.test(text)) parse(text, fallback);
     // JSON objects embedded in assignments/calls (e.g. YITSiteWidgets). Balanced extraction
     // respects quoted braces, handles nested objects, and never runs JavaScript.
@@ -428,7 +467,24 @@ export function discoverPage(): DiscoveryResult {
   }
   for (const meta of query<HTMLMetaElement>('meta[property^="og:video"]'))
     addMedia(fallback, meta.content, "", "metadata");
-  for (const entry of performance.getEntriesByType("resource")) {
+  // The resource timing buffer outlives a client-side navigation too, so on a page reached
+  // by following an in-app link it still lists the previous video's subtitles and streams,
+  // with no marker of which page loaded them. The document's own navigation entry records
+  // the path it was loaded at; once that differs from the current path, no entry can be
+  // attributed to the video on screen. An adaptive stream is still found by the playback
+  // check, which only records what loads while it runs.
+  const loadedAt = performance.getEntriesByType("navigation")[0]?.name;
+  let navigatedInPage = false;
+  try {
+    navigatedInPage = Boolean(
+      loadedAt && new URL(loadedAt).pathname !== location.pathname,
+    );
+  } catch {
+    /* An unparsable entry is no evidence of a navigation. */
+  }
+  for (const entry of navigatedInPage
+    ? []
+    : performance.getEntriesByType("resource")) {
     if (/\.(vtt|srt|ttml)(?:[?#]|$)/i.test(entry.name))
       addCaption(fallback, { url: entry.name, format: format(entry.name) });
     else addMedia(fallback, entry.name, "", "performance");
