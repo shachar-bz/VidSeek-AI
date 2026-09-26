@@ -356,10 +356,26 @@ export function discoverPage(): DiscoveryResult {
       g = make(undefined, video.getAttribute("aria-label") || undefined);
       groups.push(g);
     }
+    // `type` is a `<source>` attribute, never a `<video>` one: a URL takes its MIME type
+    // from the `<source>` that names it, or else from the response the element got for it.
+    // The browser reports that only for a same-origin or CORS response, so an extensionless
+    // cross-origin URL stays unclassified and is left to the playback check. Having loaded
+    // is no evidence of a file: Chrome plays an HLS playlist natively, too.
+    const sourceElements = [...video.querySelectorAll("source")];
+    // `contentType` is newer than this TypeScript version's DOM types.
+    const servedType = (url: string): string =>
+      (
+        performance.getEntriesByName(url) as (PerformanceEntry & {
+          contentType?: string;
+        })[]
+      ).find((entry) => entry.contentType)?.contentType || "";
     for (const src of sources)
-      addMedia(g, src, video.getAttribute("type") || "", "video");
-    for (const source of video.querySelectorAll("source"))
-      addMedia(g, source.src, source.type, "video");
+      addMedia(
+        g,
+        src,
+        sourceElements.find((s) => s.src === src)?.type || servedType(src),
+        "video",
+      );
     g.drm_detected ||= Boolean(video.mediaKeys);
     if (Number.isFinite(video.duration) && video.duration > 0)
       g.media_duration_seconds = video.duration;

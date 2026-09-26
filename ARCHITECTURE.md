@@ -95,11 +95,8 @@ VidSeek-AI/
 * A video's journey starts at `services/video_download/jobs.py` and runs the stages in
   `download_pipeline/`.
 * The website starts at `frontend/src/main.tsx`; every URL it has is in `frontend/src/routes.ts`.
-* `VISUAL_UNDERSTANDING_PLAN.md` designs the layer that answers questions about what a video
-  shows; its ingestion half runs on a second executor in `jobs.py`.
-* `frontend/WEBSITE_FUNCTIONALITY.md` specifies what the website does,
-  `backend/services/video_download/WEB_DISCOVERY.md` how authenticated pages are searched for
-  video, and `OPEN_TASKS.md` the known gaps left open on purpose.
+* `backend/services/video_download/WEB_DISCOVERY.md` describes how authenticated pages are
+  searched for video.
 
 ## Rules
 
