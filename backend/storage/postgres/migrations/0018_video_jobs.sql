@@ -6,7 +6,7 @@
 -- `JobManager` keeps jobs in an in-memory dict on a single worker. Three things follow from
 -- that, and this table is what fixes all three: a hosted website cannot see a job at all, a
 -- restart loses every job in flight, and the dict only ever grows because nothing evicts a
--- finished one (OPEN_TASKS.md #3). The library page's live processing rows read this table.
+-- finished one. The library page's live processing rows read this table.
 --
 -- The row is written by the companion as it works and read by everyone else. It is
 -- deliberately a mirror of `VideoJobResponse` rather than a second vocabulary: `status`,

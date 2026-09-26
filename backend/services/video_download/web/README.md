@@ -54,6 +54,5 @@ local companion.
 
 The private-network check resolves a hostname and rejects it unless every address is
 globally routable. It does not cover redirects already followed by yt-dlp, DNS rebinding,
-or HLS/DASH fragments fetched by FFmpeg. See `OPEN_TASKS.md` in the repository root for why
-that is accepted here and what closing it would take.
+or HLS/DASH fragments fetched by FFmpeg.
 

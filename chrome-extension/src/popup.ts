@@ -374,7 +374,7 @@ function reportDrmBlocked(reason: string): void {
 
 /**
  * Adaptive/MSE players are exactly the ones that can switch to a DRM-protected rendition
- * only once playback actually starts (open_tasks.md #2c): a plain progressive `<video src>`
+ * only once playback actually starts: a plain progressive `<video src>`
  * cannot. Gating only these behind a play-and-verify step keeps a simple direct file fast.
  */
 function needsPlaybackVerification(discoveryValue: DiscoveryResult): boolean {
