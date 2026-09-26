@@ -8,7 +8,7 @@ const DASH = /\.mpd(?:$|[?#])/i;
 export function classifyMediaUrl(url: string, mimeType = ""): MediaKind | null {
   if (
     !/^https?:\/\//i.test(url) ||
-    /(?:doubleclick\.net|2mdn\.net|googlesyndication\.com|\/web_video_ads\/)/i.test(
+    /(?:imasdk\.googleapis\.com|doubleclick\.net|2mdn\.net|googlesyndication\.com|\/web_video_ads\/|\/vast(?:[/.?]|$))/i.test(
       url,
     )
   )
@@ -392,6 +392,7 @@ const MIN_PLAYED_SECONDS = 1;
  */
 export function describeCapturedSources(
   candidates: MediaCandidate[],
+  pageTitle?: string,
 ): CapturedSourceChoice[] {
   const ordered = [...candidates].sort(
     (left, right) =>
@@ -437,7 +438,7 @@ export function describeCapturedSources(
       : `Streamed from ${hostnameOf(candidate.url)}`;
     return {
       candidate,
-      label: `Video ${index + 1} · ${facts.join(" · ")}`,
+      label: `${pageTitle ? `${pageTitle} · Source` : "Video"} ${index + 1} · ${facts.join(" · ")}`,
       detail,
       recommended,
     };
@@ -467,17 +468,16 @@ function isEmptyFrameResult(result: DiscoveryResult): boolean {
 
 /**
  * The video's own title where the page gives it one (structured data, an aria-label, an
- * embed's document title). Otherwise its place in the list: the tab's title is the same for
- * every video on the page, so it would not tell them apart.
+ * embed's document title), retaining the page title when that is all we have.
+ * Repeated titles are numbered by findVideoGroups; details distinguish their sources.
  */
 function describeVideoGroup(
   result: DiscoveryResult,
   position: number,
-  topPageTitle: string,
 ): string {
   if (isYouTubeUrl(result.page_url))
     return `YouTube: ${result.page_title.replace(/ - YouTube$/, "")}`;
-  if (result.page_title && result.page_title !== topPageTitle)
+  if (result.page_title)
     return result.page_title;
   return `Video ${position}`;
 }
@@ -524,7 +524,7 @@ export function findVideoGroups(
     .filter((frame) => !isEmptyFrameResult(frame.result))
     .map((frame, index) => ({
       frameId: frame.frameId,
-      label: describeVideoGroup(frame.result, index + 1, topPageTitle),
+      label: describeVideoGroup(frame.result, index + 1),
       detail: describeVideoGroupDetail(frame.result, frame.frameId),
       recommended: Boolean(frame.result.media_playing),
       result: frame.result,

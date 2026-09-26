@@ -847,7 +847,7 @@ async function finishVerification(): Promise<void> {
       // rather than silently picking one.
       if (response.candidates.length > 1) {
         renderVideoPicker(
-          describeCapturedSources(response.candidates).map(
+          describeCapturedSources(response.candidates, discovery.page_title).map(
             ({ candidate, label, detail, recommended }) => ({
               frameId: 0,
               label,

@@ -45,7 +45,7 @@ export function discoverPage(): DiscoveryResult {
     }
   };
   const adUrl = (u: string): boolean =>
-    /(?:doubleclick\.net|2mdn\.net|googlesyndication\.com|\/web_video_ads\/|\/vast(?:[/.?]|$))/i.test(
+    /(?:imasdk\.googleapis\.com|doubleclick\.net|2mdn\.net|googlesyndication\.com|\/web_video_ads\/|\/vast(?:[/.?]|$))/i.test(
       u,
     );
   const classify = (url: string, mime = ""): MediaKind | null => {
@@ -84,6 +84,9 @@ export function discoverPage(): DiscoveryResult {
   });
   const groups: DiscoveryResult[] = [];
   const fallback = make();
+  // Ad SDK frames can expose playable test clips and unrelated provider JSON.
+  // None of that is evidence for the content in the containing page.
+  if (adUrl(location.href)) return { ...fallback, videos: [] };
   const addMedia = (
     g: DiscoveryResult,
     value: string,
@@ -387,14 +390,13 @@ export function discoverPage(): DiscoveryResult {
     if (yt && !groups.some((g) => g.page_url === yt))
       groups.push({ ...make(undefined, frame.title), page_url: yt });
   }
-  for (const video of query<HTMLVideoElement>("video")) {
-    if (
-      /advertisement|פרסומת/i.test(
+  const contentVideos = query<HTMLVideoElement>("video").filter(
+    (video) =>
+      !/advertisement|פרסומת/i.test(
         `${video.title} ${video.getAttribute("aria-label") || ""}`,
-      ) ||
-      adUrl(video.currentSrc)
-    )
-      continue;
+      ) && !adUrl(video.currentSrc || video.src),
+  );
+  for (const video of contentVideos) {
     const sources = [
       video.currentSrc,
       video.src,
@@ -404,7 +406,7 @@ export function discoverPage(): DiscoveryResult {
       group.media_candidates.some((c) => sources.includes(c.url)),
     );
     // A blob player and a single structured source are normally two views of one video.
-    if (!g && groups.length === 1 && query("video").length === 1) g = groups[0];
+    if (!g && groups.length === 1 && contentVideos.length === 1) g = groups[0];
     if (!g) {
       g = make(undefined, video.getAttribute("aria-label") || undefined);
       groups.push(g);

@@ -181,10 +181,13 @@ export function collapseHlsRenditions(
   }
 
   return candidates.flatMap((candidate) => {
+    // A master's explicit reference is sufficient even if Chrome evicted the
+    // rendition body before getResponseBody could read it.
+    if (ownedByMaster.has(playlistKey(candidate.url))) return [];
     const summary = summaries.get(candidate.url);
     if (!summary) return [candidate];
     if (summary.role === "media") {
-      if (ownedByMaster.has(playlistKey(candidate.url)) || summary.subtitlesOnly)
+      if (summary.subtitlesOnly)
         return [];
       return [
         {

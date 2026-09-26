@@ -70,6 +70,18 @@ describe("summarizeHlsPlaylist", () => {
 });
 
 describe("collapseHlsRenditions", () => {
+  it("includes the page title when naming captured sources", () => {
+    expect(describeCapturedSources([hls(MASTER_URL)], "Sam Altman at TED2025")[0]!.label)
+      .toBe("Sam Altman at TED2025 · Source 1 · length unknown");
+  });
+  it("folds TED audio and quality variants even when their response bodies are unavailable", () => {
+    const variants = ["index-f1-v1", "index-f8-a1", "index-f9-v1"]
+      .map(name => hls(`${BASE}/${name}.m3u8?intro_master_id=7275&preview=true`));
+    const collapsed = collapseHlsRenditions(
+      [hls(MASTER_URL), ...variants], new Map([[MASTER_URL, MASTER]]),
+    );
+    expect(collapsed.map(c => c.url)).toEqual([MASTER_URL]);
+  });
   it("turns a master and the renditions the player fetched into one video", () => {
     const renditions = [
       `${BASE}/index-f1-v1.m3u8?intro_master_id=7275&preview=true`,

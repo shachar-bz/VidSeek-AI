@@ -16,6 +16,45 @@ const json = (value: unknown) => {
   document.body.append(s);
 };
 describe("rendered page discovery", () => {
+  it("TED: keeps the titled talk, blob player and captions together beside IMA ads", () => {
+    const title = "OpenAI's Sam Altman talks ChatGPT, AI agents and superintelligence";
+    document.title = title;
+    document.body.innerHTML = `
+      <video title="Advertisement" src="https://gcdn.2mdn.net/ad.mp4"></video>
+      <video title="Advertisement"></video>
+      <video id="video" src="blob:https://ted.com/talk"></video>`;
+    json({ "@type": "VideoObject", name: title, embedUrl: "https://embed.ted.com/talks/sam_altman" });
+    json({ props: { pageProps: { videoData: {
+      title, duration: 2849,
+      hlsUrl: "https://hls.ted.com/project_masters/10110/manifest.m3u8",
+    } } } });
+    const video = document.querySelector('#video')!;
+    Object.defineProperty(video, "duration", { value: 2849 });
+    Object.defineProperty(video, "textTracks", { value: [{
+      kind: "subtitles", language: "en", mode: "showing",
+      cues: [{ text: "Sam, welcome to TED", startTime: 0, endTime: 3 }],
+    }] });
+    vi.mocked(performance.getEntriesByType).mockReturnValue([
+      { name: "https://imasdk.googleapis.com/js/core/blank.mp4" },
+      { name: "https://hls.ted.com/project_masters/10110/index-f1-v1.m3u8" },
+    ] as PerformanceEntryList);
+    const result = discoverPage();
+    expect(result.videos).toHaveLength(1);
+    expect(result.videos![0]).toMatchObject({ page_title: title, media_duration_seconds: 2849 });
+    expect(result.videos![0]!.media_candidates.map(c => c.url)).toEqual([
+      "https://hls.ted.com/project_masters/10110/manifest.m3u8",
+    ]);
+    expect(JSON.stringify(result.videos![0]!.caption_candidates)).toContain("Sam, welcome to TED");
+    expect(findVideoGroups([{ frameId: 0, result }], title)).toBeUndefined();
+  });
+
+  it("ignores IMA test media even when no ad label is present", () => {
+    document.body.innerHTML = '<video src="https://imasdk.googleapis.com/js/core/blank.mp4"></video>';
+    vi.mocked(performance.getEntriesByType).mockReturnValue([
+      { name: "https://imasdk.googleapis.com/js/core/blank.mp4" },
+    ] as PerformanceEntryList);
+    expect(discoverPage().media_candidates).toEqual([]);
+  });
   it("Coursera: collects signed sources and extensionless subtitle proxies", () => {
     document.body.innerHTML =
       '<video><source src="https://cdn.example/course.webm?sig=one" type="video/webm"><track kind="captions" srclang="en" src="https://www.coursera.org/api/subtitleAssetProxy.v1/a?fileExtension=vtt"></video>';

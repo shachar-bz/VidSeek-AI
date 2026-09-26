@@ -66,6 +66,7 @@ it("captures UTF-8 captions from a child frame and excludes audio/segments/ads",
     ["https://cdn.example/segment.ts", "video/mp2t"],
     ["https://gcdn.2mdn.net/ad.mp4", "video/mp4"],
     ["https://cdn.example/he.vtt", "text/vtt"],
+    ["https://imasdk.googleapis.com/js/core/blank.mp4", "video/mp4"],
   ];
   for (const [i, [url, mimeType]] of urls.entries()) {
     event!(source, "Network.requestWillBeSent", {

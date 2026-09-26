@@ -365,7 +365,7 @@ describe("findVideoGroups", () => {
     expect(groups?.[1]?.label).toBe("YouTube: How AI helps at work");
   });
 
-  it("numbers untitled videos and marks the playing one, its length and where it lives", () => {
+  it("retains shared page titles and marks the playing video, its length and location", () => {
     const secondOnPage: DiscoveryResult = {
       ...mainPage,
       media_candidates: [
@@ -387,9 +387,9 @@ describe("findVideoGroups", () => {
       "App"
     );
     expect(groups?.map(({ label, detail, recommended }) => [label, detail, recommended])).toEqual([
-      ["Video 1", "In the page itself", false],
-      ["Video 2", "Playing now · 12:34", true],
-      ["Video 3", "Embedded from player.vimeo.com", false]
+      ["App (1)", "In the page itself", false],
+      ["App (2)", "Playing now · 12:34", true],
+      ["App (3)", "Embedded from player.vimeo.com", false]
     ]);
   });
 
