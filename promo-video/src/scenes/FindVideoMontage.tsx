@@ -37,7 +37,7 @@ const segmentsFor = (clip: SiteClip, visibleSeconds: number): ClipSegment[] => {
 // Final resting slots: a gentle arc of five small cards.
 const restingSlot = (index: number) => {
   const offset = index - 2;
-  return { x: 960 + offset * 350, y: 380 + Math.abs(offset) * 26, rotate: offset * 3, scale: 0.28 };
+  return { x: 960 + offset * 372, y: 360 + Math.abs(offset) * 28, rotate: offset * 3, scale: 0.34 };
 };
 
 export const FindVideoMontage: React.FC = () => {

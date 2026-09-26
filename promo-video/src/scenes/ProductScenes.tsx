@@ -15,7 +15,7 @@ import { TimestampChip } from "../components/TimestampChip";
 import { colors, fonts, shadows } from "../theme";
 
 // Layout shared by the product beats: messaging on the left, the real product floating on the right.
-const BOX = { left: 520, top: 88, width: 1340, height: 754 };
+const BOX = { left: 610, top: 96, width: 1250, height: 703 };
 const EXTENSION_SOURCE = { width: 1916, height: 1150 }; // Chrome window with the VidSeek side panel
 const WEBSITE_SOURCE = { width: 1916, height: 1146 }; // VidSeek website video page
 
@@ -55,7 +55,7 @@ const ProductExample: React.FC<ProductExampleProps> = ({
   camera,
   kineticLines,
   kineticUntil,
-  kineticFontSize = 124,
+  kineticFontSize = 104,
   answers = [],
   clicks = [],
   children,
@@ -80,9 +80,9 @@ const ProductExample: React.FC<ProductExampleProps> = ({
           })}
         </ScreenRecording>
       </div>
-      <KineticWords lines={kineticLines} at={0.3} until={kineticUntil} left={70} top={130} fontSize={kineticFontSize} />
+      <KineticWords lines={kineticLines} at={0.3} until={kineticUntil} left={60} top={120} fontSize={kineticFontSize} />
       {answers.map((answer) => (
-        <AnswerCard key={answer.text} {...answer} left={60} top={470} width={600} />
+        <AnswerCard key={answer.text} {...answer} left={48} top={440} width={570} />
       ))}
       {children}
     </AbsoluteFill>
@@ -169,7 +169,7 @@ export const CommentsScene: React.FC = () => (
       { at: 3.0, centerX: 1516, centerY: 700, width: 800 },
     ]}
     kineticLines={["WHAT DO", "VIEWERS", "THINK?"]}
-    kineticFontSize={100}
+    kineticFontSize={88}
     kineticUntil={6.2}
     answers={[
       {
@@ -342,15 +342,15 @@ export const ItWatchesScene: React.FC = () => {
           <WhiskMomentReveal />
         </ScreenRecording>
       </div>
-      <KineticWords lines={["IT", "WATCHES."]} at={0.3} until={8.2} left={70} top={130} fontSize={124} />
+      <KineticWords lines={["IT", "WATCHES."]} at={0.3} until={8.2} left={60} top={120} fontSize={104} />
       <AnswerCard
         text="He whisks eggs for the custard around 08:39, and again for the pumpkin pie filling around 14:49."
         chips={["08:39–08:44", "14:49–15:04"]}
         at={3.9}
         until={5.8}
-        left={60}
-        top={470}
-        width={600}
+        left={48}
+        top={440}
+        width={570}
       />
     </AbsoluteFill>
   );
@@ -465,7 +465,7 @@ const FormulaLiftOff: React.FC = () => {
 const SlideFreezeFrame: React.FC = () => (
   <ScreenRecording
     src="clips/moodle_question_a.mp4"
-    segments={[{ start: 25.0, holdSeconds: 4 }]}
+    segments={[{ start: 25.0, holdSeconds: 12 }]}
     sourceWidth={WEBSITE_SOURCE.width}
     sourceHeight={WEBSITE_SOURCE.height}
     camera={[{ at: 0, centerX: WEBSITE_SOURCE.width / 2, centerY: WEBSITE_SOURCE.height / 2, width: WEBSITE_SOURCE.width }]}
@@ -507,10 +507,10 @@ export const LibraryScene: React.FC = () => {
   const { fps } = useVideoConfig();
   const seconds = frame / fps;
   const transform = useFloatingTilt();
-  const filtered = interpolate(seconds, [3.2, 3.6], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const filtered = interpolate(seconds, [3.2, 3.38], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const LIBRARY_SOURCE = { width: 3200, height: 1800 };
   const gridCamera: CameraKeyframe[] = [
-    { at: 0, centerX: 1600, centerY: 950, width: 3200 },
+    { at: 0, centerX: 1600, centerY: 900, width: 3200 },
     { at: 3.0, centerX: 1500, centerY: 820, width: 2700 },
   ];
   const filteredCamera: CameraKeyframe[] = [
@@ -543,34 +543,32 @@ export const LibraryScene: React.FC = () => {
           </div>
         </CameraFrame>
       </div>
-      <KineticWords lines={["YOUR", "LIBRARY."]} at={0.3} until={6.7} left={70} top={130} fontSize={124} />
-      {tags.map((tag, index) => {
-        const pop = spring({ frame: frame - (0.8 + index * 0.15) * fps, fps, config: { damping: 12 } });
-        const isSelected = tag === "AI";
-        const selected = isSelected ? interpolate(seconds, [2.6, 3.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 0;
-        return (
-          <div
-            key={tag}
-            style={{
-              position: "absolute",
-              left: 80 + (index % 3) * 150 + (index > 2 ? 40 : 0),
-              top: 470 + Math.floor(index / 3) * 78 + Math.sin(frame / 25 + index) * 4,
-              transform: `scale(${pop * (1 + selected * 0.15)})`,
-              padding: "12px 22px",
-              borderRadius: 999,
-              background: selected > 0.5 ? colors.cobalt : colors.white,
-              color: selected > 0.5 ? colors.white : colors.ink,
-              boxShadow: shadows.card,
-              fontFamily: fonts.sans,
-              fontSize: 26,
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {tag}
-          </div>
-        );
-      })}
+      <KineticWords lines={["YOUR", "LIBRARY."]} at={0.3} until={6.7} left={60} top={120} fontSize={104} />
+      <div style={{ position: "absolute", left: 56, top: 440, width: 520, display: "flex", flexWrap: "wrap", gap: 14 }}>
+        {tags.map((tag, index) => {
+          const pop = spring({ frame: frame - (0.8 + index * 0.15) * fps, fps, config: { damping: 12 } });
+          const selected = tag === "AI" ? interpolate(seconds, [2.6, 3.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 0;
+          return (
+            <div
+              key={tag}
+              style={{
+                transform: `translateY(${Math.sin(frame / 25 + index) * 3}px) scale(${pop * (1 + selected * 0.15)})`,
+                padding: "12px 22px",
+                borderRadius: 999,
+                background: selected > 0.5 ? colors.cobalt : colors.white,
+                color: selected > 0.5 ? colors.white : colors.ink,
+                boxShadow: shadows.card,
+                fontFamily: fonts.sans,
+                fontSize: 26,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tag}
+            </div>
+          );
+        })}
+      </div>
     </AbsoluteFill>
   );
 };
