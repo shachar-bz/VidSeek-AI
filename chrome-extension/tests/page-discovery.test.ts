@@ -41,6 +41,83 @@ describe("rendered page discovery", () => {
     ]);
     expect(groups[0]!.drm_detected).toBe(false);
   });
+  it("TED: ignores the previous talk's Next.js data after an in-app navigation", () => {
+    const nextData = (slug: string, cue: string) => {
+      const s = document.createElement("script");
+      s.id = "__NEXT_DATA__";
+      s.type = "application/json";
+      s.textContent = JSON.stringify({
+        page: "/talks/[...slug]",
+        query: { slug: [slug] },
+        props: {
+          pageProps: {
+            videoData: {
+              hlsUrl: `https://hls.ted.com/${slug}/manifest.m3u8`,
+            },
+            transcriptData: {
+              translation: { paragraphs: [{ cues: [{ text: cue, time: 5 }] }] },
+            },
+          },
+        },
+      });
+      document.body.append(s);
+    };
+    const videoObject = (name: string, slug: string) => {
+      const s = document.createElement("script");
+      s.type = "application/ld+json";
+      s.textContent = JSON.stringify({
+        "@type": "VideoObject",
+        name,
+        contentUrl: `https://hls.ted.com/${slug}/manifest.m3u8`,
+      });
+      document.body.append(s);
+    };
+    document.body.innerHTML =
+      '<video id="video" src="blob:https://ted.com/id"></video>';
+    // Server-rendered for the first talk; the JSON-LD is replaced on navigation, the
+    // Next.js data and the resource timing buffer are not.
+    nextData("first_talk", "Words from the first talk");
+    videoObject("The second talk", "second_talk");
+    vi.mocked(performance.getEntriesByType).mockImplementation(
+      (type) =>
+        ({
+          navigation: [{ name: `${location.origin}/talks/first_talk` }],
+          resource: [
+            { name: "https://hls.ted.com/first_talk/subtitles/en/full.vtt" },
+          ],
+        })[type] as PerformanceEntryList,
+    );
+    window.history.pushState({}, "", "/talks/second_talk");
+    try {
+      const groups = discoverPage().videos!;
+      expect(groups).toHaveLength(1);
+      expect(groups[0]!.page_title).toBe("The second talk");
+      expect(groups[0]!.media_candidates.map((c) => c.url)).toEqual([
+        "https://hls.ted.com/second_talk/manifest.m3u8",
+      ]);
+      expect(JSON.stringify(groups[0]!.caption_candidates)).not.toMatch(
+        /first.talk/,
+      );
+
+      // Loaded directly, the same data describes the page and is still read.
+      document.body.innerHTML = "";
+      nextData("second_talk", "Words from the second talk");
+      vi.mocked(performance.getEntriesByType).mockImplementation(
+        (type) =>
+          ({
+            navigation: [{ name: `${location.origin}/talks/second_talk` }],
+            resource: [
+              { name: "https://hls.ted.com/second_talk/subtitles/en/full.vtt" },
+            ],
+          })[type] as PerformanceEntryList,
+      );
+      const direct = JSON.stringify(discoverPage().videos![0]!.caption_candidates);
+      expect(direct).toContain("Words from the second talk");
+      expect(direct).toContain("second_talk/subtitles/en/full.vtt");
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
   it("TED: does not offer transcript metadata as a second video", () => {
     document.body.innerHTML =
       '<video id="video" src="blob:https://ted.com/id"></video>';
