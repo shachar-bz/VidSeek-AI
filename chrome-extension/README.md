@@ -17,6 +17,19 @@ The first click inspects the active page. If it finds only a plain progressive f
 second, explicit click requests access to the discovered page/CDN origins and starts the
 download directly.
 
+When no caption candidates were found, inspection also reads an open transcript panel
+using its accessible label or transcript/caption/subtitle markup, without site-specific
+selectors. It pairs visible clock labels with speech and preserves their timestamps.
+For a panel that loads rows while scrolling, inspection collects overlapping windows
+for up to eight seconds and restores the original scroll position. It does not click
+transcript tabs or load unopened panels automatically.
+
+This fallback requires one native video player with a known duration and one discovered
+video. It rejects hidden panels, ambiguous owners, invalid or non-increasing clocks,
+large gaps, and text that does not cover approximately the whole recording. Partial
+transcripts remain a reason to use the existing transcription fallback. Open the full
+transcript panel and inspect again if the site's transcript was not loaded initially.
+
 If discovery finds an adaptive (HLS/DASH) source, or nothing playable yet, DRM can still
 activate once the player actually starts — `video.mediaKeys` is `null` until then, so
 inspecting before playback cannot rule it out. In that case the popup shows **Verify &
