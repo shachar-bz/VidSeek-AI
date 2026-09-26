@@ -1,0 +1,67 @@
+{
+  "voiceId": "cjVigY5qzO86Huf0OWal",
+  "voiceName": "Eric - Smooth, Trustworthy",
+  "modelId": "eleven_multilingual_v2",
+  "lines": [
+    {
+      "id": "hook_book",
+      "text": "Alex wants to understand something. The book has nine hundred pages."
+    },
+    {
+      "id": "hook_chatbot",
+      "text": "The chatbot gives a wall of text... and Alex isn't sure it's even right."
+    },
+    {
+      "id": "hook_video",
+      "text": "The video explains it best. But the part Alex needs is buried somewhere in two hours."
+    },
+    {
+      "id": "hook_question",
+      "text": "What if Alex could just... ask the video?"
+    },
+    {
+      "id": "reveal",
+      "text": "Meet VidSeek AI."
+    },
+    {
+      "id": "find_video",
+      "text": "One click, on almost any video site. No captions? VidSeek writes them."
+    },
+    {
+      "id": "ask_anything",
+      "text": "Ask anything. Get a clear answer, with the exact moments behind it."
+    },
+    {
+      "id": "jump_to_moment",
+      "text": "Click a moment, and you're right there."
+    },
+    {
+      "id": "comments",
+      "text": "Curious what everyone else thought? It reads the comments, too."
+    },
+    {
+      "id": "follow_ups",
+      "text": "Ask a follow-up. Then another. Go as deep as you want."
+    },
+    {
+      "id": "it_watches",
+      "text": "And it doesn't just listen. It watches."
+    },
+    {
+      "id": "it_reads",
+      "text": "It even reads the slides, and what's written on the board."
+    },
+    {
+      "id": "library",
+      "text": "Every video lands in your own library. Searchable, and always one click away."
+    },
+    {
+      "id": "callback",
+      "text": "Alex got it. In seconds."
+    },
+    {
+      "id": "tagline",
+      "text": "VidSeek AI. Ask any video anything."
+    }
+  ]
+}
