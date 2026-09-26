@@ -19,8 +19,8 @@ export const soundEffectCues: SoundEffectCue[] = [
   { id: "keyboard_typing", at: 5.4, volume: 0.35 },
   { id: "scrub_whoosh", at: 10.2, volume: 0.3 },
   { id: "scrub_whoosh", at: 11.9, volume: 0.3 },
-  { id: "riser", at: 14.55, volume: 0.6 },
-  { id: "impact", at: MUSIC_DROP_SECONDS, volume: 0.9 },
+  { id: "riser", at: 14.5, volume: 0.35 },
+  { id: "impact", at: MUSIC_DROP_SECONDS, volume: 0.32 },
   // Five site clicks, one every two beats.
   ...[0, 1, 2, 3, 4].map((index) => ({ id: "ui_click", at: 20 + index, volume: 0.6 })),
   ...[0, 1, 2, 3, 4].map((index) => ({ id: "whoosh", at: 19.55 + index, volume: 0.22 })),
