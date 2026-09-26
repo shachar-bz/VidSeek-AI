@@ -48,14 +48,21 @@ export function discoverPage(): DiscoveryResult {
     /(?:doubleclick\.net|2mdn\.net|googlesyndication\.com|\/web_video_ads\/|\/vast(?:[/.?]|$))/i.test(
       u,
     );
-  const classify = (url: string, mime = ""): MediaKind | null => {
+  // `playedByElement`: a `<video>` already loaded this URL itself, so it is a file even
+  // without an extension -- a streamed video reaches the element as a `blob:` instead.
+  const classify = (
+    url: string,
+    mime = "",
+    playedByElement = false,
+  ): MediaKind | null => {
     if (!http(url) || adUrl(url) || /\.(?:m4s|ts|aac)(?:[?#]|$)/i.test(url))
       return null;
     if (/\.m3u8(?:[?#]|$)/i.test(url) || /mpegurl/i.test(mime)) return "hls";
     if (/\.mpd(?:[?#]|$)/i.test(url) || /dash\+xml/i.test(mime)) return "dash";
     if (
       /\.(mp4|m4v|webm|mov|mkv)(?:[?#]|$)/i.test(url) ||
-      /^video\/(?!mp2t)/i.test(mime)
+      /^video\/(?!mp2t)/i.test(mime) ||
+      playedByElement
     )
       return "direct";
     return null;
@@ -89,9 +96,10 @@ export function discoverPage(): DiscoveryResult {
     value: string,
     mime = "",
     source = "structured",
+    playedByElement = false,
   ): void => {
     const url = absolute(value),
-      kind = classify(url, mime);
+      kind = classify(url, mime, playedByElement);
     if (
       !kind ||
       g.media_candidates.some((c) => c.url === url) ||
@@ -356,10 +364,18 @@ export function discoverPage(): DiscoveryResult {
       g = make(undefined, video.getAttribute("aria-label") || undefined);
       groups.push(g);
     }
+    // `type` is a `<source>` attribute, never a `<video>` one: a URL takes its MIME type
+    // from the `<source>` that names it, if any.
+    const sourceElements = [...video.querySelectorAll("source")];
+    const loaded = video.readyState >= 1 && !video.error;
     for (const src of sources)
-      addMedia(g, src, video.getAttribute("type") || "", "video");
-    for (const source of video.querySelectorAll("source"))
-      addMedia(g, source.src, source.type, "video");
+      addMedia(
+        g,
+        src,
+        sourceElements.find((s) => s.src === src)?.type || "",
+        "video",
+        loaded && src === video.currentSrc,
+      );
     g.drm_detected ||= Boolean(video.mediaKeys);
     if (Number.isFinite(video.duration) && video.duration > 0)
       g.media_duration_seconds = video.duration;

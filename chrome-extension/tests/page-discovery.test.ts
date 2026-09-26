@@ -162,3 +162,33 @@ it("resource identity preserves video query parameters but ignores expiring sign
     first[0]!.selected_media_id,
   );
 });
+
+describe("a native <video> source's MIME type", () => {
+  const signed = "https://cdn.example/stream?token=abc";
+  const loadedFrom = (video: HTMLVideoElement, url: string): void => {
+    Object.defineProperty(video, "currentSrc", { value: url });
+    Object.defineProperty(video, "readyState", { value: 1 });
+  };
+
+  it("takes each URL's type from the <source> that names it", () => {
+    const webm = "https://cdn.example/course.webm?sig=one";
+    document.body.innerHTML = `<video><source src="${webm}" type="video/webm"></video>`;
+    loadedFrom(document.querySelector("video")!, webm);
+    expect(discoverPage().videos![0]!.media_candidates).toEqual([
+      expect.objectContaining({ url: webm, kind: "direct", mime_type: "video/webm" }),
+    ]);
+  });
+
+  it("keeps an extensionless <video src> the element has already loaded", () => {
+    document.body.innerHTML = `<video src="${signed}"></video>`;
+    loadedFrom(document.querySelector("video")!, signed);
+    expect(discoverPage().videos![0]!.media_candidates).toEqual([
+      expect.objectContaining({ url: signed, kind: "direct", source: "video" }),
+    ]);
+  });
+
+  it("still drops an extensionless <video src> nothing has loaded yet", () => {
+    document.body.innerHTML = `<video src="${signed}"></video>`;
+    expect(discoverPage().videos![0]!.media_candidates).toEqual([]);
+  });
+});
