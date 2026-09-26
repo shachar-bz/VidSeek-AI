@@ -10,25 +10,7 @@ companion and a real browser before this file was written.
 
 ---
 
-## 1. Discovery misses embedded and adaptive players
-
-The remaining two share one root: `discoverPage` only reads what's already sitting in the
-DOM before playback starts.
-
-### 1a. MSE and `blob:` playback look like "no video"
-
-**Status:** open. **Problem:** `discoverPage` drops `blob:` URLs and never reads
-`video.srcObject`. Most adaptive players feed the element through Media Source Extensions,
-so the element's `currentSrc` is a `blob:` URL and discovery finds zero candidates. The
-popup says "No direct source found yet", the job falls back to handing the page URL to
-yt-dlp, that fails, and only then is capture offered.
-
-**To close:** when a `<video>` has a `blob:` source or a non-null `srcObject`, report that
-as a flag on `DiscoveryResult` (it is not a media candidate). The popup can then offer
-capture straight away instead of after a failed download. Needs a matching optional field
-on `CreateVideoJobRequest`, or it can stay purely client-side.
-
-### 1b. The `<video>` element's MIME type is always empty
+## 1. The `<video>` element's MIME type is always empty
 
 **Status:** open, cosmetic. **Problem:** `discoverPage` reads
 `video.getAttribute("type")`, but `type` is a `<source>` attribute and is never present on
@@ -84,25 +66,7 @@ companion's memory, and a restart loses every job in flight.
 
 ---
 
-## 4. `discoverPage` has no automated test
-
-**Status:** partially covered. **Problem:** `tests/discovery.test.ts` covers
-`classifyMediaUrl`, `originPatterns` and `chooseDirectCandidate`, but not `discoverPage`
-itself, which holds the real logic. Vitest runs in the plain node environment with no DOM.
-
-`discoverPage` *was* verified against a real browser over a fixture page — relative URL
-resolution, `blob:` filtering, `<source>`/`<track>` walking, JSON-LD `@graph` traversal,
-performance-entry mining, transcript scraping and dedup all behaved correctly — but that
-check is manual and does not run in CI.
-
-**To close:** add `jsdom` (or `happy-dom`) and `environment: "jsdom"` to `vite.config.ts`,
-then assert against a fixture document. Note that `discoverPage` duplicates its regexes
-on purpose — it is serialized into the page by `executeScript` and cannot reference module
-scope — so a test also guards against the two copies drifting apart.
-
----
-
-## 5. A missing FFmpeg can yield a silent video
+## 4. A missing FFmpeg can yield a silent video
 
 **Status:** partly handled. **Problem:** `_download_options` sets
 `merge_output_format: "mp4/mkv"` with `no_warnings: True`. If ffmpeg is absent, yt-dlp
