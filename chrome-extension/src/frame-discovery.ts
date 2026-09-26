@@ -10,23 +10,24 @@ export async function inspectFrames(
   if (requestAccess) {
     const origins = [
       ...new Set(
-        frames
-          .filter((f) => f.frameId !== 0)
-          .flatMap((f) => {
-            try {
-              const u = new URL(f.url);
-              return /^https?:$/.test(u.protocol)
-                ? [`${u.protocol}//${u.hostname}/*`]
-                : [];
-            } catch {
-              return [];
-            }
-          }),
+        // The side panel can outlive activeTab access after a tab switch or navigation.
+        // Include the main page, not only embedded player origins.
+        frames.flatMap((f) => {
+          try {
+            const u = new URL(f.url);
+            return /^https?:$/.test(u.protocol)
+              ? [`${u.protocol}//${u.hostname}/*`]
+              : [];
+          } catch {
+            return [];
+          }
+        }),
       ),
     ];
     if (origins.length) await chrome.permissions.request({ origins });
   }
   const results: FrameDiscoveryResult[] = [];
+  const failures: string[] = [];
   for (const frame of frames) {
     try {
       const found = await chrome.scripting.executeScript({
@@ -34,9 +35,19 @@ export async function inspectFrames(
         func: discoverPage,
       });
       results.push(...found);
-    } catch {
+    } catch (error) {
       /* A sandboxed, unloaded or unpermitted sibling must not abort the page. */
+      failures.push(
+        `Frame ${frame.frameId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
+  }
+  if (!results.some((entry) => entry.result)) {
+    throw new Error(
+      failures.length
+        ? `Could not inspect this tab. ${failures.join("; ")}`
+        : "Could not inspect this tab: no page frame returned a result. Reload the page and try again.",
+    );
   }
   return results;
 }
