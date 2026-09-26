@@ -1,0 +1,12 @@
+[
+  {"id": "whoosh", "text": "fast clean cinematic whoosh transition, airy, modern", "duration_seconds": 0.8},
+  {"id": "scrub_whoosh", "text": "fast video timeline scrub, rewinding tape whir turning into a whoosh, digital", "duration_seconds": 0.9},
+  {"id": "ui_click", "text": "crisp soft mouse click on a modern trackpad, single click", "duration_seconds": 0.5},
+  {"id": "ui_pop", "text": "soft bubbly UI pop notification, pleasant, subtle", "duration_seconds": 0.5},
+  {"id": "page_flip", "text": "heavy thick book pages flipping quickly then a tired sigh of paper", "duration_seconds": 1.5},
+  {"id": "keyboard_typing", "text": "quiet fast laptop keyboard typing, short burst", "duration_seconds": 1.5},
+  {"id": "riser", "text": "tension riser building into a drop, reverse cymbal and noise sweep, cinematic", "duration_seconds": 2.5},
+  {"id": "impact", "text": "deep cinematic impact boom hit with sub bass, clean", "duration_seconds": 2},
+  {"id": "shimmer", "text": "magical digital shimmer sparkle as text lifts off a surface, glassy, bright", "duration_seconds": 1.5},
+  {"id": "book_close", "text": "large heavy book slammed shut with a satisfying thud", "duration_seconds": 1}
+]

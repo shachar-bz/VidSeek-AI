@@ -69,6 +69,10 @@ VidSeek-AI/
 │   ├── public/                             # Static files copied into the extension build.
 │   ├── src/                                # Background worker, side panel (inspect, scan, chat), page and frame discovery, and the companion API client.
 │   └── tests/                              # Extension helper unit tests.
+├── promo-video/                            # The VidSeek AI promo ad, a standalone Remotion project; imports nothing from the product.
+│   ├── scripts/                            # ElevenLabs generation (narration, music, sound effects, AI stills) and preview-still rendering.
+│   ├── public/                             # Media served to Remotion; recordings and generated audio and stills are gitignored.
+│   └── src/                                # The composition: timeline, shared components, one module per group of scenes.
 └── frontend/                               # The VidSeek website: a React + Vite single-page app.
     ├── public/                             # Files served as-is from the site root: the favicons.
     ├── src/                                # The app root, the route table and the directories below.

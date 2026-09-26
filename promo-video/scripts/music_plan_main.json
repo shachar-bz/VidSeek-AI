@@ -1,0 +1,10 @@
+{
+  "positive_global_styles": ["modern cinematic electronic", "tech product launch", "120 bpm", "polished", "inspiring", "bright synths", "punchy drums"],
+  "negative_global_styles": ["vocals", "lyrics", "singing", "guitar solo", "lo-fi", "muddy", "slow intro", "fade in"],
+  "sections": [
+    {"section_name": "Drop", "positive_local_styles": ["starts instantly at full energy on beat one", "huge impact hit at 0:00", "four-on-the-floor", "bright uplifting synth lead", "driving bass"], "negative_local_styles": ["intro", "build-up", "quiet start"], "duration_ms": 26000, "lines": []},
+    {"section_name": "Groove", "positive_local_styles": ["rhythmic", "plucky arpeggios", "steady energy", "curious"], "negative_local_styles": ["quiet"], "duration_ms": 24000, "lines": []},
+    {"section_name": "Build to climax", "positive_local_styles": ["rising intensity", "layered synths", "epic cinematic hits", "awe", "wonder"], "negative_local_styles": ["quiet"], "duration_ms": 18000, "lines": []},
+    {"section_name": "Resolve", "positive_local_styles": ["warm resolution", "final big hit then gentle tail"], "negative_local_styles": ["abrupt noise"], "duration_ms": 15000, "lines": []}
+  ]
+}

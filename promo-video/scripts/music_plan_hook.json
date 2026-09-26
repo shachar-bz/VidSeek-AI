@@ -1,0 +1,8 @@
+{
+  "positive_global_styles": ["minimal cinematic underscore", "ticking clock percussion", "soft muted piano", "tense ambient pad", "quiet", "slowly building unease"],
+  "negative_global_styles": ["vocals", "lyrics", "drums", "bass drop", "loud", "upbeat"],
+  "sections": [
+    {"section_name": "Frustration", "positive_local_styles": ["sparse", "clock ticks", "hesitant piano notes"], "negative_local_styles": ["drums"], "duration_ms": 11000, "lines": []},
+    {"section_name": "Unease rises", "positive_local_styles": ["pad swells", "tension rising", "ends on a suspended held note"], "negative_local_styles": ["drums", "resolution"], "duration_ms": 6000, "lines": []}
+  ]
+}
