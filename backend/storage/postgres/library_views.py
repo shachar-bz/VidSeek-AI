@@ -134,10 +134,16 @@ with linked as (
            null::text[] as insights_suggested_questions, null::text as visual_status,
            0::bigint as conversation_count
     from public.video_jobs j
+    -- A job with a video but no link is only pending while it runs: the link is written
+    -- before the job finishes. A finished one means the account removed the video, and
+    -- listing it would bring back every video the account ever removed.
     where j.user_id = %s::uuid and (
-        j.video_id is null or not exists (
-            select 1 from public.user_videos uv
-            where uv.user_id = j.user_id and uv.video_id = j.video_id
+        j.video_id is null or (
+            j.status in ('queued', 'running', 'awaiting_browser_download')
+            and not exists (
+                select 1 from public.user_videos uv
+                where uv.user_id = j.user_id and uv.video_id = j.video_id
+            )
         )
     )
 ), items as (select * from linked union all select * from pending),
