@@ -104,7 +104,8 @@ def _placeable(items: Iterable[TimedText] | None) -> list[tuple[str, float, floa
 def _clean(items: Iterable[TimedText] | None, media_duration_seconds: float | None) -> list[_Piece]:
     """Put the placeable pieces in order, and refuse to close a gap by guessing.
 
-    A missing or backwards end means the source never measured how long this piece lasted.
+    A missing or backwards end (an end equal to the start is a measured instant, not a
+    missing one) means the source never measured how long this piece lasted.
     Closing it at the next piece's start would claim someone was speaking for the whole gap
     between them, silence included, so that is not done — a piece like this is worth nothing
     to this module unless it is the last one, with no next piece to wrongly claim speech up
@@ -123,7 +124,10 @@ def _clean(items: Iterable[TimedText] | None, media_duration_seconds: float | No
     pieces = []
     for position, (text, start, end) in enumerate(placeable):
         next_start = placeable[position + 1][1] if position + 1 < len(placeable) else None
-        if end is not None and end <= start:
+        # A backwards end was never really measured. An end equal to the start was: Scribe
+        # times an ellipsis or a clipped "Yeah" as an instant, and treating that as missing
+        # would throw away every transcript that contains one.
+        if end is not None and end < start:
             end = None
         if end is None:
             if next_start is not None:

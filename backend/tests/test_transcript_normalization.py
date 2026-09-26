@@ -125,6 +125,27 @@ def test_a_silence_ends_a_segment_where_the_speaker_stopped() -> None:
     assert [segment.text for segment in transcript.segments] == ["one two", "three"]
 
 
+def test_a_word_timed_as_an_instant_does_not_discard_the_transcript() -> None:
+    """Scribe routinely times an ellipsis or a short "Yeah" with start equal to end. That
+    is a measured instant, not a missing end, and must not cost the whole video its timing."""
+    transcript = normalize_words(
+        [_word("so", 0.0, 0.4), _word("...", 0.4, 0.4), _word("Yeah", 0.9, 0.9), _word("right.", 1.0, 1.5)],
+        source="elevenlabs",
+    )
+
+    assert transcript is not None
+    assert transcript.segments[0].text == "so ... Yeah right."
+    assert transcript.segments[0].end_seconds == 1.5
+
+
+def test_a_mid_transcript_word_with_a_backwards_end_is_still_refused() -> None:
+    transcript = normalize_words(
+        [_word("one", 2.0, 1.0), _word("two", 3.0, 4.0)], source="elevenlabs"
+    )
+
+    assert transcript is None
+
+
 def test_speech_that_never_pauses_is_still_broken_up() -> None:
     words = [_word(f"word{index}", index * 0.5, index * 0.5 + 0.5) for index in range(80)]
 
