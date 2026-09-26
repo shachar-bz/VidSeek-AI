@@ -41,6 +41,37 @@ describe("rendered page discovery", () => {
     ]);
     expect(groups[0]!.drm_detected).toBe(false);
   });
+  it("TED: does not offer transcript metadata as a second video", () => {
+    document.body.innerHTML =
+      '<video id="video" src="blob:https://ted.com/id"></video>';
+    const videoObject = document.createElement("script");
+    videoObject.type = "application/ld+json";
+    videoObject.textContent = JSON.stringify({
+      "@type": "VideoObject",
+      name: "The future we're building -- and boring",
+      contentUrl: "https://download.ted.com/talk.mp4",
+    });
+    document.body.append(videoObject);
+    json({
+      props: {
+        pageProps: {
+          transcriptData: {
+            translation: { paragraphs: [] },
+            video: { id: "2774", talkExtras: { footnotes: [] } },
+          },
+        },
+      },
+    });
+
+    const groups = discoverPage().videos!;
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.page_title).toBe(
+      "The future we're building -- and boring",
+    );
+    expect(groups[0]!.media_candidates.map((candidate) => candidate.url)).toEqual([
+      "https://download.ted.com/talk.mp4",
+    ]);
+  });
   it("ynet: separates three videos configured in inline scripts before playback", () => {
     for (let i = 0; i < 3; i++) {
       const s = document.createElement("script");
