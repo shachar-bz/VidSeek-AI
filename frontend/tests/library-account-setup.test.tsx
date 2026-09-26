@@ -134,6 +134,42 @@ describe("library page", () => {
     expect(screen.getByText(/chat history is permanently lost/i)).toBeTruthy();
   });
 
+  it("removes a failed upload that never produced a video", async () => {
+    const failed = {
+      video_id: null,
+      job_id: "job-failed",
+      title: "Broken upload",
+      custom_title: null,
+      source_site: "example.com",
+      source_url: "https://example.com/video",
+      duration_seconds: null,
+      tags: [],
+      added_at: null,
+      stage: "failed",
+      progress: 0.2,
+      status_message: "Download failed",
+      error_code: "download_failed",
+      conversation_count: 0
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/library/tags") return Promise.resolve(jsonResponse({ tags: [] }));
+      if (url === "/v1/library/events") return Promise.resolve(dataStream([]));
+      if (url.startsWith("/v1/library?")) return Promise.resolve(jsonResponse({ videos: [failed], total: 1, limit: 50, offset: 0 }));
+      if (url === "/v1/library/jobs/job-failed" && init?.method === "DELETE") return Promise.resolve(new Response(null, { status: 204 }));
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MemoryRouter><LibraryPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Broken upload" }));
+    expect(screen.getByText(/failed before a video was saved/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove video" }));
+
+    await waitFor(() => expect(screen.queryByText("Broken upload")).toBeNull());
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/v1/library/jobs/job-failed" && init?.method === "DELETE")).toBe(true);
+  });
+
   it("saves a typed tag even when Add tag was not pressed first", async () => {
     const ready = {
       video_id: "video-1",

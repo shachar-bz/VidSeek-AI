@@ -1,4 +1,4 @@
-"""Authenticated library listing, metadata edits, unlinking, tags, and progress events."""
+"""Authenticated library listing, metadata edits, unlinking, dismissing failed jobs, tags, and progress events."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from backend.storage.postgres import (
     LibraryViewRow,
     PostgresLibraryViews,
     PostgresUserVideos,
+    PostgresVideoJobs,
     StoredUser,
 )
 
@@ -39,6 +40,10 @@ def library_views(request: Request) -> PostgresLibraryViews:
 
 def user_videos(request: Request) -> PostgresUserVideos:
     return request.app.state.user_videos_store
+
+
+def video_jobs(request: Request) -> PostgresVideoJobs:
+    return request.app.state.video_jobs_store
 
 
 def library_query(
@@ -217,3 +222,14 @@ def unlink_library_video(
     if links.get(user.id, video_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
     links.unlink(user.id, video_id)
+
+
+@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss_failed_library_job(
+    job_id: str,
+    user: StoredUser = Depends(current_user),
+    jobs: PostgresVideoJobs = Depends(video_jobs),
+) -> None:
+    """Remove a job that ended without a video, the only trace of a failed upload."""
+    if not jobs.delete_finished_without_video(job_id, user.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")

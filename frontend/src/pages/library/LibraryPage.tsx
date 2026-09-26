@@ -13,6 +13,7 @@ import {
   getLibrary,
   getLibraryTags,
   getLibraryThumbnail,
+  removeFailedLibraryJob,
   removeLibraryVideo,
   subscribeToLibraryEvents,
   updateLibraryVideo
@@ -175,12 +176,27 @@ function Status({ video }: { video: LibraryVideo }) {
   );
 }
 
+/** A failed upload that never produced a video: only its job row can be removed. */
+function isFailedJob(video: LibraryVideo): boolean {
+  return video.video_id === null && video.job_id !== null && video.stage === "failed";
+}
+
 function RowActions({ video, onEdit, onRemove }: {
   video: LibraryVideo;
   onEdit(video: LibraryVideo, mode: EditMode): void;
   onRemove(video: LibraryVideo): void;
 }) {
-  if (!video.video_id) return <span className="library-actions__pending">•••</span>;
+  if (!video.video_id) {
+    if (!isFailedJob(video)) return <span className="library-actions__pending">•••</span>;
+    return (
+      <details className="library-actions">
+        <summary aria-label={`Actions for ${video.title}`}>•••</summary>
+        <div className="library-actions__menu">
+          <button type="button" aria-label={`Remove ${video.title}`} onClick={() => onRemove(video)}><TrashIcon />Remove from library</button>
+        </div>
+      </details>
+    );
+  }
   return (
     <details className="library-actions">
       <summary aria-label={`Actions for ${video.title}`}>•••</summary>
@@ -457,13 +473,16 @@ export function LibraryPage() {
   }
 
   async function confirmRemoval() {
-    if (!removing?.video_id) return;
+    if (!removing) return;
+    const failedJobId = isFailedJob(removing) ? removing.job_id : null;
+    if (!removing.video_id && !failedJobId) return;
     setRemovalPending(true);
     setRemovalError(null);
     try {
-      await removeLibraryVideo(removing.video_id);
+      if (failedJobId) await removeFailedLibraryJob(failedJobId);
+      else await removeLibraryVideo(removing.video_id!);
       setVideos((current) => {
-        const updated = current.filter((video) => video.video_id !== removing.video_id);
+        const updated = current.filter((video) => failedJobId ? video.job_id !== failedJobId : video.video_id !== removing.video_id);
         videosRef.current = updated;
         return updated;
       });
@@ -513,7 +532,7 @@ export function LibraryPage() {
       )}
 
       <MetadataDialog video={editing} mode={editMode} suggestions={tags} onClose={() => setEditing(null)} onSaved={(saved) => { setVideos((current) => { const updated = current.map((video) => video.video_id === saved.video_id ? saved : video); videosRef.current = updated; return updated; }); setTags((current) => Array.from(new Set([...current, ...saved.tags])).sort()); setEditing(null); }} />
-      <Dialog open={removing !== null} title="Remove this video?" onClose={() => setRemoving(null)} actions={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button className="danger-button" pending={removalPending} onClick={confirmRemoval}>{removalPending ? "Removing…" : "Remove video"}</Button></>}><p>Removing this link permanently deletes your chat history and pins for this video. Re-adding the video later restores its shared video content and artifacts, but your chat history is permanently lost.</p>{removalError ? <p className="form-error" role="alert">{removalError}</p> : null}</Dialog>
+      <Dialog open={removing !== null} title="Remove this video?" onClose={() => setRemoving(null)} actions={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button className="danger-button" pending={removalPending} onClick={confirmRemoval}>{removalPending ? "Removing…" : "Remove video"}</Button></>}>{removing && isFailedJob(removing) ? <p>This upload failed before a video was saved, so there is nothing else to delete. You can add the video again from the extension.</p> : <p>Removing this link permanently deletes your chat history and pins for this video. Re-adding the video later restores its shared video content and artifacts, but your chat history is permanently lost.</p>}{removalError ? <p className="form-error" role="alert">{removalError}</p> : null}</Dialog>
     </div>
   );
 }

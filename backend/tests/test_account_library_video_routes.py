@@ -223,6 +223,34 @@ def test_unlink_removes_only_the_private_library_link() -> None:
     assert links.unlinked == [(USER_ID, VIDEO_ID)]
 
 
+class StubJobs:
+    def __init__(self, deletable=True):
+        self.deletable = deletable
+        self.deleted = []
+
+    def delete_finished_without_video(self, job_id, user_id):
+        self.deleted.append((job_id, user_id))
+        return self.deletable
+
+
+def test_failed_job_without_a_video_can_be_dismissed() -> None:
+    jobs = StubJobs()
+    app = _app(library)
+    app.state.video_jobs_store = jobs
+
+    response = TestClient(app).delete("/v1/library/jobs/job-1")
+
+    assert response.status_code == 204
+    assert jobs.deleted == [("job-1", USER_ID)]
+
+
+def test_running_or_foreign_job_is_not_dismissed() -> None:
+    app = _app(library)
+    app.state.video_jobs_store = StubJobs(deletable=False)
+
+    assert TestClient(app).delete("/v1/library/jobs/job-1").status_code == 404
+
+
 def test_foreign_video_is_hidden_as_not_found() -> None:
     app = _app(videos)
     app.state.library_views_store = StubViews(None)
