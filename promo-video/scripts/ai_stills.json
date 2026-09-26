@@ -1,0 +1,25 @@
+{
+  "modelId": "gemini-3-pro-image",
+  "aspectRatio": "16:9",
+  "resolution": "2K",
+  "character": "Alex, a man in his late twenties: short dark curly hair, light stubble, thin round black glasses, mustard-yellow knit sweater.",
+  "style": "Cinematic film still, bright airy modern apartment, soft white daylight from a large window, clean minimal Scandinavian interior, white walls, a small plant, subtle cobalt-blue accents (#5266eb), shallow depth of field, 35mm lens, photorealistic, Apple-commercial look. Keep the right third of the frame calm and uncluttered (floating UI is placed there). No text, no logos, no readable screens.",
+  "stills": [
+    {
+      "id": "alex_book",
+      "prompt": "Alex sits at a light oak desk on the left side of the frame, bent over an enormous, absurdly thick open astronomy textbook with a tower of similar thick books beside it. He props his forehead on one hand, eyes half-closed, visibly frustrated and overwhelmed."
+    },
+    {
+      "id": "alex_chatbot",
+      "prompt": "Same Alex, same sweater and glasses, same apartment. He leans back from an open laptop on the left side of the frame, rubbing his eyes under his glasses, doubtful and tired, the screen's glow on his face (screen not visible to camera)."
+    },
+    {
+      "id": "alex_video",
+      "prompt": "Same Alex, same sweater and glasses, same apartment, late-afternoon light. He slumps deep in his chair on the left side of the frame, one hand dragging on the laptop trackpad, head tilted back, exhausted by a very long video (screen not visible to camera)."
+    },
+    {
+      "id": "alex_relieved",
+      "prompt": "Same Alex, same sweater and glasses, same apartment, fresh morning light. He smiles, relaxed and satisfied, closing the thick astronomy textbook with one hand while his laptop sits open beside it on the left side of the frame."
+    }
+  ]
+}
