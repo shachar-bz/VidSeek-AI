@@ -7,7 +7,7 @@ import { AI_STILLS_AVAILABLE } from "../timeline";
 // When the AI stills of Alex exist they fill the frame, and the floating UI
 // pieces sit on the right; until then the UI pieces carry the scene alone.
 
-const AlexStill: React.FC<{ file: string; pushFrom?: number; pushTo?: number }> = ({ file, pushFrom = 1.04, pushTo = 1.14 }) => {
+const AlexStill: React.FC<{ file: string; pushFrom?: number; pushTo?: number }> = ({ file, pushFrom = 1, pushTo = 1.035 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   if (!AI_STILLS_AVAILABLE) return null;
@@ -15,7 +15,7 @@ const AlexStill: React.FC<{ file: string; pushFrom?: number; pushTo?: number }> 
   return (
     <AbsoluteFill>
       <Img src={staticFile(`stills/${file}`)} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${scale})` }} />
-      <AbsoluteFill style={{ background: "linear-gradient(90deg, rgba(246,247,252,0) 35%, rgba(246,247,252,0.55) 100%)" }} />
+      <AbsoluteFill style={{ background: "linear-gradient(90deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.35) 100%)" }} />
     </AbsoluteFill>
   );
 };
@@ -44,12 +44,25 @@ const TextBars: React.FC<{ lines: number; width: number; seed: number; color?: s
   </div>
 );
 
+const CinematicHook: React.FC<{file: string; eyebrow: string; title: string; detail: string}> = ({file, eyebrow, title, detail}) => {
+  const enter = useEnter(0.25);
+  return <AbsoluteFill>
+    <AlexStill file={file} />
+    <div style={{position: 'absolute', left: 1160, top: 290, width: 660, color: 'white', fontFamily: fonts.sans, opacity: enter, transform: `translateY(${(1-enter)*20}px)`, textShadow: '0 3px 24px rgba(0,0,0,0.5)'}}>
+      <div style={{fontSize: 22, letterSpacing: 5, fontWeight: 600, color: '#b9c5ff', marginBottom: 24}}>{eyebrow}</div>
+      <div style={{fontSize: 92, lineHeight: 1.05, letterSpacing: -3, fontWeight: 700, whiteSpace: 'pre-line'}}>{title}</div>
+      <div style={{fontSize: 30, lineHeight: 1.45, marginTop: 26, color: '#e0e3ee'}}>{detail}</div>
+    </div>
+  </AbsoluteFill>;
+};
+
 export const HookBook: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = useEnter(0.1);
   const pageNumber = Math.min(12, 1 + Math.floor((frame / fps) * 2.8));
   const flip = ((frame / fps) * 1.6) % 1;
+  if (AI_STILLS_AVAILABLE) return <CinematicHook file="alex_book.png" eyebrow="TOO MUCH TO READ" title="900 pages." detail="One question." />;
   return (
     <AbsoluteFill>
       <AlexStill file="alex_book.png" />
@@ -135,6 +148,7 @@ export const HookChatbot: React.FC = () => {
   const seconds = frame / fps;
   const scroll = Math.max(0, seconds - 0.8) * 260;
   const doubt = spring({ frame: frame - 2.6 * fps, fps, config: { damping: 10 } });
+  if (AI_STILLS_AVAILABLE) return <CinematicHook file="alex_chatbot.png" eyebrow="TOO MUCH TO VERIFY" title="A wall of text." detail="But is it right?" />;
   return (
     <AbsoluteFill>
       <AlexStill file="alex_chatbot.png" />
@@ -237,6 +251,7 @@ export const HookVideo: React.FC = () => {
   const to = scrubPositions[step];
   const playhead = from + (to - from) * Math.min(1, within * 2.2);
   const playerWidth = 1180;
+  if (AI_STILLS_AVAILABLE) return <CinematicHook file="alex_video.png" eyebrow="TOO MUCH TO WATCH" title="Two hours." detail="Where is the part you need?" />;
   return (
     <AbsoluteFill>
       <AlexStill file="alex_video.png" />
@@ -327,7 +342,7 @@ export const Callback: React.FC = () => {
   const check = spring({ frame: frame - 0.5 * fps, fps, config: { damping: 11 } });
   return (
     <AbsoluteFill>
-      <AlexStill file="alex_relieved.png" pushFrom={1.1} pushTo={1.02} />
+      <AlexStill file="alex_relieved.png" pushFrom={1.035} pushTo={1} />
       {!AI_STILLS_AVAILABLE && (
         <div style={{ position: "absolute", left: 360, top: 380, width: 620, height: 380, perspective: 1600 }}>
           {Array.from({ length: 22 }, (_, index) => (

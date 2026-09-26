@@ -51,8 +51,20 @@ python scripts/generate_ai_stills.py     # needs the key's "Image & Video" permi
 The timeline in `src/timeline.ts` holds every narration start and every scene boundary.
 The main music cue is 120 BPM, so beats land every 0.5 s after 17 s.
 
-When the four AI stills exist, set `AI_STILLS_AVAILABLE = true` in `src/timeline.ts`. The
-hook then shows Alex behind the floating UI.
+The current revision enables four photorealistic Alex stills, generated with the
+built-in image tool. Prompts and identity-reference instructions are recorded in
+`scripts/cinematic_stills.md`. Copy these gitignored images along with the other
+media when setting up another checkout. The hook uses a subtle camera push and
+short titles over each photograph.
+
+Product recordings now keep the complete browser page visible. Timestamp clicks,
+the chip-jump transitions, and the formula lift remain in place.
+
+Generate the quiet replacement transition sound with
+`node scripts/generate_transition.mjs` (add `--force` to regenerate). It uses
+ElevenLabs' [sound-effects API](https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert).
+The repeating scratch/scrub sounds are removed from the soundtrack; the new cue
+has a short envelope and lower mix level, and narration ducking fades smoothly.
 
 ## Preview and render
 

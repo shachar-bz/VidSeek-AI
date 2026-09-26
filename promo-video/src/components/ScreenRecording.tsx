@@ -30,6 +30,12 @@ export const outputSecondsAtSourceTime = (segments: ClipSegment[], sourceSeconds
   return elapsed;
 };
 
+// Contain the complete source, including browser chrome and page edges.
+export const fullPageCamera = (sourceWidth: number, sourceHeight: number, boxWidth: number, boxHeight: number): CameraKeyframe[] => [{
+  at: 0, centerX: sourceWidth / 2, centerY: sourceHeight / 2,
+  width: Math.max(sourceWidth, sourceHeight * boxWidth / boxHeight),
+}];
+
 // A camera framing inside the source: center point and visible width in source pixels.
 export type CameraFraming = { centerX: number; centerY: number; width: number };
 export type CameraKeyframe = CameraFraming & { at: number };

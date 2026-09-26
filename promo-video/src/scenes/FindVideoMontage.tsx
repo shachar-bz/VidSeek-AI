@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { ClipSegment, ScreenRecording } from "../components/ScreenRecording";
+import { ClipSegment, fullPageCamera, ScreenRecording } from "../components/ScreenRecording";
 import { KineticWords } from "../components/KineticWords";
 
 // Five real "Find video" / "Scan video" clicks on five different sites, each landing on a beat.
@@ -19,9 +19,9 @@ const CLICK_LEAD_SECONDS = 0.4; // each card arrives this long before its click
 const FIRST_CLICK_SECONDS = 0.5; // scene-local; the scene starts half a beat before 20.0 s
 const CLICK_SPACING_SECONDS = 1.0; // two beats
 const SOURCE = { width: 1916, height: 1150 };
-const CARD = { width: 1180, height: 664 };
-// Frames the page's right side and the VidSeek side panel.
-const SIDE_PANEL_FRAMING = [{ at: 0, centerX: 1330, centerY: 560, width: 1172 }];
+const CARD = { width: 1400, height: 840 };
+// Keep the complete browser page and VidSeek side panel visible together.
+const SIDE_PANEL_FRAMING = fullPageCamera(SOURCE.width, SOURCE.height, CARD.width, CARD.height);
 
 const segmentsFor = (clip: SiteClip, visibleSeconds: number): ClipSegment[] => {
   const start = clip.clickAt - CLICK_LEAD_SECONDS;

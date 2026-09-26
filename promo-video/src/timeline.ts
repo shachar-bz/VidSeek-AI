@@ -70,4 +70,4 @@ export const voiceoverDurations: Record<string, number> = {
 
 // Set to true once the four AI stills of Alex exist in public/stills
 // (alex_book.png, alex_chatbot.png, alex_video.png, alex_relieved.png).
-export const AI_STILLS_AVAILABLE = false;
+export const AI_STILLS_AVAILABLE = true;

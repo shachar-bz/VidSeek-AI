@@ -5,6 +5,7 @@ import { ClickRipple } from "../components/ClickRipple";
 import { KineticWords } from "../components/KineticWords";
 import {
   CameraFrame,
+  fullPageCamera,
   CameraKeyframe,
   ClipSegment,
   outputSecondsAtSourceTime,
@@ -15,15 +16,9 @@ import { TimestampChip } from "../components/TimestampChip";
 import { colors, fonts, shadows } from "../theme";
 
 // Layout shared by the product beats: messaging on the left, the real product floating on the right.
-const BOX = { left: 610, top: 96, width: 1250, height: 703 };
+const BOX = { left: 610, top: 96, width: 1250, height: 750 };
 const EXTENSION_SOURCE = { width: 1916, height: 1150 }; // Chrome window with the VidSeek side panel
 const WEBSITE_SOURCE = { width: 1916, height: 1146 }; // VidSeek website video page
-
-// Camera framings in source pixels.
-const EXTENSION_WIDE = { centerX: 958, centerY: 616, width: 1880 };
-const EXTENSION_INPUT = { centerX: 1516, centerY: 900, width: 800 };
-const WEBSITE_WIDE = { centerX: 960, centerY: 600, width: 1420 };
-const WEBSITE_CHAT = { centerX: 1110, centerY: 620, width: 760 };
 
 type RealClick = { sourceTime: number; sourceX: number; sourceY: number };
 
@@ -40,13 +35,8 @@ type ProductExampleProps = {
   children?: React.ReactNode;
 };
 
-// The floating screen drifts and tilts a little so the real UI feels three-dimensional.
-const useFloatingTilt = () => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enter = spring({ frame, fps, config: { damping: 20, stiffness: 90 } });
-  return `perspective(2400px) rotateY(${-7 + enter * 3 + Math.sin(frame / 60) * 0.8}deg) rotateX(${2 - enter * 1}deg) translateY(${(1 - enter) * 30}px)`;
-};
+// Keep page edges stable and readable throughout each product demonstration.
+const useFloatingTilt = () => 'none';
 
 const ProductExample: React.FC<ProductExampleProps> = ({
   src,
@@ -55,7 +45,7 @@ const ProductExample: React.FC<ProductExampleProps> = ({
   camera,
   kineticLines,
   kineticUntil,
-  kineticFontSize = 104,
+  kineticFontSize = 94,
   answers = [],
   clicks = [],
   children,
@@ -82,7 +72,7 @@ const ProductExample: React.FC<ProductExampleProps> = ({
       </div>
       <KineticWords lines={kineticLines} at={0.3} until={kineticUntil} left={60} top={120} fontSize={kineticFontSize} />
       {answers.map((answer) => (
-        <AnswerCard key={answer.text} {...answer} left={48} top={440} width={570} />
+        <AnswerCard key={answer.text} {...answer} left={48} top={440} width={540} />
       ))}
       {children}
     </AbsoluteFill>
@@ -100,12 +90,7 @@ export const AskAnythingScene: React.FC = () => (
       { start: 24.8, end: 26.8, speed: 1 },
       { start: 26.8, holdSeconds: 1.3 },
     ]}
-    camera={[
-      { at: 0, ...EXTENSION_WIDE },
-      { at: 0.6, ...EXTENSION_INPUT },
-      { at: 2.0, ...EXTENSION_INPUT },
-      { at: 3.1, centerX: 1516, centerY: 420, width: 800 },
-    ]}
+    camera={fullPageCamera(1916, 1150, BOX.width, BOX.height)}
     kineticLines={["ASK", "ANYTHING."]}
     kineticUntil={6.2}
     answers={[
@@ -130,12 +115,7 @@ export const JumpToMomentScene: React.FC = () => (
       { start: 13.6, end: 15.8, speed: 1 },
       { start: 15.8, holdSeconds: 0.6 },
     ]}
-    camera={[
-      { at: 0, ...WEBSITE_WIDE },
-      { at: 0.5, ...WEBSITE_CHAT },
-      { at: 3.3, ...WEBSITE_CHAT },
-      { at: 3.9, centerX: 830, centerY: 520, width: 1150 },
-    ]}
+    camera={fullPageCamera(1916, 1150, BOX.width, BOX.height)}
     kineticLines={["CLICK.", "JUMP."]}
     kineticUntil={5.7}
     answers={[
@@ -162,12 +142,7 @@ export const CommentsScene: React.FC = () => (
       { start: 18.1, end: 21.6, speed: 1 },
       { start: 21.6, holdSeconds: 0.4 },
     ]}
-    camera={[
-      { at: 0, ...EXTENSION_WIDE },
-      { at: 0.5, ...EXTENSION_INPUT },
-      { at: 2.2, ...EXTENSION_INPUT },
-      { at: 3.0, centerX: 1516, centerY: 700, width: 800 },
-    ]}
+    camera={fullPageCamera(1916, 1150, BOX.width, BOX.height)}
     kineticLines={["WHAT DO", "VIEWERS", "THINK?"]}
     kineticFontSize={88}
     kineticUntil={6.2}
@@ -203,12 +178,7 @@ export const FollowUpsScene: React.FC = () => (
     src="clips/ted_questions_a_b.mp4"
     source={WEBSITE_SOURCE}
     segments={TED_SEGMENTS}
-    camera={[
-      { at: 0, ...WEBSITE_WIDE },
-      { at: 0.5, centerX: 1150, centerY: 720, width: 900 },
-      { at: 4.6, centerX: 1150, centerY: 720, width: 900 },
-      { at: 5.1, centerX: 945, centerY: 640, width: 1480 },
-    ]}
+    camera={fullPageCamera(1916, 1150, BOX.width, BOX.height)}
     kineticLines={["GO", "DEEPER."]}
     kineticUntil={9.7}
     answers={[
@@ -239,12 +209,7 @@ const WATCH_SEGMENTS: ClipSegment[] = [
   { start: 54.2, end: 56.2, speed: 1 },
   { start: 56.2, holdSeconds: 3.2 },
 ];
-const WATCH_CAMERA: CameraKeyframe[] = [
-  { at: 0, ...EXTENSION_WIDE },
-  { at: 0.4, ...EXTENSION_INPUT },
-  { at: 2.0, ...EXTENSION_INPUT },
-  { at: 2.6, centerX: 1516, centerY: 340, width: 800 },
-];
+const WATCH_CAMERA = fullPageCamera(1916, 1148, BOX.width, BOX.height);
 const WHISK_CHIP_SOURCE = { x: 1716, y: 321 };
 const WHISK_REVEAL_AT = 5.9;
 
@@ -278,7 +243,7 @@ const WhiskMomentReveal: React.FC = () => {
             segments={[{ start: 4.0, end: 7.2, speed: 1 }]}
             sourceWidth={1454}
             sourceHeight={1080}
-            camera={[{ at: 0, centerX: 727, centerY: 540, width: 1454 }]}
+            camera={fullPageCamera(1454, 1080, BOX.width, BOX.height)}
             boxWidth={BOX.width}
             boxHeight={BOX.height}
             borderRadius={0}
@@ -342,7 +307,7 @@ export const ItWatchesScene: React.FC = () => {
           <WhiskMomentReveal />
         </ScreenRecording>
       </div>
-      <KineticWords lines={["IT", "WATCHES."]} at={0.3} until={8.2} left={60} top={120} fontSize={104} />
+      <KineticWords lines={["IT", "WATCHES."]} at={0.3} until={8.2} left={60} top={120} fontSize={94} />
       <AnswerCard
         text="He whisks eggs for the custard around 08:39, and again for the pumpkin pie filling around 14:49."
         chips={["08:39–08:44", "14:49–15:04"]}
@@ -350,7 +315,7 @@ export const ItWatchesScene: React.FC = () => {
         until={5.8}
         left={48}
         top={440}
-        width={570}
+        width={540}
       />
     </AbsoluteFill>
   );
@@ -366,14 +331,7 @@ const READ_SEGMENTS: ClipSegment[] = [
   { start: 23.4, end: 25.0, speed: 1 },
   { start: 25.0, holdSeconds: 3.0 },
 ];
-const READ_CAMERA: CameraKeyframe[] = [
-  { at: 0, ...WEBSITE_WIDE },
-  { at: 0.4, ...WEBSITE_CHAT },
-  { at: 4.4, ...WEBSITE_CHAT },
-  { at: 5.0, centerX: 800, centerY: 520, width: 1100 },
-  { at: 6.6, centerX: 800, centerY: 520, width: 1100 },
-  { at: 7.6, centerX: 633, centerY: 420, width: 560 },
-];
+const READ_CAMERA = fullPageCamera(1916, 1146, BOX.width, BOX.height);
 const SLIDE_FORMULA = { x: 452, y: 358, width: 340, height: 86 };
 const LIFT_AT = 8.2;
 
@@ -468,7 +426,7 @@ const SlideFreezeFrame: React.FC = () => (
     segments={[{ start: 25.0, holdSeconds: 12 }]}
     sourceWidth={WEBSITE_SOURCE.width}
     sourceHeight={WEBSITE_SOURCE.height}
-    camera={[{ at: 0, centerX: WEBSITE_SOURCE.width / 2, centerY: WEBSITE_SOURCE.height / 2, width: WEBSITE_SOURCE.width }]}
+    camera={fullPageCamera(WEBSITE_SOURCE.width, WEBSITE_SOURCE.height, WEBSITE_SOURCE.width, WEBSITE_SOURCE.height)}
     boxWidth={WEBSITE_SOURCE.width}
     boxHeight={WEBSITE_SOURCE.height}
     borderRadius={0}
@@ -509,14 +467,8 @@ export const LibraryScene: React.FC = () => {
   const transform = useFloatingTilt();
   const filtered = interpolate(seconds, [3.2, 3.38], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const LIBRARY_SOURCE = { width: 3200, height: 1800 };
-  const gridCamera: CameraKeyframe[] = [
-    { at: 0, centerX: 1600, centerY: 900, width: 3200 },
-    { at: 3.0, centerX: 1500, centerY: 820, width: 2700 },
-  ];
-  const filteredCamera: CameraKeyframe[] = [
-    { at: 3.2, centerX: 1450, centerY: 760, width: 2500 },
-    { at: 6.5, centerX: 1400, centerY: 820, width: 2750 },
-  ];
+  const gridCamera = fullPageCamera(3200, 1800, BOX.width, BOX.height);
+  const filteredCamera = gridCamera;
   const tags = ["AI", "Cooking", "Lecture", "TED", "Computer Science", "LLMs", "Agents"];
   return (
     <AbsoluteFill>
@@ -543,7 +495,7 @@ export const LibraryScene: React.FC = () => {
           </div>
         </CameraFrame>
       </div>
-      <KineticWords lines={["YOUR", "LIBRARY."]} at={0.3} until={6.7} left={60} top={120} fontSize={104} />
+      <KineticWords lines={["YOUR", "LIBRARY."]} at={0.3} until={6.7} left={60} top={120} fontSize={94} />
       <div style={{ position: "absolute", left: 56, top: 440, width: 520, display: "flex", flexWrap: "wrap", gap: 14 }}>
         {tags.map((tag, index) => {
           const pop = spring({ frame: frame - (0.8 + index * 0.15) * fps, fps, config: { damping: 12 } });
