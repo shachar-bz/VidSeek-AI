@@ -165,6 +165,23 @@ class PostgresVideoJobs:
             ).fetchall()
         return [StoredVideoJob.from_row(row) for row in rows]
 
+    def delete_finished_without_video(self, job_id: str, user_id: str) -> bool:
+        """Forget this account's job if it ended without ever producing a video.
+
+        Such a job is the library's only record of a failed upload -- it has no link to
+        remove -- so this is how the account dismisses it. A job still running, or one
+        that produced a video, is left alone. Returns whether a row was deleted.
+        """
+        with connection(self._pool) as open_connection:
+            deleted = open_connection.execute(
+                f"delete from public.{TABLE_NAME} "
+                "where id = %s and user_id = %s::uuid and video_id is null "
+                "and status not in ('queued', 'running', 'awaiting_browser_download') "
+                "returning id",
+                (job_id, user_id),
+            ).fetchone()
+        return deleted is not None
+
     def delete(self, job_id: str) -> None:
         """Forget a job's row. A finished job is not otherwise evicted, so this is that eviction."""
         with connection(self._pool) as open_connection:

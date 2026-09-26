@@ -58,3 +58,8 @@ export function updateLibraryVideo(
 export function removeLibraryVideo(videoId: string): Promise<void> {
   return request<void>(`/v1/library/${encodeURIComponent(videoId)}`, { method: "DELETE" });
 }
+
+/** Dismisses a job that failed before producing a video, which has no library link to remove. */
+export function removeFailedLibraryJob(jobId: string): Promise<void> {
+  return request<void>(`/v1/library/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+}

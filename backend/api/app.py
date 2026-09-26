@@ -25,6 +25,7 @@ from backend.storage.postgres import (
     PostgresTranscriptSegments,
     PostgresUsers,
     PostgresUserVideos,
+    PostgresVideoJobs,
     PostgresVideoRecords,
 )
 from backend.video_agent import ConversationAgentRunner, PydanticConversationAgentRunner
@@ -51,6 +52,7 @@ def create_app(
     messages_store: PostgresMessages | None = None,
     video_records_store: PostgresVideoRecords | None = None,
     comments_store: PostgresComments | None = None,
+    video_jobs_store: PostgresVideoJobs | None = None,
     blob_video_storage: BlobVideoStorage | None = None,
     conversation_agent_runner: ConversationAgentRunner | None = None,
     generation_registry: GenerationRegistry | None = None,
@@ -114,6 +116,9 @@ def create_app(
     )
     app.state.comments_store = (
         comments_store if comments_store is not None else PostgresComments()
+    )
+    app.state.video_jobs_store = (
+        video_jobs_store if video_jobs_store is not None else PostgresVideoJobs()
     )
     # Blob settings are required only by playback. Keeping an absent default lazy preserves
     # startup for a local companion with no storage configuration.
