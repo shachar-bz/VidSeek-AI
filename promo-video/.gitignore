@@ -1,7 +1,8 @@
 node_modules/
 out/
 .env
-# Raw recordings and generated media are large binaries; they live outside git.
+# Raw recordings (videos/) and generated media are large binaries; they live outside git.
 public/clips/
 public/audio/
 public/stills/
+videos/
