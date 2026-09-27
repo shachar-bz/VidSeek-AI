@@ -3768,9 +3768,19 @@ h3 {
   gap: 0.75rem;
 }
 
+/* Size containment keeps the chat from growing the workspace row: the row takes the viewer
+   column's height, and a long chat scrolls inside its history instead of stretching the page. */
+.video-page .conversation-feature {
+  min-height: 45rem;
+  display: flex;
+  flex-direction: column;
+  contain: size;
+}
+
 .video-page .conversation-grid {
   --conversation-drawer-width: 15.5rem;
-  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   gap: 1.15rem;
 }
 
@@ -3812,7 +3822,7 @@ h3 {
 }
 
 .video-page .chat-panel {
-  min-height: 45rem;
+  min-height: 0;
   min-width: 0;
   display: flex;
   flex: 1 1 auto;
@@ -4045,7 +4055,7 @@ h3 {
     grid-template-columns: 1fr;
   }
 
-  .video-page .chat-panel {
+  .video-page .conversation-feature {
     min-height: 38rem;
   }
 }

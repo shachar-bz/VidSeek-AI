@@ -215,6 +215,10 @@ export function ConversationWorkspace({
   // not reset the panel the way opening a chat does, or it would abort that message's stream.
   const adoptedConversationRef = useRef<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const historyRef = useRef<HTMLDivElement | null>(null);
+  // Whether the history is scrolled to its end, so new and streaming messages keep it there
+  // without pulling a reader back down while they scroll through earlier answers.
+  const followHistoryRef = useRef(true);
   const canChat = allowsChat(video.stage);
 
   const updateLive = useCallback((next: LiveGeneration | null) => {
@@ -323,6 +327,7 @@ export function ConversationWorkspace({
     if (!conversationId) return;
     if (liveRef.current) commitLiveToHistory(liveRef.current);
     const initial = beginGeneration(content);
+    followHistoryRef.current = true;
     updateLive(initial);
     setDraft("");
     setStreamError(null);
@@ -467,6 +472,20 @@ export function ConversationWorkspace({
     ...(detail?.messages ?? []),
     ...(live ? [live.userMessage, live.assistantMessage] : [])
   ], [detail?.messages, live]);
+  useEffect(() => {
+    followHistoryRef.current = true;
+  }, [selectedId]);
+
+  useEffect(() => {
+    const history = historyRef.current;
+    if (history && followHistoryRef.current) history.scrollTop = history.scrollHeight;
+  }, [renderedMessages, detail]);
+
+  function trackHistoryScroll() {
+    const history = historyRef.current;
+    if (history) followHistoryRef.current = history.scrollHeight - history.scrollTop - history.clientHeight < 48;
+  }
+
   const unavailable = chatUnavailableMessage(video.stage);
   const starterQuestions = useMemo(() => starterQuestionsForVideo(video), [video]);
 
@@ -484,7 +503,7 @@ export function ConversationWorkspace({
         <Panel className="chat-panel">
           <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
           {selectedId && !detail ? <p className="muted-text">Loading chat…</p> : <>
-            <div className="chat-history" aria-live="polite">{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
+            <div className="chat-history" ref={historyRef} aria-live="polite" onScroll={trackHistoryScroll}>{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
             <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming || creating} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (canChat && !streaming && !creating && draft.trim()) event.currentTarget.form?.requestSubmit(); } }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" pending={creating} disabled={!canChat || creating || !draft.trim()}><ArrowUpIcon /></Button>}</div></form>
           </>}
