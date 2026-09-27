@@ -1,4 +1,5 @@
 node_modules/
+.npm-cache/
 out/
 .env
 # Raw recordings (videos/) and generated media are large binaries; they live outside git.

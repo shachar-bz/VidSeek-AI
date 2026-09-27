@@ -6,7 +6,8 @@ import { ChipJumpTransition } from "./components/ChipJumpTransition";
 import { SceneTransition } from "./components/SceneTransition";
 import { EndCard, Reveal } from "./scenes/BrandScenes";
 import { FindVideoMontage } from "./scenes/FindVideoMontage";
-import { Callback, HookBook, HookChatbot, HookQuestion, HookVideo } from "./scenes/HookScenes";
+import { Callback, HookQuestion } from "./scenes/HookScenes";
+import { ElevenLabsHook } from "./scenes/ElevenLabsHook";
 import {
   AskAnythingScene,
   CommentsScene,
@@ -22,9 +23,7 @@ import { Soundtrack } from "./Soundtrack";
 const SCENE_OVERLAP_SECONDS = 0.3;
 
 const SCENE_COMPONENTS: { id: SceneId; component: React.FC; enter?: boolean }[] = [
-  { id: "hookBook", component: HookBook },
-  { id: "hookChatbot", component: HookChatbot },
-  { id: "hookVideo", component: HookVideo },
+  { id: "hookFilm", component: ElevenLabsHook, enter: false },
   { id: "hookQuestion", component: HookQuestion },
   { id: "reveal", component: Reveal, enter: false },
   { id: "findVideo", component: FindVideoMontage },

@@ -359,6 +359,7 @@ export const Callback: React.FC = () => {
               background: colors.cobalt,
               transformOrigin: "left center",
               transform: `rotateY(${(1 - close) * -150}deg)`,
+              backfaceVisibility: "hidden",
               boxShadow: shadows.card,
               display: "flex",
               alignItems: "center",

@@ -9,9 +9,7 @@ export const beat = (beatIndex: number) => MUSIC_DROP_SECONDS + beatIndex * BEAT
 export const toFrames = (seconds: number) => Math.round(seconds * FPS);
 
 export type SceneId =
-  | "hookBook"
-  | "hookChatbot"
-  | "hookVideo"
+  | "hookFilm"
   | "hookQuestion"
   | "reveal"
   | "findVideo"
@@ -26,9 +24,7 @@ export type SceneId =
   | "endCard";
 
 export const scenes: Record<SceneId, { start: number; end: number }> = {
-  hookBook: { start: 0, end: 4.6 },
-  hookChatbot: { start: 4.6, end: 9.3 },
-  hookVideo: { start: 9.3, end: 14.2 },
+  hookFilm: { start: 0, end: 14.2 },
   hookQuestion: { start: 14.2, end: 17 },
   reveal: { start: 17, end: 19.5 },
   findVideo: { start: 19.5, end: 27.5 },
@@ -45,9 +41,10 @@ export const scenes: Record<SceneId, { start: number; end: number }> = {
 
 // Narration cues: file name in public/audio/vo and the second it starts.
 export const voiceoverCues: { id: string; start: number; caption: string }[] = [
-  { id: "hook_book", start: 0.4, caption: "Alex wants to understand something. The book has nine hundred pages." },
-  { id: "hook_chatbot", start: 4.8, caption: "The chatbot gives a wall of text… and Alex isn't sure it's even right." },
-  { id: "hook_video", start: 9.5, caption: "The video explains it best. But the part Alex needs is buried somewhere in two hours." },
+  { id: "hook_intro_v2", start: 0.15, caption: "Alex wants to understand a difficult topic." },
+  { id: "hook_book_v2", start: 3.15, caption: "The textbook? Overwhelming." },
+  { id: "hook_chatbot_v2", start: 5.25, caption: "The chatbot sounds confident. But the answer is wrong." },
+  { id: "hook_video_v2", start: 10.25, caption: "The video? Good luck finding the right moment." },
   { id: "hook_question", start: 14.4, caption: "What if Alex could just… ask the video?" },
   { id: "reveal", start: 17.6, caption: "Meet VidSeek AI." },
   { id: "find_video", start: 20.0, caption: "One click, on almost any video site. No captions? VidSeek writes them." },
@@ -63,11 +60,12 @@ export const voiceoverCues: { id: string; start: number; caption: string }[] = [
 ];
 
 export const voiceoverDurations: Record<string, number> = {
-  hook_book: 4.04, hook_chatbot: 4.37, hook_video: 4.5, hook_question: 2.28, reveal: 1.35,
+  hook_intro_v2: 2.351, hook_book_v2: 1.620, hook_chatbot_v2: 2.821, hook_video_v2: 2.638,
+  hook_question: 2.28, reveal: 1.35,
   find_video: 4.09, ask_anything: 3.99, jump_to_moment: 1.76, comments: 3.53, follow_ups: 2.93,
   it_watches: 1.95, it_reads: 2.74, library: 4.41, callback: 1.72, tagline: 2.32,
 };
 
 // Set to true once the four AI stills of Alex exist in public/stills
 // (alex_book.png, alex_chatbot.png, alex_video.png, alex_relieved.png).
-export const AI_STILLS_AVAILABLE = true;
+export const AI_STILLS_AVAILABLE = false;

@@ -15,8 +15,8 @@ const sceneBoundaries = [
 ];
 
 export const soundEffectCues: SoundEffectCue[] = [
-  { id: "page_flip", at: 1.1, volume: 0.55 },
-  { id: "keyboard_typing", at: 5.4, volume: 0.35 },
+  { id: "page_flip", at: 3.15, volume: 0.3, duration: 1.2 },
+  { id: "keyboard_typing", at: 5.3, volume: 0.2, duration: 1.6 },
   { id: "riser", at: 14.5, volume: 0.35 },
   { id: "impact", at: MUSIC_DROP_SECONDS, volume: 0.32 },
   // Five site clicks, one every two beats.
@@ -52,7 +52,7 @@ export const Soundtrack: React.FC = () => {
       <Sequence durationInFrames={toFrames(MUSIC_DROP_SECONDS)}>
         <Audio
           src={staticFile("audio/music_hook.mp3")}
-          volume={(frame) => interpolate(frame / FPS, [0, 1, 13.8, 16.9], [0, 0.42, 0.42, 0.08], { extrapolateRight: "clamp" })}
+          volume={(frame) => interpolate(frame / FPS, [0, 1, 13.8, 16.9], [0, 0.42, 0.42, 0.08], { extrapolateRight: "clamp" }) * narrationDuck(frame / FPS)}
         />
       </Sequence>
       <Sequence from={toFrames(MUSIC_DROP_SECONDS)} durationInFrames={mainMusicFrames}>
