@@ -1,24 +1,25 @@
 # VidSeek AI promo video
 
-A ~100 second ad for VidSeek AI, built with [Remotion](https://www.remotion.dev/). It
+A 79 second ad for VidSeek AI, built with [Remotion](https://www.remotion.dev/). It
 mixes an ElevenLabs opening film with real recordings of the product.
 
 ## Story
 
 1. **Hook (0–17 s):** Alex wants to understand a difficult topic, tries an overwhelming
-   textbook, gets a confident but wrong chatbot answer, and searches a long video.
+   textbook, gets a confident but wrong or overly long chatbot answer, and searches a long video.
    It ends on "What if Alex could just… ask the video?"
 2. **Reveal (17 s):** the music drops and the logo lands.
-3. **Product (19–83 s):**
-   * five real "Find video" clicks on five sites
+3. **Product (19.5–73 s):**
+   * fast supported-site carousel with complete browser framing
    * ask anything (YouTube)
    * click a timestamp to jump (Coursera)
    * the comments (YouTube)
    * follow-up questions (TED)
    * the visual agent finding the whisking at 08:39 (Internet Archive)
    * a formula lifting off a lecture slide (Panopto)
-   * Alex's tagged library
-4. **Close:** Alex gets it in seconds, then the end card: "Ask any video anything.", built
+   * Alex's tagged library in the current six-row view
+   * reopen a previous chat, pin an answer, and open its exact source message
+4. **Close (73–79 s):** the end card: "Ask any video anything.", built
    by Shachar Ben Zur.
 
 ## Setup
@@ -41,7 +42,8 @@ The v2 opening uses `public/clips/Elevenlabs_vid.mp4` (1280×720, 24 fps,
 14.048 seconds). Its original audio is muted. The continuous film plays at
 14/14.5 speed to cover the transition at 14.2 seconds, with no internal scene
 transitions layered over its own cuts. The reveal remains at 17 seconds and the
-full ad remains 100 seconds.
+full ad is now 79 seconds. The opening film and hook music are preserved; only the
+requested chatbot narration/caption is extended.
 
 ## Generating media (ElevenLabs)
 
@@ -51,6 +53,7 @@ The key is read from `ELEVENLABS_VIDEO` in `.env`, either here or in the main ch
 ```bash
 python scripts/generate_voiceover.py     # narration, one file per line in voiceover_lines.json
 python scripts/generate_music.py         # music_hook (tense bed) + music_main (starts on the drop)
+node scripts/generate_music.mjs          # lighter replacement main track, starts at 17 s
 python scripts/generate_sound_effects.py
 python scripts/generate_ai_stills.py     # needs the key's "Image & Video" permission
 ```
@@ -60,14 +63,14 @@ The main music cue is 120 BPM, so beats land every 0.5 s after 17 s.
 
 Prompts for the earlier photorealistic Alex stills remain in
 `scripts/cinematic_stills.md`. Those images are absent from this checkout, so
-`AI_STILLS_AVAILABLE` is false and the callback uses its animated book and
-checkmark. The new opening film does not depend on that flag.
+`AI_STILLS_AVAILABLE` is false. The closing book callback is removed from v2.
+The opening film does not depend on that flag.
 
 The four replacement opening lines use the same Eric voice as the product demo.
 Generate them without Python using:
 
 ```bash
-node scripts/generate_voiceover.mjs hook_intro_v2 hook_book_v2 hook_chatbot_v2 hook_video_v2
+node scripts/generate_voiceover.mjs hook_intro_v2 hook_book_v2 hook_chatbot_extended hook_video_v2 chat_history pin_answers
 ```
 
 New IDs preserve the earlier narration assets. Measured MP3 durations are recorded
@@ -78,6 +81,14 @@ speech and rendered MP4s remain local and gitignored.
 
 Product recordings now keep the complete browser page visible. Timestamp clicks,
 the chip-jump transitions, and the formula lift remain in place.
+The demonstrations have a larger frame, lossless intermediate frames, and a CRF 14
+final encode. Existing recordings retain their original source resolution.
+
+`library_rows_v2.png` and the `chat_*.png` captures are real 2370×1314 browser
+screenshots from the local demo account. Camera framing excludes the browser's
+unused right/bottom area. The chat sequence shows actual UI states, with click
+rings marking the corresponding actions. Pin links show at most 160 characters
+plus an ellipsis and focus the original message inside its scrollable chat.
 
 Generate the quiet replacement transition sound with
 `node scripts/generate_transition.mjs` (add `--force` to regenerate). It uses
@@ -90,5 +101,5 @@ has a short envelope and lower mix level, and narration ducking fades smoothly.
 ```bash
 npm run studio                                         # interactive preview
 node scripts/render_stills.mjs <dir> 2 31.5 74.5       # quick stills at given seconds
-npm run render                                         # out/vidseek-promo-v2.mp4, CRF 18
+npm run render                                         # out/vidseek-promo-v2.mp4, CRF 14, 1080p30
 ```

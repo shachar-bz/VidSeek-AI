@@ -12,8 +12,8 @@
       "text": "The textbook? Overwhelming."
     },
     {
-      "id": "hook_chatbot_v2",
-      "text": "The chatbot sounds confident. But the answer is wrong."
+      "id": "hook_chatbot_extended",
+      "text": "The chatbot sounds confident, but the answer is wrong or too long to understand."
     },
     {
       "id": "hook_video_v2",
@@ -60,12 +60,16 @@
       "text": "Every video lands in your own library. Searchable, and always one click away."
     },
     {
-      "id": "callback",
-      "text": "Alex got it. In seconds."
-    },
-    {
       "id": "tagline",
       "text": "VidSeek AI. Ask any video anything."
+    },
+    {
+      "id": "chat_history",
+      "text": "Revisit your previous chats."
+    },
+    {
+      "id": "pin_answers",
+      "text": "And pin important answers, so they're always easy to find."
     }
   ]
 }

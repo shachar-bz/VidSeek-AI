@@ -1,0 +1,10 @@
+{
+  "positive_global_styles": ["light upbeat instrumental", "warm modern electronic", "120 bpm", "soft plucked synths", "gentle bass groove", "crisp restrained percussion", "optimistic and curious", "space for spoken narration"],
+  "negative_global_styles": ["vocals", "lyrics", "singing", "epic cinematic", "huge impacts", "aggressive drums", "distorted bass", "busy lead melody"],
+  "sections": [
+    {"section_name": "Friendly reveal", "positive_local_styles": ["confident warm opening chord", "light groove immediately", "subtle sparkling plucks"], "negative_local_styles": ["long intro", "big drop"], "duration_ms": 14000, "lines": []},
+    {"section_name": "Curious momentum", "positive_local_styles": ["steady relaxed energy", "playful understated rhythm", "minimal melody under voice"], "negative_local_styles": ["dense arrangement"], "duration_ms": 22000, "lines": []},
+    {"section_name": "Everything together", "positive_local_styles": ["slightly fuller warm harmony", "clear and bright", "gentle forward movement"], "negative_local_styles": ["dramatic climax"], "duration_ms": 18000, "lines": []},
+    {"section_name": "Warm finish", "positive_local_styles": ["satisfying final chord", "soft natural ending", "light optimistic resolution"], "negative_local_styles": ["abrupt ending"], "duration_ms": 8000, "lines": []}
+  ]
+}

@@ -70,7 +70,7 @@ const SegmentedVideo: React.FC<{ src: string; segments: ClipSegment[] }> = ({ sr
         const video =
           "holdSeconds" in segment ? (
             <Freeze frame={0}>
-              <OffthreadVideo src={staticFile(src)} trimBefore={Math.round(segment.start * FPS)} muted />
+              <OffthreadVideo src={staticFile(src)} trimBefore={Math.round(segment.start * FPS)} muted transparent style={{ width: "100%", height: "100%", objectFit: "fill" }} />
             </Freeze>
           ) : (
             <OffthreadVideo
@@ -78,6 +78,8 @@ const SegmentedVideo: React.FC<{ src: string; segments: ClipSegment[] }> = ({ sr
               trimBefore={Math.round(segment.start * FPS)}
               playbackRate={segment.speed}
               muted
+              transparent
+              style={{ width: "100%", height: "100%", objectFit: "fill" }}
             />
           );
         return (

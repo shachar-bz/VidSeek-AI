@@ -6,7 +6,8 @@ import { ChipJumpTransition } from "./components/ChipJumpTransition";
 import { SceneTransition } from "./components/SceneTransition";
 import { EndCard, Reveal } from "./scenes/BrandScenes";
 import { FindVideoMontage } from "./scenes/FindVideoMontage";
-import { Callback, HookQuestion } from "./scenes/HookScenes";
+import { HookQuestion } from "./scenes/HookScenes";
+import { ChatPinsScene } from "./scenes/ChatPinsScene";
 import { ElevenLabsHook } from "./scenes/ElevenLabsHook";
 import {
   AskAnythingScene,
@@ -17,7 +18,7 @@ import {
   JumpToMomentScene,
   LibraryScene,
 } from "./scenes/ProductScenes";
-import { SceneId, scenes, toFrames } from "./timeline";
+import { SceneId, scenes, toFrames, visualPlaybackRates } from "./timeline";
 import { Soundtrack } from "./Soundtrack";
 
 const SCENE_OVERLAP_SECONDS = 0.3;
@@ -34,7 +35,7 @@ const SCENE_COMPONENTS: { id: SceneId; component: React.FC; enter?: boolean }[] 
   { id: "itWatches", component: ItWatchesScene },
   { id: "itReads", component: ItReadsScene },
   { id: "library", component: LibraryScene },
-  { id: "callback", component: Callback },
+  { id: "chatPins", component: ChatPinsScene },
   { id: "endCard", component: EndCard },
 ];
 
@@ -53,7 +54,9 @@ export const VidSeekPromo: React.FC = () => (
       return (
         <Sequence key={id} from={toFrames(start)} durationInFrames={durationInFrames} name={id}>
           <SceneTransition durationInFrames={isLast ? durationInFrames + 30 : durationInFrames} enter={enter}>
-            <SceneComponent />
+            <Sequence layout="none" playbackRate={visualPlaybackRates[id] ?? 1}>
+              <SceneComponent />
+            </Sequence>
           </SceneTransition>
         </Sequence>
       );

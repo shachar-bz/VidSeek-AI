@@ -1,120 +1,39 @@
-import React from "react";
-import { AbsoluteFill, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { ClipSegment, fullPageCamera, ScreenRecording } from "../components/ScreenRecording";
-import { KineticWords } from "../components/KineticWords";
+﻿import React from "react";
+import { AbsoluteFill, interpolate, Sequence, useCurrentFrame } from "remotion";
+import { fullPageCamera, ScreenRecording } from "../components/ScreenRecording";
+import { colors, fonts } from "../theme";
+import { FPS } from "../timeline";
 
-// Five real "Find video" / "Scan video" clicks on five different sites, each landing on a beat.
-// `clickAt` is where the click happens in the source recording.
-type SiteClip = { src: string; clickAt: number; playSeconds: number; leadIn?: number };
-
-const SITE_CLIPS: SiteClip[] = [
-  { src: "clips/youtube-login.mp4", clickAt: 0.233, playSeconds: 1.8 },
-  { src: "clips/Internet_archive-login.mp4", clickAt: 0.6, playSeconds: 1.5 },
-  { src: "clips/ted-login.mp4", clickAt: 37.57, playSeconds: 1.5 },
-  { src: "clips/coursera-login.mp4", clickAt: 0.35, playSeconds: 0.75 },
-  { src: "clips/moodle-login.mp4", clickAt: 0.3, playSeconds: 1.6 },
+// Supported-site carousel. Coursera is already ready in the supplied recording,
+// so no artificial click, flash or click sound is attributed to it.
+const sites = [
+  { name: "YouTube", src: "youtube-login.mp4", start: 0, width: 1914, height: 1150 },
+  { name: "Internet Archive", src: "Internet_archive-login.mp4", start: 0.3, width: 1916, height: 1150 },
+  { name: "TED", src: "ted-login.mp4", start: 37.2, width: 1918, height: 1152 },
+  { name: "Coursera", src: "coursera-login.mp4", start: 0, width: 1916, height: 1148 },
+  { name: "Moodle / Panopto", src: "moodle-login.mp4", start: 0, width: 1914, height: 1148 },
 ];
-
-const CLICK_LEAD_SECONDS = 0.4; // each card arrives this long before its click
-const FIRST_CLICK_SECONDS = 0.5; // scene-local; the scene starts half a beat before 20.0 s
-const CLICK_SPACING_SECONDS = 1.0; // two beats
-const SOURCE = { width: 1916, height: 1150 };
-const CARD = { width: 1400, height: 840 };
-// Keep the complete browser page and VidSeek side panel visible together.
-const SIDE_PANEL_FRAMING = fullPageCamera(SOURCE.width, SOURCE.height, CARD.width, CARD.height);
-
-const segmentsFor = (clip: SiteClip, visibleSeconds: number): ClipSegment[] => {
-  const start = clip.clickAt - CLICK_LEAD_SECONDS;
-  const segments: ClipSegment[] = [];
-  if (start < 0) segments.push({ start: 0, holdSeconds: -start });
-  const playStart = Math.max(0, start);
-  const playEnd = playStart + clip.playSeconds;
-  segments.push({ start: playStart, end: playEnd, speed: 1 });
-  segments.push({ start: playEnd - 0.04, holdSeconds: Math.max(0.1, visibleSeconds) });
-  return segments;
+const STEP = 1.05;
+const SiteCard: React.FC<{site: typeof sites[number]}> = ({site}) => {
+  const seconds = useCurrentFrame() / FPS;
+  const enter = interpolate(seconds, [0, 0.16], [1, 0], {extrapolateRight: "clamp"});
+  return <div style={{position: "absolute", left: 180, top: 100, transform: `translateX(${enter * 160}px)`, opacity: 1 - enter}}>
+    <ScreenRecording src={`clips/${site.src}`} sourceWidth={site.width} sourceHeight={site.height}
+      segments={[{start: site.start, end: site.start + 2.5, speed: 1}]}
+      camera={fullPageCamera(site.width, site.height, 1560, 830)} boxWidth={1560} boxHeight={830} borderRadius={16} />
+  </div>;
 };
-
-// Final resting slots: a gentle arc of five small cards.
-const restingSlot = (index: number) => {
-  const offset = index - 2;
-  return { x: 960 + offset * 372, y: 360 + Math.abs(offset) * 28, rotate: offset * 3, scale: 0.34 };
-};
-
 export const FindVideoMontage: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
-  const seconds = frame / fps;
-  const settleAt = FIRST_CLICK_SECONDS + SITE_CLIPS.length * CLICK_SPACING_SECONDS - 0.2;
-  const settle = spring({ frame: frame - settleAt * fps, fps, config: { damping: 18, stiffness: 110 } });
-  return (
-    <AbsoluteFill>
-      {SITE_CLIPS.map((clip, index) => {
-        const arriveAt = FIRST_CLICK_SECONDS + index * CLICK_SPACING_SECONDS - CLICK_LEAD_SECONDS;
-        if (seconds < arriveAt - 0.05) return null;
-        const arrive = spring({ frame: frame - arriveAt * fps, fps, config: { damping: 17, stiffness: 150 } });
-        const nextArrive = arriveAt + CLICK_SPACING_SECONDS;
-        const pushedBack = interpolate(seconds, [nextArrive, nextArrive + 0.3], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        });
-        const isLast = index === SITE_CLIPS.length - 1;
-        const slot = restingSlot(index);
-        // While active: centered, full size. Once the next card comes: tuck back. At the end: arc slot.
-        const activeX = 960 + (1 - arrive) * 1100;
-        const activeRotateY = (1 - arrive) * -35;
-        const tuckScale = 1 - (isLast ? 0 : pushedBack) * 0.12;
-        const tuckOpacity = isLast ? 1 : 1 - pushedBack * 0.75;
-        const centerX = interpolate(settle, [0, 1], [activeX, slot.x]);
-        const centerY = interpolate(settle, [0, 1], [500, slot.y]);
-        const scale = interpolate(settle, [0, 1], [tuckScale, slot.scale]);
-        const opacity = interpolate(settle, [0, 1], [tuckOpacity, 1]);
-        const clickSeconds = arriveAt + CLICK_LEAD_SECONDS;
-        const clickFlash = interpolate(seconds, [clickSeconds, clickSeconds + 0.35], [1, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        });
-        const visibleSeconds = durationInFrames / fps - arriveAt;
-        return (
-          <div
-            key={clip.src}
-            style={{
-              position: "absolute",
-              left: centerX - CARD.width / 2,
-              top: centerY - CARD.height / 2,
-              width: CARD.width,
-              height: CARD.height,
-              opacity,
-              transform: `perspective(2000px) rotateY(${activeRotateY + settle * slot.rotate}deg) scale(${scale})`,
-              zIndex: index,
-            }}
-          >
-            <SequenceFromArrival arriveAt={arriveAt}>
-              <ScreenRecording
-                src={clip.src}
-                sourceWidth={SOURCE.width}
-                sourceHeight={SOURCE.height}
-                segments={segmentsFor(clip, visibleSeconds)}
-                camera={SIDE_PANEL_FRAMING}
-                boxWidth={CARD.width}
-                boxHeight={CARD.height}
-                borderRadius={26}
-                style={{ outline: `${6 * clickFlash}px solid rgba(82,102,235,${clickFlash})` }}
-              />
-            </SequenceFromArrival>
-          </div>
-        );
-      })}
-      <KineticWords lines={["Almost any video.", "One click."]} at={settleAt + 0.3} until={8} left={0} top={600} width={1920} align="center" fontSize={96} />
-    </AbsoluteFill>
-  );
-};
-
-// Starts a card's recording at the moment the card arrives.
-const SequenceFromArrival: React.FC<{ arriveAt: number; children: React.ReactNode }> = ({ arriveAt, children }) => {
-  const { fps } = useVideoConfig();
-  return (
-    <Sequence from={Math.round(arriveAt * fps)} layout="none">
-      {children}
-    </Sequence>
-  );
+  const seconds = useCurrentFrame() / FPS;
+  const active = Math.min(sites.length - 1, Math.floor(seconds / STEP));
+  return <AbsoluteFill style={{fontFamily: fonts.sans}}>
+    <div style={{position: "absolute", top: 20, width: "100%", textAlign: "center", fontSize: 46, fontWeight: 800, color: colors.ink}}>Across the sites you already watch.</div>
+    {sites.map((site, index) => <Sequence key={site.src} from={Math.round(index * STEP * FPS)} durationInFrames={Math.round((index === 4 ? 2.1 : STEP) * FPS)}>
+      <SiteCard site={site} />
+    </Sequence>)}
+    <div style={{position: "absolute", left: 70, right: 70, bottom: 100, display: "flex", justifyContent: "center", gap: 18}}>
+      {sites.map((site, index) => <div key={site.name} style={{padding: "13px 25px", borderRadius: 999, background: active === index ? colors.cobalt : "white", color: active === index ? "white" : colors.inkMuted, fontSize: 27, fontWeight: 700, border: `1px solid ${colors.mistBorder}`}}>{site.name}</div>)}
+    </div>
+    <div style={{position: "absolute", bottom: 67, width: "100%", textAlign: "center", color: colors.inkMuted, fontSize: 20}}>And many more video sites</div>
+  </AbsoluteFill>;
 };

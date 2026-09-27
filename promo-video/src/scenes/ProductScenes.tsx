@@ -16,7 +16,7 @@ import { TimestampChip } from "../components/TimestampChip";
 import { colors, fonts, shadows } from "../theme";
 
 // Layout shared by the product beats: messaging on the left, the real product floating on the right.
-const BOX = { left: 610, top: 96, width: 1250, height: 750 };
+const BOX = { left: 60, top: 80, width: 1800, height: 950 };
 const EXTENSION_SOURCE = { width: 1916, height: 1150 }; // Chrome window with the VidSeek side panel
 const WEBSITE_SOURCE = { width: 1916, height: 1146 }; // VidSeek website video page
 
@@ -70,10 +70,8 @@ const ProductExample: React.FC<ProductExampleProps> = ({
           })}
         </ScreenRecording>
       </div>
-      <KineticWords lines={kineticLines} at={0.3} until={kineticUntil} left={60} top={120} fontSize={kineticFontSize} />
-      {answers.map((answer) => (
-        <AnswerCard key={answer.text} {...answer} left={48} top={440} width={540} />
-      ))}
+      <KineticWords lines={[kineticLines.join(" ")]} at={0.3} until={kineticUntil} left={60} top={18} fontSize={44} />
+      
       {children}
     </AbsoluteFill>
   );
@@ -307,16 +305,8 @@ export const ItWatchesScene: React.FC = () => {
           <WhiskMomentReveal />
         </ScreenRecording>
       </div>
-      <KineticWords lines={["IT", "WATCHES."]} at={0.3} until={8.2} left={60} top={120} fontSize={94} />
-      <AnswerCard
-        text="He whisks eggs for the custard around 08:39, and again for the pumpkin pie filling around 14:49."
-        chips={["08:39–08:44", "14:49–15:04"]}
-        at={3.9}
-        until={5.8}
-        left={48}
-        top={440}
-        width={540}
-      />
+      <KineticWords lines={["IT WATCHES."]} at={0.3} until={8.2} left={60} top={18} fontSize={44} />
+
     </AbsoluteFill>
   );
 };
@@ -459,72 +449,15 @@ export const ItReadsScene: React.FC = () => (
   </AbsoluteFill>
 );
 
-// "Your library": the real library as Alex sees it, tagged, then filtered by the AI tag.
-export const LibraryScene: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const seconds = frame / fps;
-  const transform = useFloatingTilt();
-  const filtered = interpolate(seconds, [3.2, 3.38], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const LIBRARY_SOURCE = { width: 3200, height: 1800 };
-  const gridCamera = fullPageCamera(3200, 1800, BOX.width, BOX.height);
-  const filteredCamera = gridCamera;
-  const tags = ["AI", "Cooking", "Lecture", "TED", "Computer Science", "LLMs", "Agents"];
-  return (
-    <AbsoluteFill>
-      <div style={{ position: "absolute", left: BOX.left, top: BOX.top, transform }}>
-        <CameraFrame
-          sourceWidth={LIBRARY_SOURCE.width}
-          sourceHeight={LIBRARY_SOURCE.height}
-          camera={gridCamera}
-          boxWidth={BOX.width}
-          boxHeight={BOX.height}
-          content={<LibraryImage file="stills/lib_grid_tagged.png" />}
-        >
-          <div style={{ position: "absolute", inset: 0, opacity: filtered }}>
-            <CameraFrame
-              sourceWidth={LIBRARY_SOURCE.width}
-              sourceHeight={LIBRARY_SOURCE.height}
-              camera={filteredCamera}
-              boxWidth={BOX.width}
-              boxHeight={BOX.height}
-              borderRadius={0}
-              style={{ boxShadow: "none" }}
-              content={<LibraryImage file="stills/lib_grid_filter_ai.png" />}
-            />
-          </div>
-        </CameraFrame>
-      </div>
-      <KineticWords lines={["YOUR", "LIBRARY."]} at={0.3} until={6.7} left={60} top={120} fontSize={94} />
-      <div style={{ position: "absolute", left: 56, top: 440, width: 520, display: "flex", flexWrap: "wrap", gap: 14 }}>
-        {tags.map((tag, index) => {
-          const pop = spring({ frame: frame - (0.8 + index * 0.15) * fps, fps, config: { damping: 12 } });
-          const selected = tag === "AI" ? interpolate(seconds, [2.6, 3.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 0;
-          return (
-            <div
-              key={tag}
-              style={{
-                transform: `translateY(${Math.sin(frame / 25 + index) * 3}px) scale(${pop * (1 + selected * 0.15)})`,
-                padding: "12px 22px",
-                borderRadius: 999,
-                background: selected > 0.5 ? colors.cobalt : colors.white,
-                color: selected > 0.5 ? colors.white : colors.ink,
-                boxShadow: shadows.card,
-                fontFamily: fonts.sans,
-                fontSize: 26,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {tag}
-            </div>
-          );
-        })}
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-const LibraryImage: React.FC<{ file: string }> = ({ file }) => (
-  <Img src={staticFile(file)} style={{ width: 3200, height: 1800, display: "block" }} />
+// Current six-row library, captured from the real demo account.
+export const LibraryScene: React.FC = () => (
+  <AbsoluteFill>
+    <KineticWords lines={["YOUR LIBRARY. ALL IN ONE PLACE."]} at={0.2} until={5.7} left={60} top={20} fontSize={44} />
+    <div style={{position: "absolute", left: 70, top: 95}}>
+      <CameraFrame sourceWidth={2370} sourceHeight={1314}
+        camera={[{at: 0, centerX: 1066, centerY: 610, width: 2000}]}
+        boxWidth={1780} boxHeight={900}
+        content={<Img src={staticFile("stills/library_rows_v2.png")} style={{width: 2370, height: 1314}} />} />
+    </div>
+  </AbsoluteFill>
 );

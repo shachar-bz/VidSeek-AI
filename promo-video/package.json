@@ -5,7 +5,7 @@
   "description": "VidSeek AI promo ad built with Remotion",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts VidSeekPromo out/vidseek-promo-v2.mp4 --crf 18",
+    "render": "remotion render src/index.ts VidSeekPromo out/vidseek-promo-v2.mp4 --crf 14 --image-format png --x264-preset veryfast",
     "still": "remotion still src/index.ts VidSeekPromo out/still.png",
     "typecheck": "tsc --noEmit"
   },
