@@ -57,7 +57,7 @@ export const Soundtrack: React.FC = () => {
       </Sequence>
       <Sequence from={toFrames(MUSIC_DROP_SECONDS)} durationInFrames={mainMusicFrames}>
         <Audio
-          src={staticFile("audio/music_main_light.mp3")}
+          src={staticFile("audio/music_main.mp3")}
           volume={(frame) => {
             const seconds = MUSIC_DROP_SECONDS + frame / FPS;
             const ducked = 0.4 * narrationDuck(seconds);

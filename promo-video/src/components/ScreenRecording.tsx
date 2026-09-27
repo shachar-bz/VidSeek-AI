@@ -110,12 +110,20 @@ export const CameraFrame: React.FC<{
   const visibleHeight = boxHeight / scale;
   const left = -(framing.centerX - framing.width / 2) * scale;
   const top = -(framing.centerY - visibleHeight / 2) * scale;
+  // Fit the frame to the visible source bounds, rather than painting white
+  // letterboxing around a contained recording. Source scale and clicks stay put.
+  const insetLeft = Math.max(0, left);
+  const insetTop = Math.max(0, top);
+  const frameWidth = Math.min(boxWidth, left + sourceWidth * scale) - insetLeft;
+  const frameHeight = Math.min(boxHeight, top + sourceHeight * scale) - insetTop;
   return (
     <div
       style={{
         position: "absolute",
-        width: boxWidth,
-        height: boxHeight,
+        left: insetLeft,
+        top: insetTop,
+        width: frameWidth,
+        height: frameHeight,
         borderRadius,
         overflow: "hidden",
         background: "#fff",
@@ -126,8 +134,8 @@ export const CameraFrame: React.FC<{
       <div
         style={{
           position: "absolute",
-          left,
-          top,
+          left: left - insetLeft,
+          top: top - insetTop,
           width: sourceWidth,
           height: sourceHeight,
           transform: `scale(${scale})`,
@@ -136,7 +144,7 @@ export const CameraFrame: React.FC<{
       >
         {content}
       </div>
-      {children}
+      <div style={{position: "absolute", left: -insetLeft, top: -insetTop, width: boxWidth, height: boxHeight}}>{children}</div>
     </div>
   );
 };
