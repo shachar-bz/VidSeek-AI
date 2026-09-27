@@ -1,12 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type FormEvent
 } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   createConversation,
@@ -36,6 +37,12 @@ import { splitMessageCitations } from "./format";
 import { beginGeneration, applyStreamEvent, endIncompleteStream, type LiveGeneration } from "./streamState";
 
 const CHAT_NAME = /^Chat (\d+)$/;
+
+export function pinnedAnswerPreview(content: string): string {
+  const text = content.replace(/\s+/g, " ").trim();
+  const characters = Array.from(text);
+  return characters.length > 160 ? `${characters.slice(0, 160).join("").trimEnd()}…` : text;
+}
 
 function summaryFromDetail(detail: ConversationDetail): ConversationSummary {
   return {
@@ -136,6 +143,7 @@ function MessageCard({
   message,
   pinPending,
   pinDisabled,
+  highlighted,
   approximate,
   onSeek,
   onTogglePin
@@ -143,6 +151,7 @@ function MessageCard({
   message: ConversationMessage;
   pinPending: boolean;
   pinDisabled: boolean;
+  highlighted: boolean;
   approximate: boolean;
   onSeek(seconds: number): void;
   onTogglePin(message: ConversationMessage): void;
@@ -150,7 +159,7 @@ function MessageCard({
   const assistant = message.role === "assistant";
   const sentAt = formatMessageTime(message.created_at);
   return (
-    <article className={`chat-message chat-message--${message.role}`}>
+    <article id={`message-${message.message_id}`} tabIndex={-1} className={`chat-message chat-message--${message.role}${highlighted ? " chat-message--highlighted" : ""}`}>
       {assistant ? <img className="chat-message__avatar" src={agentAvatar} alt="VidSeek" /> : null}
       <div className="chat-message__body">
         <div className="chat-message__bubble">
@@ -188,8 +197,11 @@ export function ConversationWorkspace({
   playerPosition?(): PlayerPosition | null;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const selectedId = searchParams.get("conversation");
+  const selectedMessageId = searchParams.get("message");
+  const focusedPinRef = useRef<string | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [pins, setPins] = useState<PinnedAnswer[]>([]);
@@ -473,8 +485,21 @@ export function ConversationWorkspace({
     ...(live ? [live.userMessage, live.assistantMessage] : [])
   ], [detail?.messages, live]);
   useEffect(() => {
-    followHistoryRef.current = true;
-  }, [selectedId]);
+    followHistoryRef.current = !selectedMessageId;
+  }, [selectedId, selectedMessageId]);
+
+  useLayoutEffect(() => {
+    if (!selectedMessageId || detail?.conversation_id !== selectedId) return;
+    const focusKey = `${location.key}:${selectedId}:${selectedMessageId}`;
+    if (focusedPinRef.current === focusKey) return;
+    const history = historyRef.current;
+    const message = document.getElementById(`message-${selectedMessageId}`);
+    if (!history || !message || !history.contains(message)) return;
+    followHistoryRef.current = false;
+    history.scrollTop += message.getBoundingClientRect().top - history.getBoundingClientRect().top - 16;
+    message.focus({ preventScroll: true });
+    focusedPinRef.current = focusKey;
+  }, [detail, selectedId, selectedMessageId, location.key]);
 
   useEffect(() => {
     const history = historyRef.current;
@@ -503,7 +528,7 @@ export function ConversationWorkspace({
         <Panel className="chat-panel">
           <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
           {selectedId && !detail ? <p className="muted-text">Loading chat…</p> : <>
-            <div className="chat-history" ref={historyRef} aria-live="polite" onScroll={trackHistoryScroll}>{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
+            <div className="chat-history" ref={historyRef} aria-live="polite" onScroll={trackHistoryScroll}>{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} highlighted={message.message_id === selectedMessageId} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
             <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming || creating} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (canChat && !streaming && !creating && draft.trim()) event.currentTarget.form?.requestSubmit(); } }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" pending={creating} disabled={!canChat || creating || !draft.trim()}><ArrowUpIcon /></Button>}</div></form>
           </>}
@@ -561,7 +586,7 @@ export function ConversationWorkspace({
               </section>
               <section className="pins-panel" aria-labelledby="pinned-answers-heading">
                 <div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>
-                {pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><p className="chat-message__content"><AnswerText content={pin.content} approximate={approximate} onSeek={onSeek} /></p><Link to={videoPath(video.video_id, pin.conversation_id)}>Open source chat</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}
+                {pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><Link className="pinned-answer-preview" to={videoPath(video.video_id, pin.conversation_id, pin.message_id)} aria-label={`Open pinned answer: ${pinnedAnswerPreview(pin.content)}`}>{pinnedAnswerPreview(pin.content)}</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}
               </section>
             </Panel>
           </div>

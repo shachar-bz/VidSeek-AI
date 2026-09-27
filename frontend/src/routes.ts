@@ -23,8 +23,9 @@ export const CONVERSATION_PARAMETER = "conversation";
 /** The two pages a signed-out visitor may reach. Everything else redirects to sign-in. */
 export const PUBLIC_ROUTES: readonly string[] = [ROUTES.signIn, ROUTES.signUp];
 
-export function videoPath(videoId: string, conversationId?: string): string {
+export function videoPath(videoId: string, conversationId?: string, messageId?: string): string {
   const base = ROUTES.video.replace(":videoId", encodeURIComponent(videoId));
   if (!conversationId) return base;
-  return `${base}?${CONVERSATION_PARAMETER}=${encodeURIComponent(conversationId)}`;
+  const query = `${CONVERSATION_PARAMETER}=${encodeURIComponent(conversationId)}`;
+  return `${base}?${query}${messageId ? `&message=${encodeURIComponent(messageId)}` : ""}`;
 }

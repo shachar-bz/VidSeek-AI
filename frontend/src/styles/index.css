@@ -2333,6 +2333,22 @@ h3 {
   font-size: var(--text-body-sm);
 }
 
+.pins-panel .pinned-answer-preview {
+  display: block;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.pins-panel .pinned-answer-preview:hover {
+  text-decoration: underline;
+}
+
+.chat-message--highlighted .chat-message__bubble {
+  outline: 2px solid #5266eb;
+  outline-offset: 3px;
+}
+
 .pins-panel li .ui-button {
   min-height: 2rem;
   justify-self: start;

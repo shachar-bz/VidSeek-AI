@@ -125,15 +125,19 @@ class PostgresPinnedAnswers:
                     where m.id = %s::uuid and m.role = 'assistant'
                       and c.user_id = %s::uuid and c.video_id = %s::uuid
                 ), inserted as (
+                    -- Read the RETURNING relation: sibling CTEs share a snapshot,
+                    -- so a table scan cannot see a pin inserted by this statement.
+                    -- The no-op update also returns an existing pin on repeat clicks.
                     insert into public.{TABLE_NAME} (message_id)
                     select id from eligible
-                    on conflict (message_id) do nothing
+                    on conflict (message_id) do update
+                        set message_id = excluded.message_id
                     returning id, message_id, created_at
                 )
                 select p.id, p.message_id, e.conversation_id, e.content,
                        p.created_at as pinned_at
                 from eligible e
-                join public.{TABLE_NAME} p on p.message_id = e.id
+                join inserted p on p.message_id = e.id
                 """,
                 (message_id, user_id, video_id),
             ).fetchone()
