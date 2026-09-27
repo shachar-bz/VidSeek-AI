@@ -31,7 +31,7 @@ import { featureFailureMessage, sourceLabel } from "../shared";
 
 const EXTENSION_INSTALL_URL =
   "https://github.com/shachar-bz/VidSeek-AI/tree/main/chrome-extension";
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 6;
 
 interface FilterDraft {
   search: string;
