@@ -2,7 +2,8 @@
 
 A thin door onto `services/visual_search/`: the stored OCR text of every keyframe is searched
 by what it means (multilingual-e5-small) and, when words are given, for those exact strings.
-The text was read there, so each moment is citable (`result.py`).
+The text was read there, so each moment is citable (`result.py`). A search spends one visual
+tool call and no look.
 
 The words are cleaned here before the service sees them -- blank ones dropped, the list cut to
 the service's limit -- so a sloppy call still searches instead of failing. The search runs off
@@ -21,6 +22,7 @@ from backend.services.visual_search import INDEX_READY, MAX_WORDS, normalized
 from backend.services.visual_search import search_screen_text as search_screen_text_in_video
 
 from ..deps import ConversationDeps
+from ..visual_budget_spent import VisualBudgetSpent
 from ..visual_index_notes import unsearchable_note
 from .result import ScreenTextMoment, ScreenTextMoments
 
@@ -29,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 async def search_screen_text(
     ctx: RunContext[ConversationDeps], query: str, words: list[str] | None = None
-) -> ScreenTextMoments:
+) -> ScreenTextMoments | VisualBudgetSpent:
     """Find moments by the text written on screen: slides, boards, signs, code. Costs no look.
 
     `query` finds text that means what it describes. `words` finds text that contains those
@@ -49,9 +51,15 @@ async def search_screen_text(
         found, or OCR is still reading.
     """
     deps = ctx.deps
+    budget = deps.visual_budget
     query = query.strip()
     if not query:
-        return ScreenTextMoments(note="Nothing was searched: the query is empty.")
+        return ScreenTextMoments(
+            note="Nothing was searched, and no tool call was spent: the query is empty.",
+            budget=budget.remaining(),
+        )
+    if not budget.start_tool_call():
+        return VisualBudgetSpent()
     notes = []
     wanted = [word.strip() for word in words or [] if normalized(word)]
     if len(wanted) > MAX_WORDS:
@@ -63,9 +71,11 @@ async def search_screen_text(
         )
     except Exception:
         logger.exception("The on-screen text search failed for video %s", deps.video_id)
-        return ScreenTextMoments(note="The search failed. Look at the frames with view_sequence instead.")
+        return ScreenTextMoments(
+            note="The search failed. Look at the frames with view_sequence instead.", budget=budget.remaining()
+        )
     if result.index_status != INDEX_READY:
-        return ScreenTextMoments(note=" ".join([*notes, unsearchable_note(result)]))
+        return ScreenTextMoments(note=" ".join([*notes, unsearchable_note(result)]), budget=budget.remaining())
 
     moments = [
         ScreenTextMoment(
@@ -87,4 +97,4 @@ async def search_screen_text(
             f"OCR has not read the text of {result.unread_keyframe_count} keyframes yet, so text "
             "written there cannot be found yet: an empty result does not mean it is not on screen."
         )
-    return ScreenTextMoments(moments=moments, note=" ".join(notes) or None)
+    return ScreenTextMoments(moments=moments, note=" ".join(notes) or None, budget=budget.remaining())
