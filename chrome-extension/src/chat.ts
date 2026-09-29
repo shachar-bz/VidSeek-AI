@@ -41,16 +41,6 @@ const FALLBACK_QUESTIONS = [
   "Can you explain the key concepts with examples?",
 ];
 
-// What each of the agent's tools is doing, in words, for the line under a pending answer.
-const TOOL_ACTIVITY: Record<string, string> = {
-  get_video_info: "Checking the video's details",
-  get_video_outline: "Reading the outline",
-  get_chapter_context: "Reading a chapter",
-  get_memory_context: "Reading a moment closely",
-  memories_semantic_search: "Searching the video",
-  investigate_visual: "Looking at what the video shows",
-};
-
 interface ChatState {
   userToken: string;
   video: VideoDetail;
@@ -188,10 +178,11 @@ function renderAnswerText(target: HTMLElement, content: string): void {
   }
 }
 
+/** The server's label for the call still running, or the last one; "Thinking" before any. */
 function latestActivity(trace: ToolCallTrace[] | null | undefined): string {
   const running = [...(trace ?? [])].reverse().find((call) => !call.finished_at);
   const call = running ?? trace?.at(-1);
-  return (call && TOOL_ACTIVITY[call.tool]) || "Thinking";
+  return call?.activity || "Thinking";
 }
 
 function renderMessage(message: ConversationMessage, pending: boolean): HTMLElement {

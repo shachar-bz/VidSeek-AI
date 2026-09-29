@@ -178,6 +178,8 @@ export interface ToolCallTrace {
   started_at?: string | null;
   finished_at?: string | null;
   error?: string | null;
+  /** What the call is doing, in words, for the line under a pending answer. Live only. */
+  activity?: string | null;
 }
 
 export interface ConversationMessage {
