@@ -2,10 +2,9 @@
 
 The search services run for real against a `FakePool` answering their reads in order -- the
 index state, the segments, the chapters, the count of unread keyframes, the keyframe texts, the
-frame scores, then the transcript of each moment. Only the query encoders are stood in for, so
-no model loads. What these tests check is the tool's side: the window and words it hands the
-service, the budget it spends, the spans it records for the findings check, and what it tells
-the agent when the index cannot be searched.
+frame scores. Only the query encoder is stood in for, so no model loads. What these tests check
+is the tool's side: the words it hands the service, the budget it spends, the spans it records
+for the findings check, and what it tells the agent when the index cannot be searched.
 """
 
 import asyncio
@@ -76,32 +75,27 @@ def _deps(pool: FakePool, current_time_seconds: float | None = 130.0) -> VisualD
 
 @pytest.fixture(autouse=True)
 def fake_encoders(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The moment search with stand-in encoders, so SigLIP 2 and e5 never load."""
+    """The moment search with a stand-in encoder, so SigLIP 2 never loads."""
     monkeypatch.setattr(
         moments_tool,
         "search_moments_in_video",
-        functools.partial(
-            search_moments_in_video,
-            image_query_encoder=lambda _: [1.0],
-            on_screen_text_query_encoder=lambda _: [1.0],
-        ),
+        functools.partial(search_moments_in_video, image_query_encoder=lambda _: [1.0]),
     )
 
 
-def _search_moments(deps: VisualDeps, query: str = "the architecture diagram", **window):
-    return asyncio.run(search_visual_moments(FakeRunContext(deps), query, **window))
+def _search_moments(deps: VisualDeps, query: str = "the architecture diagram"):
+    return asyncio.run(search_visual_moments(FakeRunContext(deps), query))
 
 
-def _search_text(deps: VisualDeps, words: list[str], **window):
-    return asyncio.run(search_visual_text(FakeRunContext(deps), words, **window))
+def _search_text(deps: VisualDeps, words: list[str]):
+    return asyncio.run(search_visual_text(FakeRunContext(deps), words))
 
 
 # --- search_visual_moments -----------------------------------------------------------------
 
 
 def test_a_picture_match_comes_back_placed_but_needs_a_look_before_it_is_citable() -> None:
-    transcript = [{"segment_index": 3, "start_seconds": 20.0, "end_seconds": 30.0, "text": "Here is the diagram."}]
-    deps = _deps(index_pool(after=[frame_scores({24.0: 0.4, 26.0: 0.42}), transcript]))
+    deps = _deps(index_pool(after=[frame_scores({24.0: 0.4, 26.0: 0.42})]))
 
     result = _search_moments(deps)
 
@@ -111,32 +105,12 @@ def test_a_picture_match_comes_back_placed_but_needs_a_look_before_it_is_citable
     assert (moment.chapter, moment.segment_index, moment.segment_boundary) == ("Opening", 1, "scene_change")
     assert moment.found_by == ["image"]
     assert moment.peak_z_score is not None and moment.peak_z_score > 1.5
-    assert moment.transcript == "Here is the diagram."
     assert moment.needs_look is True
     assert result.note is None
     # Resembling the query is not showing it: nothing is citable until a look.
     assert deps.spans == []
     assert deps.budget.tool_calls_used == 1
     assert f"{MAX_TOOL_CALLS - 1} tool calls" in result.budget
-
-
-def test_the_window_is_passed_to_the_search_and_a_start_before_the_video_moved_to_zero() -> None:
-    deps = _deps(index_pool(after=[frame_scores({24.0: 0.4, 44.0: 0.45})]))
-
-    result = _search_moments(deps, start_seconds=-5.0, end_seconds=30.0)
-
-    assert [(m.start_seconds, m.end_seconds) for m in result.moments] == [(24.0, 24.0)]
-
-
-def test_a_window_ending_before_it_starts_searches_nothing_and_spends_nothing() -> None:
-    pool = index_pool()
-    deps = _deps(pool)
-
-    result = _search_moments(deps, start_seconds=50.0, end_seconds=10.0)
-
-    assert result.moments == [] and "end_seconds is before start_seconds" in result.note
-    assert deps.budget.tool_calls_used == 0
-    assert pool.recorded == []
 
 
 def test_an_empty_query_searches_nothing_and_spends_nothing() -> None:
@@ -169,18 +143,6 @@ def test_an_index_not_ready_sends_the_agent_to_the_current_moment(search: str) -
     assert "02:10 (130.0 s)" in result.note and "view_sequence" in result.note
     assert deps.spans == []
     assert deps.budget.tool_calls_used == 1
-
-
-@pytest.mark.parametrize("search", ["moments", "text"])
-def test_an_index_not_ready_sends_the_agent_to_the_window_searched_rather_than_the_current_moment(search: str) -> None:
-    pool = FakePool(responses=[[{"visual_status": "indexing", "visual_error": None, "visual_index_version": None}]])
-    deps = _deps(pool)
-    window = {"start_seconds": 300.0, "end_seconds": 360.0}
-
-    result = _search_moments(deps, **window) if search == "moments" else _search_text(deps, ["kafka"], **window)
-
-    assert "05:00-06:00 (300.0-360.0 s)" in result.note
-    assert "02:10" not in result.note
 
 
 def test_an_outdated_index_is_not_searched_and_with_no_position_the_agent_is_told_where_else_to_look() -> None:
@@ -258,14 +220,6 @@ def test_no_words_searches_nothing_and_spends_nothing() -> None:
     assert "no words were given" in result.note
     assert deps.budget.tool_calls_used == 0
     assert pool.recorded == []
-
-
-def test_the_text_window_is_passed_to_the_search() -> None:
-    deps = _deps(index_pool(texts={0.0: "kafka", 40.0: "kafka again"}))
-
-    result = _search_text(deps, ["kafka"], start_seconds=35.0, end_seconds=50.0)
-
-    assert [(m.start_seconds, m.end_seconds) for m in result.moments] == [(40.0, 50.0)]
 
 
 def test_an_empty_text_search_while_ocr_is_still_reading_says_it_may_have_missed_text() -> None:

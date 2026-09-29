@@ -1,10 +1,10 @@
-"""Tests for the two visual searches: what counts as a hit, how hits become moments, and what comes back.
+"""Tests for the visual searches: what counts as a hit, how hits become moments, and what comes back.
 
 The stores are answered by a `FakePool`, in the order the searches read them -- the index state,
-the segments, the chapters, the count of unread keyframes, the keyframe texts, then (for
-`search_visual_moments`) the frame scores and the keyframe-text scores, and last the transcript
-of each moment in the order returned. The query encoders are stood in for, so each test says
-exactly what matched and checks what the search made of it.
+the segments, the chapters, the count of unread keyframes, the keyframe texts, then the frame
+scores (`search_visual_moments`) or the keyframe-text scores (`search_screen_text`, for a video
+with on-screen text). No search reads the transcript. The query encoders are stood in for, so
+each test says exactly what matched and checks what the search made of it.
 """
 
 import pytest
@@ -18,9 +18,9 @@ from backend.services.visual_search import (
     ON_SCREEN_TEXT_CHARACTERS,
     TEXT_CHARACTERS,
     TEXT_MEANING,
-    TRANSCRIPT_CHARACTERS,
     merge_into_ranges,
     normalized,
+    search_screen_text,
     search_visual_moments,
     search_visual_text,
     standout_frames,
@@ -76,25 +76,41 @@ def flat_frames(until: int = 60) -> list[dict]:
     return [{"time_seconds": float(t), "similarity": 0.05} for t in range(0, until, 2)]
 
 
-def moments_pool(
-    *,
-    frames: list[dict],
-    segments: list[dict] = SEGMENTS,
-    texts: dict[float, str] | None = None,
-    text_scores: dict[float, float] | None = None,
-    unread: int = 0,
-    transcripts: list[list[dict]] = (),
-) -> FakePool:
-    """A pool answering `search_visual_moments`'s reads in the order it makes them."""
-    texts = texts or {}
-    responses = [
+def opened_index(*, segments: list[dict], texts: dict[float, str], unread: int) -> list[list[dict]]:
+    """The reads every search makes to open the index, answered in order."""
+    return [
         READY_STATE,
         segments,
         CHAPTERS,
         [{"unread_count": unread}],
         [{"time_seconds": time, "ocr_text": text} for time, text in texts.items()],
-        frames,
     ]
+
+
+def moments_pool(
+    *,
+    frames: list[dict],
+    segments: list[dict] = SEGMENTS,
+    texts: dict[float, str] | None = None,
+    unread: int = 0,
+) -> FakePool:
+    """A pool answering `search_visual_moments`'s reads in the order it makes them."""
+    return FakePool(responses=[*opened_index(segments=segments, texts=texts or {}, unread=unread), frames])
+
+
+def screen_pool(
+    texts: dict[float, str],
+    *,
+    text_scores: dict[float, float] | None = None,
+    segments: list[dict] = SEGMENTS,
+    unread: int = 0,
+) -> FakePool:
+    """A pool answering `search_screen_text`'s reads in the order it makes them.
+
+    The keyframe-text scores are read only when some keyframe shows text; texts with no score
+    have no e5 vector, so they can be found by their words and never by meaning.
+    """
+    responses = opened_index(segments=segments, texts=texts, unread=unread)
     if texts:
         scores = text_scores or {}
         responses.append(
@@ -103,48 +119,28 @@ def moments_pool(
                 for time, score in sorted(scores.items(), key=lambda item: -item[1])
             ]
         )
-    responses.extend(transcripts)
     return FakePool(responses=responses)
-
-
-def text_pool(
-    texts: dict[float, str],
-    *,
-    segments: list[dict] = SEGMENTS,
-    unread: int = 0,
-    transcripts: list[list[dict]] = (),
-) -> FakePool:
-    """A pool answering `search_visual_text`'s reads in the order it makes them."""
-    return FakePool(
-        responses=[
-            READY_STATE,
-            segments,
-            CHAPTERS,
-            [{"unread_count": unread}],
-            [{"time_seconds": time, "ocr_text": text} for time, text in texts.items()],
-            *transcripts,
-        ]
-    )
 
 
 def search(pool: FakePool, **options):
     return search_visual_moments(
+        VIDEO_ID, "the architecture diagram", pool=pool, image_query_encoder=lambda _: [1.0], **options
+    )
+
+
+def screen_search(pool: FakePool, words=None, **options):
+    return search_screen_text(
         VIDEO_ID,
         "the architecture diagram",
+        words,
         pool=pool,
-        image_query_encoder=lambda _: [1.0],
         on_screen_text_query_encoder=lambda _: [1.0],
         **options,
     )
 
 
-def transcript_reads(pool: FakePool) -> list[tuple]:
-    """The windows the transcript was read by time for, in order."""
-    return [
-        item.parameters
-        for item in pool.recorded
-        if "from public.transcript_segments" in item.statement
-    ]
+def reads_the_transcript(pool: FakePool) -> bool:
+    return any("transcript_segments" in statement for statement in pool.statements)
 
 
 # --- what counts as a hit ------------------------------------------------------------------
@@ -161,7 +157,7 @@ def test_a_frame_is_a_hit_from_a_z_score_of_one_and_a_half() -> None:
 
 
 def test_a_frame_that_stands_out_is_a_hit_however_low_it_scores() -> None:
-    # "A dog" on a padel match: there is no floor any more; the sub-agent's look decides.
+    # "A dog" on a padel match: there is no floor; the agent's look decides.
     scores = [0.010 + 0.001 * (i % 3) for i in range(30)]
     scores[7] = 0.031
 
@@ -204,24 +200,32 @@ def test_few_scores_are_all_hits_and_many_are_judged_by_their_z_score() -> None:
     assert standout_positions([0.8] * 20, z_threshold=1.5, minimum_for_z_score=20) == []
 
 
-# --- search_visual_moments: the index ------------------------------------------------------
+# --- the index -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("run", ["moments", "text"])
-def test_a_video_whose_index_is_not_ready_is_not_searched(run: str) -> None:
+def _run(search_name: str, pool: FakePool):
+    if search_name == "moments":
+        return search(pool)
+    if search_name == "screen":
+        return screen_search(pool, ["kafka"])
+    return search_visual_text(VIDEO_ID, ["kafka"], pool=pool)
+
+
+@pytest.mark.parametrize("search_name", ["moments", "screen", "words_only"])
+def test_a_video_whose_index_is_not_ready_is_not_searched(search_name: str) -> None:
     pool = FakePool(responses=[[{"visual_status": "indexing", "visual_error": None, "visual_index_version": None}]])
 
-    result = search(pool) if run == "moments" else search_visual_text(VIDEO_ID, ["kafka"], pool=pool)
+    result = _run(search_name, pool)
 
     assert (result.index_status, result.visual_status, result.moments) == (INDEX_NOT_READY, "indexing", ())
     assert len(pool.recorded) == 1
 
 
-@pytest.mark.parametrize("run", ["moments", "text"])
-def test_an_index_built_with_other_models_is_refused_rather_than_mixed(run: str) -> None:
+@pytest.mark.parametrize("search_name", ["moments", "screen", "words_only"])
+def test_an_index_built_with_other_models_is_refused_rather_than_mixed(search_name: str) -> None:
     pool = FakePool(responses=[[{"visual_status": "ready", "visual_error": None, "visual_index_version": "clip@1fps"}]])
 
-    result = search(pool) if run == "moments" else search_visual_text(VIDEO_ID, ["kafka"], pool=pool)
+    result = _run(search_name, pool)
 
     assert (result.index_status, result.moments) == (INDEX_OUTDATED, ())
 
@@ -233,74 +237,127 @@ def test_a_video_that_does_not_exist_is_not_ready() -> None:
 
 
 def test_keyframes_ocr_has_not_read_yet_are_reported() -> None:
-    result = search(moments_pool(frames=flat_frames(), unread=3))
+    result = screen_search(screen_pool({}, unread=3))
 
     assert result.index_status == INDEX_READY
     assert result.ocr_pending and result.unread_keyframe_count == 3
-    assert not search(moments_pool(frames=flat_frames())).ocr_pending
+    assert not screen_search(screen_pool({})).ocr_pending
 
 
-def test_a_video_whose_keyframes_show_no_text_is_not_searched_for_it() -> None:
-    def no_model(_query):
-        raise AssertionError("e5 must not load for a video with no on-screen text")
-
-    pool = moments_pool(frames=flat_frames())
-
-    result = search_visual_moments(
-        VIDEO_ID,
-        "a diagram",
-        pool=pool,
-        image_query_encoder=lambda _: [1.0],
-        on_screen_text_query_encoder=no_model,
-    )
-
-    assert result.moments == ()
-    assert not any("ocr_embedding <=>" in statement for statement in pool.statements)
+# --- search_visual_moments: the picture only -----------------------------------------------
 
 
-# --- search_visual_moments: the picture ----------------------------------------------------
-
-
-def test_image_hits_come_back_as_moments_placed_in_segment_and_chapter() -> None:
-    result = search(moments_pool(frames=frame_scores({32.0: 0.3, 34.0: 0.28})))
+def test_a_picture_hit_carries_its_best_frame_its_segment_and_its_chapter() -> None:
+    result = search(moments_pool(frames=frame_scores({32.0: 0.28, 34.0: 0.3})))
 
     [moment] = result.moments
+    assert moment.frame_seconds == 34.0
     assert (moment.start_seconds, moment.end_seconds) == (32.0, 34.0)
     assert moment.found_by == (IMAGE,)
     assert moment.segment.segment_index == 1
     assert moment.chapter.title == "The diagram"
     assert moment.peak_z_score > 1.5
+    assert not moment.weak and not result.nothing_stood_out
 
 
-def test_a_picture_range_crossing_a_segment_boundary_is_two_moments() -> None:
+def test_the_picture_search_reads_neither_the_on_screen_text_nor_the_transcript() -> None:
+    def no_model(_query):
+        raise AssertionError("e5 must not load for a picture search")
+
+    pool = moments_pool(
+        frames=frame_scores({52.0: 0.3}),
+        segments=SEGMENTS_WITH_TWO_KEYFRAMES,
+        texts={40.0: "First half", 50.0: "Second half"},
+    )
+
+    [moment] = search(pool).moments
+
+    assert moment.on_screen_text is None
+    assert not reads_the_transcript(pool)
+    assert not any("ocr_embedding <=>" in statement for statement in pool.statements)
+
+
+def test_a_picture_range_crossing_a_segment_boundary_is_one_moment_in_each() -> None:
     result = search(
         moments_pool(frames=frame_scores({16.0: 0.3, 18.0: 0.31, 20.0: 0.32, 22.0: 0.3}))
     )
 
-    assert sorted((m.segment.segment_index, m.start_seconds, m.end_seconds) for m in result.moments) == [
-        (0, 16.0, 18.0),
-        (1, 20.0, 22.0),
+    assert sorted((m.segment.segment_index, m.frame_seconds) for m in result.moments) == [(0, 18.0), (1, 20.0)]
+
+
+def test_a_segment_keeps_only_its_range_whose_best_frame_stood_out_most() -> None:
+    # Two separate ranges in segment 0; the later one stood out more.
+    result = search(moments_pool(frames=frame_scores({2.0: 0.25, 12.0: 0.35, 14.0: 0.3})))
+
+    [moment] = result.moments
+    assert (moment.segment.segment_index, moment.frame_seconds) == (0, 12.0)
+    assert (moment.start_seconds, moment.end_seconds) == (12.0, 14.0)
+
+
+def test_picture_moments_are_ranked_by_how_far_they_stood_out_and_cut_to_six() -> None:
+    # One hit in each of eight segments, the later ones standing out less.
+    segments = ten_second_segments(8)
+    hits = {index * 10.0 + 4.0: 0.40 - index * 0.02 for index in range(8)}
+
+    result = search(moments_pool(frames=frame_scores(hits, until=80), segments=segments))
+
+    assert [moment.frame_seconds for moment in result.moments] == [4.0, 14.0, 24.0, 34.0, 44.0, 54.0]
+
+
+def test_something_on_screen_the_whole_time_comes_back_once_per_segment() -> None:
+    frames = [{"time_seconds": float(t), "similarity": 0.2 + (0.01 if t == 26 else 0.0)} for t in range(0, 60, 2)]
+
+    result = search(moments_pool(frames=frames))
+
+    assert sorted(moment.segment.segment_index for moment in result.moments) == [0, 1, 2]
+    assert not result.nothing_stood_out
+
+
+# --- search_visual_moments: when nothing stands out ----------------------------------------
+
+
+def two_level_frames(until: int, *, high_from: float, bumps: dict[float, float]) -> list[dict]:
+    """Frames at 0.050 before `high_from` and 0.051 from it, with a few nudged a hair higher.
+
+    Two levels half and half put every frame about one standard deviation from the mean, so
+    none stands out and none is present: nothing matched.
+    """
+    return [
+        {"time_seconds": float(t), "similarity": bumps.get(float(t), 0.051 if t >= high_from else 0.050)}
+        for t in range(0, until, 2)
     ]
 
 
-def test_picture_moments_are_ranked_by_how_far_they_stood_out_and_cut_to_five() -> None:
-    # One hit in each of seven segments, the later ones standing out less.
-    segments = ten_second_segments(7)
-    hits = {index * 10.0 + 4.0: 0.40 - index * 0.02 for index in range(7)}
+def test_when_nothing_stands_out_the_three_closest_frames_come_back_weak() -> None:
+    frames = two_level_frames(80, high_from=40.0, bumps={72.0: 0.05103, 44.0: 0.05102, 56.0: 0.05101})
 
-    result = search(moments_pool(frames=frame_scores(hits, until=70), segments=segments))
-
-    assert [moment.start_seconds for moment in result.moments] == [4.0, 14.0, 24.0, 34.0, 44.0]
-
-
-def test_nothing_found_anywhere_is_an_empty_answer_not_the_least_bad_frames() -> None:
-    result = search(moments_pool(frames=flat_frames()))
+    result = search(moments_pool(frames=frames, segments=ten_second_segments(8)))
 
     assert result.index_status == INDEX_READY
-    assert result.moments == ()
+    assert result.nothing_stood_out
+    assert [moment.frame_seconds for moment in result.moments] == [72.0, 44.0, 56.0]
+    assert all(moment.weak for moment in result.moments)
+    assert all(moment.start_seconds == moment.end_seconds == moment.frame_seconds for moment in result.moments)
+    assert all(moment.peak_z_score < 1.5 for moment in result.moments)
 
 
-# --- search_visual_moments: on-screen text by meaning --------------------------------------
+def test_the_weak_frames_are_each_from_a_different_segment() -> None:
+    # The two best frames are both in segment 1; the second is passed over, and so is every
+    # other frame of segments 1 and 2 once each has given one.
+    frames = two_level_frames(60, high_from=20.0, bumps={22.0: 0.05103, 24.0: 0.05102, 50.0: 0.05101})
+
+    result = search(moments_pool(frames=frames))
+
+    assert [(m.segment.segment_index, m.frame_seconds) for m in result.moments] == [(1, 22.0), (2, 50.0), (0, 0.0)]
+
+
+def test_with_no_frames_at_all_nothing_stood_out_and_nothing_comes_back() -> None:
+    result = search(moments_pool(frames=[]))
+
+    assert result.nothing_stood_out and result.moments == ()
+
+
+# --- search_screen_text: by meaning --------------------------------------------------------
 
 
 def test_with_few_texts_the_closest_five_are_returned_with_no_z_filter() -> None:
@@ -309,9 +366,7 @@ def test_with_few_texts_the_closest_five_are_returned_with_no_z_filter() -> None
     # Far apart, but no z-score is taken over seven texts: the five closest come back.
     scores = {index * 10.0: 0.95 - index * 0.05 for index in range(7)}
 
-    result = search(
-        moments_pool(frames=flat_frames(70), segments=segments, texts=texts, text_scores=scores)
-    )
+    result = screen_search(screen_pool(texts, text_scores=scores, segments=segments))
 
     assert [moment.start_seconds for moment in result.moments] == [0.0, 10.0, 20.0, 30.0, 40.0]
     assert all(moment.found_by == (TEXT_MEANING,) for moment in result.moments)
@@ -324,9 +379,7 @@ def test_with_twenty_texts_or_more_only_those_that_stand_out_are_hits() -> None:
     scores = {index * 10.0: 0.80 + (index % 3) * 0.001 for index in range(24)}
     scores[70.0] = 0.95
 
-    result = search(
-        moments_pool(frames=flat_frames(240), segments=segments, texts=texts, text_scores=scores)
-    )
+    result = screen_search(screen_pool(texts, text_scores=scores, segments=segments))
 
     [moment] = result.moments
     assert (moment.start_seconds, moment.end_seconds) == (70.0, 80.0)
@@ -336,13 +389,8 @@ def test_with_twenty_texts_or_more_only_those_that_stand_out_are_hits() -> None:
 def test_two_keyframes_of_one_segment_matching_by_meaning_are_one_moment() -> None:
     texts = {40.0: "Architecture diagram", 50.0: "Architecture diagram, continued"}
 
-    result = search(
-        moments_pool(
-            frames=flat_frames(),
-            segments=SEGMENTS_WITH_TWO_KEYFRAMES,
-            texts=texts,
-            text_scores={40.0: 0.88, 50.0: 0.9},
-        )
+    result = screen_search(
+        screen_pool(texts, text_scores={40.0: 0.88, 50.0: 0.9}, segments=SEGMENTS_WITH_TWO_KEYFRAMES)
     )
 
     [moment] = result.moments
@@ -351,172 +399,35 @@ def test_two_keyframes_of_one_segment_matching_by_meaning_are_one_moment() -> No
     assert moment.on_screen_text == "Architecture diagram, continued"
 
 
-# --- search_visual_moments: joining the two lists ------------------------------------------
+def test_a_video_whose_keyframes_show_no_text_is_not_searched_for_it() -> None:
+    def no_model(_query):
+        raise AssertionError("e5 must not load for a video with no on-screen text")
+
+    pool = screen_pool({})
+
+    result = search_screen_text(VIDEO_ID, "a diagram", pool=pool, on_screen_text_query_encoder=no_model)
+
+    assert result.moments == ()
+    assert not any("ocr_embedding <=>" in statement for statement in pool.statements)
 
 
-def test_a_moment_both_lists_found_appears_once_and_comes_first() -> None:
-    result = search(
-        moments_pool(
-            # The strongest frame is in segment 0; a weaker one is in segment 2.
-            frames=frame_scores({4.0: 0.35, 44.0: 0.25}),
-            segments=SEGMENTS_WITH_TWO_KEYFRAMES,
-            texts={40.0: "Architecture diagram", 20.0: "Agenda"},
-            text_scores={40.0: 0.9, 20.0: 0.8},
-        )
-    )
+def test_a_screen_text_moment_carries_its_text_capped_and_reads_no_transcript() -> None:
+    pool = screen_pool({40.0: "word " * 200}, text_scores={40.0: 0.9})
 
-    first, second, third = result.moments
-    assert first.found_by == (IMAGE, TEXT_MEANING)
-    assert (first.segment.segment_index, first.start_seconds, first.end_seconds) == (2, 40.0, 50.0)
-    assert first.peak_z_score is not None
-    assert first.on_screen_text == "Architecture diagram"
-    # The rest alternate, picture first.
-    assert (second.found_by, second.start_seconds) == ((IMAGE,), 4.0)
-    assert (third.found_by, third.start_seconds) == ((TEXT_MEANING,), 20.0)
-
-
-def test_the_rest_alternate_picture_first_up_to_ten() -> None:
-    # Seven segments of ten seconds, each with a frame hit at +2 s and a keyframe at +5 s whose
-    # text is on screen from +5 s: in the same segment, but never overlapping.
-    segments = ten_second_segments(7, second_keyframe_at=5.0)
-    hits = {index * 10.0 + 2.0: 0.40 - index * 0.02 for index in range(7)}
-    texts = {index * 10.0 + 5.0: f"slide {index}" for index in range(7)}
-    scores = {index * 10.0 + 5.0: 0.95 - index * 0.02 for index in range(7)}
-
-    result = search(
-        moments_pool(
-            frames=frame_scores(hits, until=70),
-            segments=segments,
-            texts=texts,
-            text_scores=scores,
-        )
-    )
-
-    assert len(result.moments) == 10
-    assert [moment.found_by for moment in result.moments] == [(IMAGE,), (TEXT_MEANING,)] * 5
-    assert [moment.start_seconds for moment in result.moments[:4]] == [2.0, 5.0, 12.0, 15.0]
-
-
-# --- the window ----------------------------------------------------------------------------
-
-
-def test_a_window_drops_moments_outside_it() -> None:
-    result = search(
-        moments_pool(frames=frame_scores({4.0: 0.35, 44.0: 0.3})),
-        start_seconds=40.0,
-        end_seconds=60.0,
-    )
-
-    assert [moment.start_seconds for moment in result.moments] == [44.0]
-
-
-def test_the_z_score_is_taken_over_the_whole_video_not_the_window() -> None:
-    # The thing is on screen through 40-50 s, a fifth of the video: every one of those frames
-    # stands out from the whole video (z 2). Against the window's ten frames alone, half of
-    # them would be the thing and none would stand out (z 1).
-    hits = {float(t): 0.12 for t in range(40, 52, 2)}
-
-    result = search(moments_pool(frames=frame_scores(hits)), start_seconds=41.0, end_seconds=60.0)
-
-    [moment] = result.moments
-    # Clipped at the window's start, to the first frame seen inside it.
-    assert (moment.start_seconds, moment.end_seconds) == (42.0, 50.0)
-
-
-def test_a_keyframe_text_crossing_the_window_is_clipped_to_it() -> None:
-    result = search(
-        moments_pool(
-            frames=flat_frames(),
-            texts={40.0: "Architecture diagram", 0.0: "Agenda"},
-            text_scores={40.0: 0.9, 0.0: 0.7},
-        ),
-        start_seconds=45.0,
-        end_seconds=55.0,
-    )
-
-    [moment] = result.moments
-    assert (moment.start_seconds, moment.end_seconds) == (45.0, 55.0)
-    assert moment.on_screen_text == "Architecture diagram"
-
-
-def test_a_window_that_ends_before_it_starts_is_refused() -> None:
-    with pytest.raises(ValueError):
-        search(FakePool(), start_seconds=50.0, end_seconds=10.0)
-
-
-# --- what every moment carries -------------------------------------------------------------
-
-
-def test_a_short_moment_is_read_with_the_speech_five_seconds_either_side() -> None:
-    pool = moments_pool(
-        frames=frame_scores({32.0: 0.3, 34.0: 0.28}),
-        transcripts=[
-            [
-                {"segment_index": 7, "start_seconds": 26.0, "end_seconds": 31.0, "text": " Here is "},
-                {"segment_index": 8, "start_seconds": 31.0, "end_seconds": 36.0, "text": "the diagram."},
-            ]
-        ],
-    )
-
-    [moment] = search(pool).moments
-
-    assert transcript_reads(pool) == [(VIDEO_ID, 39.0, 27.0)]
-    assert moment.transcript == "Here is the diagram."
-
-
-def test_a_long_moment_is_read_with_the_speech_while_it_was_on_screen() -> None:
-    pool = moments_pool(
-        frames=flat_frames(),
-        texts={40.0: "Architecture diagram"},
-        text_scores={40.0: 0.9},
-    )
-
-    [moment] = search(pool).moments
-
-    assert (moment.start_seconds, moment.end_seconds) == (40.0, 60.0)
-    assert transcript_reads(pool) == [(VIDEO_ID, 60.0, 40.0)]
-    assert moment.transcript is None
-
-
-def test_the_on_screen_text_and_the_transcript_are_capped() -> None:
-    pool = moments_pool(
-        frames=flat_frames(),
-        texts={40.0: "word " * 200},
-        text_scores={40.0: 0.9},
-        transcripts=[[{"segment_index": 0, "start_seconds": 40.0, "end_seconds": 60.0, "text": "said " * 300}]],
-    )
-
-    [moment] = search(pool).moments
+    [moment] = screen_search(pool).moments
 
     assert len(moment.on_screen_text) <= ON_SCREEN_TEXT_CHARACTERS
     assert moment.on_screen_text.endswith("…")
-    assert len(moment.transcript) <= TRANSCRIPT_CHARACTERS
-    assert moment.transcript.endswith("…")
+    assert not reads_the_transcript(pool)
 
 
-def test_a_picture_moment_shows_the_text_of_the_keyframe_covering_it() -> None:
-    result = search(
-        moments_pool(
-            frames=frame_scores({52.0: 0.3}),
-            segments=SEGMENTS_WITH_TWO_KEYFRAMES,
-            # The texts have no e5 vector, so only the picture can find anything.
-            texts={40.0: "First half", 50.0: "Second half"},
-        )
-    )
-
-    [moment] = result.moments
-    assert moment.found_by == (IMAGE,)
-    assert moment.on_screen_text == "Second half"
-
-
-# --- search_visual_text --------------------------------------------------------------------
+# --- search_screen_text: by exact words ----------------------------------------------------
 
 
 def test_case_and_whitespace_are_ignored_on_both_sides() -> None:
-    result = search_visual_text(
-        VIDEO_ID,
+    result = screen_search(
+        screen_pool({20.0: "Kafka\nPartitions", 40.0: "Load Bal ancer"}),
         ["kafka partitions", "  LOAD\tbalancer "],
-        pool=text_pool({20.0: "Kafka\nPartitions", 40.0: "Load Bal ancer"}),
     )
 
     assert [(m.start_seconds, m.matched_words) for m in result.moments] == [
@@ -527,7 +438,7 @@ def test_case_and_whitespace_are_ignored_on_both_sides() -> None:
 
 
 def test_a_hebrew_word_is_found_with_a_prefix_before_it() -> None:
-    result = search_visual_text(VIDEO_ID, ["כוס"], pool=text_pool({0.0: "הכוס על השולחן"}))
+    result = screen_search(screen_pool({0.0: "הכוס על השולחן"}), ["כוס"])
 
     [moment] = result.moments
     assert moment.found_by == (TEXT_CHARACTERS,)
@@ -535,24 +446,17 @@ def test_a_hebrew_word_is_found_with_a_prefix_before_it() -> None:
     assert moment.on_screen_text == "הכוס על השולחן"
 
 
-def test_a_misreading_is_not_found() -> None:
-    result = search_visual_text(VIDEO_ID, ["partitions"], pool=text_pool({0.0: "Kafka Partitons"}))
+def test_a_misreading_is_not_found_by_its_words() -> None:
+    result = screen_search(screen_pool({0.0: "Kafka Partitons"}), ["partitions"])
 
     assert result.index_status == INDEX_READY
     assert result.moments == ()
 
 
-def test_moments_are_ordered_by_different_words_found_then_by_time() -> None:
-    result = search_visual_text(
-        VIDEO_ID,
+def test_word_moments_are_ordered_by_different_words_found_then_by_time() -> None:
+    result = screen_search(
+        screen_pool({0.0: "kafka", 20.0: "KAFKA and its partitions", 40.0: "partitions, again"}),
         ["Kafka", "Partitions", "kafka"],
-        pool=text_pool(
-            {
-                0.0: "kafka",
-                20.0: "KAFKA and its partitions",
-                40.0: "partitions, again",
-            }
-        ),
     )
 
     assert [(m.segment.segment_index, m.matched_words) for m in result.moments] == [
@@ -562,26 +466,12 @@ def test_moments_are_ordered_by_different_words_found_then_by_time() -> None:
         (2, ("Partitions",)),
     ]
     assert result.moments[0].chapter.title == "Opening"
-    assert result.moments[0].peak_z_score is None
-
-
-def test_at_most_five_moments_come_back_the_earliest_first() -> None:
-    segments = ten_second_segments(7)
-
-    result = search_visual_text(
-        VIDEO_ID,
-        ["kafka"],
-        pool=text_pool({index * 10.0: "kafka" for index in range(7)}, segments=segments),
-    )
-
-    assert [moment.start_seconds for moment in result.moments] == [0.0, 10.0, 20.0, 30.0, 40.0]
 
 
 def test_the_words_of_one_segments_keyframes_are_one_moment() -> None:
-    result = search_visual_text(
-        VIDEO_ID,
+    result = screen_search(
+        screen_pool({40.0: "Kafka", 50.0: "Kafka partitions"}, segments=SEGMENTS_WITH_TWO_KEYFRAMES),
         ["kafka", "partitions"],
-        pool=text_pool({40.0: "Kafka", 50.0: "Kafka partitions"}, segments=SEGMENTS_WITH_TWO_KEYFRAMES),
     )
 
     [moment] = result.moments
@@ -591,33 +481,63 @@ def test_the_words_of_one_segments_keyframes_are_one_moment() -> None:
     assert moment.on_screen_text == "Kafka partitions"
 
 
-def test_the_window_limits_the_text_search_too() -> None:
-    result = search_visual_text(
-        VIDEO_ID,
-        ["kafka"],
-        start_seconds=45.0,
-        pool=text_pool({0.0: "kafka", 40.0: "kafka"}),
-    )
-
-    assert [(m.start_seconds, m.end_seconds) for m in result.moments] == [(45.0, 60.0)]
-
-
-def test_ocr_still_reading_is_reported_by_the_text_search() -> None:
-    result = search_visual_text(VIDEO_ID, ["kafka"], pool=text_pool({}, unread=12))
-
-    assert result.moments == ()
-    assert result.ocr_pending and result.unread_keyframe_count == 12
-
-
 @pytest.mark.parametrize(
     "words",
     [[], ["a", "b", "c", "d", "e", "f"], ["kafka", " \n\t "], "kafka", [3]],
 )
-def test_words_that_cannot_be_searched_for_are_refused(words) -> None:
+def test_words_that_cannot_be_searched_for_are_refused_before_anything_is_read(words) -> None:
     pool = FakePool()
 
+    with pytest.raises(ValueError):
+        screen_search(pool, words)
     with pytest.raises(ValueError):
         search_visual_text(VIDEO_ID, words, pool=pool)
 
     assert pool.recorded == []
 
+
+# --- search_screen_text: the two lists together --------------------------------------------
+
+
+def test_the_exact_word_matches_come_first_then_the_ones_by_meaning() -> None:
+    texts = {0.0: "Agenda", 20.0: "Kafka partitions", 40.0: "How the brokers are laid out"}
+
+    result = screen_search(screen_pool(texts, text_scores={40.0: 0.9, 0.0: 0.7}), ["kafka"])
+
+    assert [(m.start_seconds, m.found_by) for m in result.moments] == [
+        (20.0, (TEXT_CHARACTERS,)),
+        (40.0, (TEXT_MEANING,)),
+        (0.0, (TEXT_MEANING,)),
+    ]
+
+
+def test_a_moment_both_lists_found_is_returned_by_each_not_merged() -> None:
+    texts = {40.0: "Architecture diagram", 50.0: "Kafka architecture diagram"}
+
+    result = screen_search(
+        screen_pool(texts, text_scores={40.0: 0.9}, segments=SEGMENTS_WITH_TWO_KEYFRAMES), ["kafka"]
+    )
+
+    assert [(m.found_by, m.start_seconds, m.end_seconds, m.on_screen_text) for m in result.moments] == [
+        ((TEXT_CHARACTERS,), 50.0, 60.0, "Kafka architecture diagram"),
+        ((TEXT_MEANING,), 40.0, 50.0, "Architecture diagram"),
+    ]
+
+
+def test_each_list_keeps_its_best_five() -> None:
+    segments = ten_second_segments(7)
+    texts = {index * 10.0: f"kafka slide {index}" for index in range(7)}
+    scores = {index * 10.0: 0.95 - index * 0.05 for index in range(7)}
+
+    result = screen_search(screen_pool(texts, text_scores=scores, segments=segments), ["kafka"])
+
+    assert [m.found_by for m in result.moments] == [(TEXT_CHARACTERS,)] * 5 + [(TEXT_MEANING,)] * 5
+
+
+def test_the_words_only_search_left_for_the_old_sub_agent_still_finds_words() -> None:
+    pool = FakePool(responses=opened_index(segments=SEGMENTS, texts={20.0: "Kafka"}, unread=0))
+
+    [moment] = search_visual_text(VIDEO_ID, ["kafka"], pool=pool).moments
+
+    assert (moment.start_seconds, moment.found_by) == (20.0, (TEXT_CHARACTERS,))
+    assert not any("ocr_embedding <=>" in statement for statement in pool.statements)

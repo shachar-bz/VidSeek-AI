@@ -15,7 +15,9 @@ VidSeek-AI/
 │   │       ├── get_video_info/             # Looks up the current video's metadata.
 │   │       ├── get_video_outline/          # Lists the current video's chapters without their contents.
 │   │       ├── investigate_visual/         # Answers a question about what the video shows, through the visual sub-agent.
-│   │       └── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
+│   │       ├── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
+│   │       ├── search_screen_text/         # Moments by on-screen text, by meaning and by exact words, through services/visual_search/; not yet registered.
+│   │       └── search_visual_moments/      # Frames whose picture looks like a description, one per shot, through services/visual_search/; not yet registered.
 │   ├── visual_agent/                       # The visual sub-agent: searches the visual index, plans a look at the video, has frames described by an image model, answers in text.
 │   │   └── tools/                          # Pydantic AI tools the sub-agent calls; one directory per tool.
 │   │       ├── get_transcript_window/      # What was said between two times.

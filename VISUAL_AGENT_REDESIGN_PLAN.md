@@ -201,6 +201,28 @@ same activity lines in the same order, and both should end with the same answer.
 
 ### Stage 1: search
 
+**Done** (commit `cfdad5d`). Everything below landed as written, except where the decisions that
+follow change it.
+
+Decisions the plan didn't cover, or that changed it:
+
+- **No time window.** `TimeWindow` and the `start_seconds`/`end_seconds` parameters are gone
+  from the search service. Every search, the weak fallback included, covers the whole video.
+- **The screen-text lists are not merged.** Exact-word hits come first (up to 5), then meaning
+  hits (up to 5). A segment both lists found appears once in each, and each hit's `found_by`
+  names one list. This replaces "merged into one ... and ranked first" below.
+- "Shot" is a visual segment. `shot_start_seconds`/`shot_end_seconds` are its bounds.
+- `score` is the frame's z-score against the whole video, rounded to 2 decimals.
+- The weak frames are the highest raw similarity, one per segment.
+- `timestamp` is `MM:SS-MM:SS` for a screen-text hit and `MM:SS` for a picture hit.
+- The wrappers spend no budget yet. That comes with `VisualBudget` in stage 2.
+- The note both wrappers give for an index that can't be searched lives in
+  `video_agent/tools/visual_index_notes.py`.
+- The old sub-agent was not designed around, only kept working until stage 3 deletes it. Its
+  search wrappers lost their window and transcript, weak frames are hidden from it, and a few
+  prompt lines that told it to pass a window were cut. `search_visual_text` (words only) stays
+  in the service for its words tool.
+
 **`services/visual_search/moment_search.py`**
 - Remove the `text_meaning` list, and the joining of lists, from `search_visual_moments`. The
   function becomes picture only.
@@ -310,6 +332,8 @@ failures that give the look back.
   `get_transcript_window`, `read_frame_text`, the old `search_visual_text` wrapper, and
   `searched_moments.py` once its parts are moved.
 - `video_agent/tools/investigate_visual/`.
+- `search_visual_text` in `services/visual_search/text_search.py`, kept in stage 1 only for the
+  old words tool; `search_screen_text` does the same with `words`.
 - `test_visual_agent_run.py`, and the findings half of `test_visual_agent_budget_and_findings.py`.
 - Check for any reference left in `services/ocr/engine.py` and `services/visual_search/`
   docstrings.
