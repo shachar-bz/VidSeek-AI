@@ -35,6 +35,7 @@ from backend.core import config
 from backend.storage.postgres import StoredMessage
 
 from . import citations
+from .activity import tool_activity
 from .prompt import SYSTEM_PROMPT, VIEWER_COMMENTS_PROMPT
 from .tools.deps import ConversationDeps
 from .tools.get_chapter_context import get_chapter_context
@@ -81,6 +82,12 @@ class ToolStarted:
     tool: str
     arguments: dict
     started_at: str
+
+    @property
+    def activity(self) -> str | None:
+        """What the call is doing, in words, for the line under a pending answer."""
+
+        return tool_activity(self.tool)
 
 
 @dataclass(frozen=True)

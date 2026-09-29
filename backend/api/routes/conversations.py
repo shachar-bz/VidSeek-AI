@@ -345,6 +345,7 @@ async def _answer_stream(
                         tool=payload.tool,
                         arguments=payload.arguments,
                         started_at=payload.started_at,
+                        activity=payload.activity,
                     )
                     calls[payload.call_id] = len(trace)
                     trace.append(call)
@@ -400,7 +401,8 @@ async def _finalize(
             stored = messages.update_assistant(
                 message_id,
                 content,
-                [call.model_dump(mode="json") for call in trace] or None,
+                # The activity label is only for display while waiting, so it is not kept.
+                [call.model_dump(mode="json", exclude={"activity"}) for call in trace] or None,
             )
             if stored is None:
                 raise RuntimeError("Assistant message disappeared during generation")

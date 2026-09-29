@@ -273,6 +273,40 @@ def test_normal_stream_orders_fragments_tools_and_persisted_completion() -> None
     assert runner.runs[0][2].video_id == VIDEO_ID
 
 
+def test_a_streamed_tool_call_carries_its_activity_and_the_saved_trace_does_not() -> None:
+    runner = FakeRunner(
+        [
+            ToolStarted("call-1", "memories_semantic_search", {"query": "mono"}, NOW),
+            ToolFinished("call-1", "2 results", NOW),
+            ToolStarted("call-2", "a_tool_without_a_label", {}, NOW),
+            ToolFinished("call-2", None, NOW),
+            TextFragment("Mono."),
+        ]
+    )
+    app = _app(runner=runner)
+    with TestClient(app) as client:
+        conversation_id = _create(client)
+        response = client.post(
+            f"/v1/conversations/{conversation_id}/messages", json={"content": "What format?"}
+        )
+        reopened = client.get(f"/v1/conversations/{conversation_id}")
+
+    events = _events(response)
+    calls = [event["call"] for event in events if event["type"] in ("tool_call", "tool_result")]
+    assert [call["activity"] for call in calls] == [
+        "Searching the video",
+        "Searching the video",
+        None,
+        None,
+    ]
+    stored = app.state.messages_store.get(events[0]["message_id"]).tool_trace
+    assert all("activity" not in call for call in stored)
+    assert all(call["activity"] is None for call in events[-1]["message"]["tool_trace"])
+    assert all(
+        call["activity"] is None for call in reopened.json()["messages"][-1]["tool_trace"]
+    )
+
+
 def test_exception_after_tokens_emits_error_and_persists_the_partial_answer() -> None:
     app = _app(runner=FakeRunner([TextFragment("Partial"), RuntimeError("provider secret")]))
     with TestClient(app) as client:

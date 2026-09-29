@@ -58,6 +58,9 @@ class ToolCallTrace(BaseModel):
     # Set when the tool raised rather than answered. A retrieval that failed is part of how
     # the answer was reached and is kept rather than dropped.
     error: str | None = None
+    # What the call is doing, in words ("Searching the video"), for the line a client shows
+    # under a pending answer. Live only: it is not stored, so a reopened conversation has none.
+    activity: str | None = None
 
 
 class ConversationMessage(BaseModel):
