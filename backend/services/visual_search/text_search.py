@@ -17,9 +17,6 @@ Two lists are read, and never combined by score or merged into one another:
 Each list keeps its best five moments. The exact-word moments come first, then the ones found
 by meaning; a segment both lists found appears once in each.
 
-`search_visual_text` is the exact-word list alone, for the visual sub-agent's tool until it is
-removed.
-
 The matching is done here rather than in SQL: a video has a few hundred keyframes at most, and
 reading them all costs less than keeping an index for it.
 """
@@ -68,7 +65,8 @@ def search_screen_text(
 
     The encoder defaults to multilingual-e5-small; a test replaces it. e5 is not loaded for a
     video none of whose keyframes show text. Raises `ValueError` for words that cannot be
-    searched for, as `search_visual_text` does, before anything is read.
+    searched for -- none, more than `MAX_WORDS`, or one that is empty once its whitespace is
+    removed -- before anything is read.
     """
     wanted = _wanted_words(words) if words is not None else []
     opened = open_index(video_id, pool=pool)
@@ -85,24 +83,6 @@ def search_screen_text(
         index_status=INDEX_READY,
         visual_status=opened.visual_status,
         moments=fill_moments(by_words + by_meaning, opened),
-        unread_keyframe_count=opened.unread_keyframe_count,
-    )
-
-
-def search_visual_text(video_id: str, words: Sequence[str], *, pool=None) -> VisualSearchResult:
-    """The moments of this video showing any of `words` on screen.
-
-    Raises `ValueError` for no words, more than `MAX_WORDS`, or a word that is empty once its
-    whitespace is removed.
-    """
-    wanted = _wanted_words(words)
-    opened = open_index(video_id, pool=pool)
-    if isinstance(opened, VisualSearchResult):
-        return opened
-    return VisualSearchResult(
-        index_status=INDEX_READY,
-        visual_status=opened.visual_status,
-        moments=fill_moments(_word_moments(opened, wanted)[:MAX_MOMENTS], opened),
         unread_keyframe_count=opened.unread_keyframe_count,
     )
 

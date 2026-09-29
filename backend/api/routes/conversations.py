@@ -33,6 +33,7 @@ from backend.schemas.conversations import (
     ToolCallTrace,
     ToolResultEvent,
 )
+from backend.services.visual_search import VISUAL_UNAVAILABLE, visual_availability
 from backend.storage.postgres import (
     PostgresComments,
     PostgresConversations,
@@ -41,6 +42,7 @@ from backend.storage.postgres import (
     PostgresPinnedAnswers,
     PostgresUserVideos,
     PostgresVideoRecords,
+    PostgresVisualIndex,
     StoredConversation,
     StoredMessage,
     StoredUser,
@@ -83,6 +85,10 @@ def comments_store(request: Request) -> PostgresComments:
     return request.app.state.comments_store
 
 
+def visual_index_store(request: Request) -> PostgresVisualIndex:
+    return request.app.state.visual_index_store
+
+
 def agent_runner(request: Request) -> ConversationAgentRunner:
     return request.app.state.conversation_agent_runner
 
@@ -98,6 +104,7 @@ UserVideos = Annotated[PostgresUserVideos, Depends(user_videos_store)]
 LibraryViews = Annotated[PostgresLibraryViews, Depends(library_views)]
 VideoRecords = Annotated[PostgresVideoRecords, Depends(video_records_store)]
 Comments = Annotated[PostgresComments, Depends(comments_store)]
+VisualIndex = Annotated[PostgresVisualIndex, Depends(visual_index_store)]
 Runner = Annotated[ConversationAgentRunner, Depends(agent_runner)]
 Generations = Annotated[GenerationRegistry, Depends(generation_registry)]
 User = Annotated[StoredUser, Depends(current_user)]
@@ -195,6 +202,7 @@ async def send_message(
     views: LibraryViews,
     video_records: VideoRecords,
     comments: Comments,
+    visual_index: VisualIndex,
     runner: Runner,
     generations: Generations,
 ) -> StreamingResponse:
@@ -229,6 +237,7 @@ async def send_message(
         pins=pins,
         timestamps_reliable=_timestamps_reliable(conversation.video_id, video_records),
         has_comments=comments.count(conversation.video_id) > 0,
+        visual_availability=visual_availability(visual_index.state(conversation.video_id)),
         current_time_seconds=body.current_time_seconds,
         player_paused=body.player_paused,
     )
@@ -268,6 +277,7 @@ async def _answer_stream(
     pins: PostgresPinnedAnswers,
     timestamps_reliable: bool,
     has_comments: bool = False,
+    visual_availability: str = VISUAL_UNAVAILABLE,
     current_time_seconds: float | None = None,
     player_paused: bool | None = None,
 ) -> AsyncIterator[str]:
@@ -283,6 +293,7 @@ async def _answer_stream(
         video_id=conversation.video_id,
         timestamps_reliable=timestamps_reliable,
         has_comments=has_comments,
+        visual_availability=visual_availability,
         current_time_seconds=current_time_seconds,
         player_paused=player_paused,
         pool=getattr(messages, "_pool", None),

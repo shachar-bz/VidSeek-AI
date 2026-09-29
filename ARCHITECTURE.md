@@ -14,20 +14,11 @@ VidSeek-AI/
 │   │       ├── get_memory_context/         # Reads one memory with the memories around it in its chapter.
 │   │       ├── get_video_info/             # Looks up the current video's metadata.
 │   │       ├── get_video_outline/          # Lists the current video's chapters without their contents.
-│   │       ├── investigate_visual/         # Answers a question about what the video shows, through the visual sub-agent.
 │   │       ├── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
-│   │       ├── search_screen_text/         # Moments by on-screen text, by meaning and by exact words, through services/visual_search/; not yet registered.
-│   │       ├── search_visual_moments/      # Frames whose picture looks like a description, one per shot, through services/visual_search/; not yet registered.
-│   │       ├── view_candidates/            # Scattered frames on one contact sheet, a verdict per frame from the image model; not yet registered.
-│   │       ├── view_frames_closeup/        # One to three frames returned large to the agent itself, as images; not yet registered.
-│   │       └── view_sequence/              # Frames across a window as one grid, described by the image model; not yet registered.
-│   ├── visual_agent/                       # The visual sub-agent: searches the visual index, plans a look at the video, has frames described by an image model, answers in text.
-│   │   └── tools/                          # Pydantic AI tools the sub-agent calls; one directory per tool.
-│   │       ├── get_transcript_window/      # What was said between two times.
-│   │       ├── read_frame_text/            # On-screen text at given times, stored or read on demand.
-│   │       ├── search_visual_moments/      # Moments showing what a query describes, through services/visual_search/.
-│   │       ├── search_visual_text/         # Moments whose on-screen text contains given words, through services/visual_search/.
-│   │       ├── view_frames_closeup/        # One to three frames sent large, for a detail a sequence grid is too small to show.
+│   │       ├── search_screen_text/         # Moments by on-screen text, by meaning and by exact words, through services/visual_search/.
+│   │       ├── search_visual_moments/      # Frames whose picture looks like a description, one per shot, through services/visual_search/.
+│   │       ├── view_candidates/            # Scattered frames on one contact sheet, a verdict per frame from the image model.
+│   │       ├── view_frames_closeup/        # One to three frames returned large to the agent itself, as images.
 │   │       └── view_sequence/              # Frames across a window as one grid, described by the image model.
 │   ├── schemas/                            # The Pydantic contract shared with the Chrome extension and the website.
 │   ├── core/                               # Cross-cutting foundations: config, errors, auth primitives, security.
@@ -53,7 +44,7 @@ VidSeek-AI/
 │   │   ├── visual_indexing/                # Builds one video's visual index from its local file; no database.
 │   │   │   ├── sampling/                   # The ffmpeg decode pass (one shrunken frame every two seconds), and keyframes at full size.
 │   │   │   └── segments/                   # Content-change segmentation and keyframe choice.
-│   │   ├── ocr/                            # The OCR engine interface and the text a keyframe keeps; read at indexing and at query time.
+│   │   ├── ocr/                            # The OCR engine interface and the text a keyframe keeps; read at indexing only.
 │   │   │   └── surya/                      # Surya 2, run in a worker process of its own Python environment.
 │   │   ├── semantic_segmentation/          # What a transcript becomes once transcription is done.
 │   │   │   ├── memories/                   # Stage two: a transcript divided into semantic memories by an LLM.
@@ -122,12 +113,11 @@ The rules bind production code. Tests (`backend/tests/`, `frontend/tests/`,
 * `schemas/` is the contract shared with the extension and the website; it depends only on
   `core/`, imports no web framework, and reaches no database. Assembling one of its models
   out of several tables is `api/`'s work, not its own.
-* `video_agent/tools/` and `visual_agent/tools/` get one directory per tool.
-* `video_agent` may import `visual_agent`, never the reverse: the sub-agent is called
-  through `video_agent/tools/investigate_visual/` and knows nothing of the main agent.
-  `visual_agent` reaches the database and Blob Storage only through `services/` and
-  `storage/`, and never sends pixels to its planning model — frames go to the image model
-  in `visual_agent/image_analysis.py`, and only its words come back.
+* `video_agent/tools/` gets one directory per tool.
+* `video_agent` reaches the database and Blob Storage only through `services/` and
+  `storage/`. Frames go to the image model in `video_agent/image_analysis.py`, and only its
+  words come back to the agent. The one exception is `view_frames_closeup`, which returns a
+  few frames to the agent itself, as images.
 * `frontend/src/api/` is the only place the website calls `fetch`; a page asks it for data
   rather than building a request itself. `frontend/src/api/types.ts` mirrors
   `backend/schemas/` field for field, the same way `chrome-extension/src/types.ts` does,

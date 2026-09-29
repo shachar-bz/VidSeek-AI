@@ -1,6 +1,6 @@
 """Extracts single frames from a video at given times, as small JPEGs (or PNGs for OCR), with ffmpeg.
 
-No frame is ever stored, so every frame the visual sub-agent looks at is extracted here, on
+No frame is ever stored, so every frame the video agent looks at is extracted here, on
 demand. `source` is whatever ffmpeg can open: at query time a read-only SAS URL of the blob
 (`source.py`), which ffmpeg seeks with HTTP range requests; in a test, a local file.
 

@@ -24,7 +24,7 @@ from pathlib import Path
 from PIL import Image
 
 # One frame every two seconds: ~1,800 frames for an hour of video. What happens for less than
-# about two seconds can fall between samples; the visual sub-agent refines around a hit by
+# about two seconds can fall between samples; the video agent refines around a hit by
 # extracting the frames it needs.
 SAMPLE_INTERVAL_SECONDS = 2.0
 

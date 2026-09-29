@@ -22,7 +22,6 @@ from backend.services.visual_search import (
     normalized,
     search_screen_text,
     search_visual_moments,
-    search_visual_text,
     standout_frames,
     standout_positions,
 )
@@ -206,12 +205,10 @@ def test_few_scores_are_all_hits_and_many_are_judged_by_their_z_score() -> None:
 def _run(search_name: str, pool: FakePool):
     if search_name == "moments":
         return search(pool)
-    if search_name == "screen":
-        return screen_search(pool, ["kafka"])
-    return search_visual_text(VIDEO_ID, ["kafka"], pool=pool)
+    return screen_search(pool, ["kafka"])
 
 
-@pytest.mark.parametrize("search_name", ["moments", "screen", "words_only"])
+@pytest.mark.parametrize("search_name", ["moments", "screen"])
 def test_a_video_whose_index_is_not_ready_is_not_searched(search_name: str) -> None:
     pool = FakePool(responses=[[{"visual_status": "indexing", "visual_error": None, "visual_index_version": None}]])
 
@@ -221,7 +218,7 @@ def test_a_video_whose_index_is_not_ready_is_not_searched(search_name: str) -> N
     assert len(pool.recorded) == 1
 
 
-@pytest.mark.parametrize("search_name", ["moments", "screen", "words_only"])
+@pytest.mark.parametrize("search_name", ["moments", "screen"])
 def test_an_index_built_with_other_models_is_refused_rather_than_mixed(search_name: str) -> None:
     pool = FakePool(responses=[[{"visual_status": "ready", "visual_error": None, "visual_index_version": "clip@1fps"}]])
 
@@ -490,8 +487,6 @@ def test_words_that_cannot_be_searched_for_are_refused_before_anything_is_read(w
 
     with pytest.raises(ValueError):
         screen_search(pool, words)
-    with pytest.raises(ValueError):
-        search_visual_text(VIDEO_ID, words, pool=pool)
 
     assert pool.recorded == []
 
@@ -532,12 +527,3 @@ def test_each_list_keeps_its_best_five() -> None:
     result = screen_search(screen_pool(texts, text_scores=scores, segments=segments), ["kafka"])
 
     assert [m.found_by for m in result.moments] == [(TEXT_CHARACTERS,)] * 5 + [(TEXT_MEANING,)] * 5
-
-
-def test_the_words_only_search_left_for_the_old_sub_agent_still_finds_words() -> None:
-    pool = FakePool(responses=opened_index(segments=SEGMENTS, texts={20.0: "Kafka"}, unread=0))
-
-    [moment] = search_visual_text(VIDEO_ID, ["kafka"], pool=pool).moments
-
-    assert (moment.start_seconds, moment.found_by) == (20.0, (TEXT_CHARACTERS,))
-    assert not any("ocr_embedding <=>" in statement for statement in pool.statements)

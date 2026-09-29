@@ -17,6 +17,7 @@ from backend.services.visual_search import search_screen_text as search_screen_t
 from backend.services.visual_search import search_visual_moments as search_moments_in_video
 from backend.tests.fake_postgres import FakePool
 from backend.video_agent.citations import spans_of
+from backend.video_agent.prompt import VISUAL_PROCESSING_MESSAGE, VISUAL_UNAVAILABLE_MESSAGE
 from backend.video_agent.tools.deps import ConversationDeps
 from backend.video_agent.tools.search_screen_text import ScreenTextMoments, search_screen_text
 from backend.video_agent.tools.search_screen_text import tool as screen_text_tool
@@ -144,17 +145,21 @@ def test_a_video_with_no_frames_says_nothing_stood_out_and_there_was_nothing_to_
 
 
 @pytest.mark.parametrize(
-    ("state", "expected"),
-    [(NOT_READY_STATE, "not ready (status: indexing)"), (OUTDATED_STATE, "built with other models")],
+    ("state", "expected", "message"),
+    [
+        (NOT_READY_STATE, "not ready (status: indexing)", VISUAL_PROCESSING_MESSAGE),
+        (OUTDATED_STATE, "built with other models", VISUAL_UNAVAILABLE_MESSAGE),
+    ],
 )
 @pytest.mark.parametrize("search", ["picture", "screen"])
-def test_an_index_that_cannot_be_searched_sends_the_agent_to_view_sequence(search, state, expected) -> None:
+def test_an_index_that_cannot_be_searched_tells_the_agent_what_to_say(search, state, expected, message) -> None:
+    """The tools are offered only for a ready index, so this is an index that changed mid-turn."""
     deps = _deps(FakePool(responses=[state]))
 
     result = _search_picture(deps) if search == "picture" else _search_screen(deps, words=["kafka"])
 
     assert expected in result.note
-    assert "view_sequence" in result.note and "only sampled" in result.note
+    assert message in result.note
     assert spans_of(result) == []
 
 

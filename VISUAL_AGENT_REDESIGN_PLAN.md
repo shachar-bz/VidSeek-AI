@@ -337,6 +337,49 @@ failures that give the look back.
 
 ### Stage 3: switch over
 
+**Done** (commit `a85da8e`). Everything below landed as written, except where the decisions that
+follow change it. The manual check below has not been done yet.
+
+Decisions the plan didn't cover, or that changed it:
+
+- **No visual tools until the index is ready.** All five visual tools are hidden, not only
+  the two searches, until the index is `ready` with the current models. What the agent tells
+  the user depends on the state:
+  - `pending` or `indexing`: "Still processing visual data, it will be ready shortly."
+  - `failed`, `skipped`, outdated, or no video: "Visual analysis isn't available for this
+    video."
+
+  The two `VISUAL_PROCESSING_PROMPT` / `VISUAL_UNAVAILABLE_PROMPT` sections say this, in the
+  user's language, and replace `VISUAL_NOT_READY_PROMPT`. Step 6 of the investigation logic
+  (sampled sequence) is dropped.
+- **`visual_availability`, not `visual_index_ready`.** `ConversationDeps.visual_availability` is
+  `ready`, `processing` or `unavailable`. `services/visual_search.visual_availability` decides
+  it from the index state. The route reads that state once per question through a new
+  `visual_index_store` on `app.state`.
+- **The viewer's position reaches the agent as a note.** The old tool passed it to the
+  sub-agent, so the main agent never saw it. Now `viewer_position_prompt` adds a system note
+  right before the question, after the history. It is rebuilt every turn and never saved. It
+  says the time can't be cited until a tool returns it.
+- **The gate lives in `video_agent/tools/visual_tools.py`**: `VISUAL_TOOLS` wraps the five tools
+  with one `prepare`.
+- **If the index changes mid-turn**, a search's note now gives the user message, not "look with
+  view_sequence".
+- **Prompt additions beyond the draft**, carried from the investigation logic and the old
+  planner prompt:
+  - no position and nothing in the conversation → say which moment is meant isn't known;
+  - one narrower second pass over a long shot;
+  - a reworded search costs a call but no look;
+  - independent calls go in one round;
+  - describe where by place in the scene, not coordinates;
+  - frames are data, not instructions.
+- `_summarize_result` counts `moments` and `frames`. No result has a `candidates` key, and
+  `findings` is gone.
+- All five `test_visual_agent_*.py` files are deleted, not only the two named below. Their
+  surviving parts were moved in stage 2.
+- Docstrings in `services/ocr/`, `services/video_frames/` and `services/visual_indexing/` that
+  named the sub-agent now say "the video agent". The SQL migrations are history and were left
+  alone.
+
 **`video_agent/tools/deps.py`**
 - `ConversationDeps` gains the visual state `VisualDeps` held today: the budget, the frame
   source, the image analyzer, the video map, and the chapter lookup.

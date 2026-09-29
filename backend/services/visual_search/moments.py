@@ -24,8 +24,9 @@ from backend.storage.postgres import (
     PostgresVisualIndex,
     StoredChapterOutline,
     StoredVisualSegment,
+    VisualIndexState,
 )
-from backend.storage.postgres.visual_index import READY
+from backend.storage.postgres.visual_index import INDEXING, PENDING, READY
 
 from .video_map import VideoVisualMap, load_video_map
 
@@ -38,6 +39,12 @@ TEXT_CHARACTERS = "text_characters"
 INDEX_READY = "ready"
 INDEX_NOT_READY = "not_ready"
 INDEX_OUTDATED = "outdated"
+
+# Whether the agent may look at a video's picture at all, as `visual_availability` decides it:
+# its index can be searched, it is still queued or being built, or it never will be as it is.
+VISUAL_READY = "ready"
+VISUAL_PROCESSING = "processing"
+VISUAL_UNAVAILABLE = "unavailable"
 
 # How much of a keyframe's text a screen-text moment carries. The agent looks at the frame
 # when it needs the rest.
@@ -162,6 +169,22 @@ def ready_video_map(video_id: str, *, pool=None) -> VideoVisualMap | None:
     if state is None or state.status != READY or state.index_version != CURRENT_VISUAL_INDEX_VERSION:
         return None
     return load_video_map(video_id, pool=pool)
+
+
+def visual_availability(state: VisualIndexState | None) -> str:
+    """Whether a video's picture can be searched and looked at, from its index state.
+
+    Ready only as `open_index` would search it: built, with the current models. `pending` and
+    `indexing` will get there; a failed or skipped index, one built with other models, or no
+    video at all will not without a new indexing run.
+    """
+    if state is None:
+        return VISUAL_UNAVAILABLE
+    if state.status == READY:
+        return VISUAL_READY if state.index_version == CURRENT_VISUAL_INDEX_VERSION else VISUAL_UNAVAILABLE
+    if state.status in (PENDING, INDEXING):
+        return VISUAL_PROCESSING
+    return VISUAL_UNAVAILABLE
 
 
 def keyframe_text_moments(

@@ -14,7 +14,11 @@ TOOL_ACTIVITY: dict[str, str] = {
     "get_memory_context": "Reading a moment closely",
     "memories_semantic_search": "Searching the video",
     "get_viewer_comments": "Reading viewer comments",
-    "investigate_visual": "Looking at what the video shows",
+    "search_visual_moments": "Searching the picture",
+    "search_screen_text": "Searching on-screen text",
+    "view_candidates": "Checking candidate moments",
+    "view_sequence": "Watching part of the video",
+    "view_frames_closeup": "Looking closely at a frame",
 }
 
 
