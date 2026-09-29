@@ -201,7 +201,8 @@ same activity lines in the same order, and both should end with the same answer.
 
 ### Stage 1: search
 
-**Done.** Everything below landed as written, except where the decisions that follow change it.
+**Done** (commit `cfdad5d`). Everything below landed as written, except where the decisions that
+follow change it.
 
 Decisions the plan didn't cover, or that changed it:
 
