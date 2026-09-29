@@ -32,19 +32,27 @@ from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from backend.core import config
+from backend.services.visual_search import VISUAL_PROCESSING, VISUAL_READY
 from backend.storage.postgres import StoredMessage
 
 from . import citations
 from .activity import tool_activity
-from .prompt import SYSTEM_PROMPT, VIEWER_COMMENTS_PROMPT
+from .prompt import (
+    SYSTEM_PROMPT,
+    VIEWER_COMMENTS_PROMPT,
+    VISUAL_PROCESSING_PROMPT,
+    VISUAL_PROMPT,
+    VISUAL_UNAVAILABLE_PROMPT,
+    viewer_position_prompt,
+)
 from .tools.deps import ConversationDeps
 from .tools.get_chapter_context import get_chapter_context
 from .tools.get_memory_context import get_memory_context
 from .tools.get_video_info import get_video_info
 from .tools.get_video_outline import get_video_outline
 from .tools.get_viewer_comments import viewer_comments_tool
-from .tools.investigate_visual import investigate_visual
 from .tools.memories_semantic_search import memories_semantic_search
+from .tools.visual_tools import VISUAL_TOOLS
 
 # Every other OpenAI call site in the backend (video_insights, grouper, segmenter,
 # transcriber) reads this same key explicitly; pydantic_ai's default OpenAI provider
@@ -61,7 +69,8 @@ TOOLS = (
     memories_semantic_search,
     get_chapter_context,
     get_memory_context,
-    investigate_visual,
+    # Offered only for a video whose visual index is ready; see `tools/visual_tools.py`.
+    *VISUAL_TOOLS,
     # Offered only for a video with stored YouTube comments; see its `prepare`.
     viewer_comments_tool,
 )
@@ -116,8 +125,9 @@ class ConversationAgentRunner(Protocol):
 
 
 def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
-    """Build the production agent: five transcript tools, one visual tool, and the comments
-    tool a YouTube video with stored comments is offered."""
+    """Build the production agent: five transcript tools, the five visual tools a video with a
+    ready visual index is offered, and the comments tool a YouTube video with stored comments is
+    offered."""
 
     # The Responses API rather than Chat Completions: gpt-6-sol refuses function tools on
     # Chat Completions while it reasons, which failed every conversation.
@@ -231,12 +241,32 @@ def _model_history(
     # cannot see.
     if deps is not None and deps.has_comments:
         converted.append(ModelRequest(parts=[SystemPromptPart(content=VIEWER_COMMENTS_PROMPT)]))
+    # The visual tools are offered only for a ready index, so the full section goes with them
+    # and the other two say what to tell the user instead of looking.
+    if deps is not None:
+        converted.append(ModelRequest(parts=[SystemPromptPart(content=_visual_prompt(deps))]))
     for message in history:
         if message.role == "user":
             converted.append(ModelRequest(parts=[UserPromptPart(content=message.content)]))
         else:
             converted.append(ModelResponse(parts=[TextPart(content=message.content)]))
+    # After the history, right before the question it belongs to: the position is this
+    # question's, and an earlier turn's player may have been somewhere else. Rebuilt every turn
+    # and never stored, like everything else here but the visible messages.
+    if deps is not None:
+        position = viewer_position_prompt(deps.current_time_seconds, deps.player_paused)
+        converted.append(ModelRequest(parts=[SystemPromptPart(content=position)]))
     return converted
+
+
+def _visual_prompt(deps: ConversationDeps) -> str:
+    """The visual section for this video: how to look, or what to say while it cannot be looked at."""
+
+    if deps.visual_availability == VISUAL_READY:
+        return VISUAL_PROMPT
+    if deps.visual_availability == VISUAL_PROCESSING:
+        return VISUAL_PROCESSING_PROMPT
+    return VISUAL_UNAVAILABLE_PROMPT
 
 
 def _summarize_result(content: object) -> str:
@@ -246,7 +276,7 @@ def _summarize_result(content: object) -> str:
         return f"{len(content)} result{'s' if len(content) != 1 else ''}"
     if hasattr(content, "model_dump"):
         data = content.model_dump()
-        for key in ("chapters", "memories", "segments", "matches", "findings", "comments"):
+        for key in ("chapters", "memories", "segments", "matches", "moments", "frames", "comments"):
             value = data.get(key)
             if isinstance(value, list):
                 return f"{len(value)} {key}"

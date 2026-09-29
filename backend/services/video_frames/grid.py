@@ -1,7 +1,7 @@
 """Lays several frames out as one labelled grid image, and spaces frames across a window.
 
 One frame cannot show an action -- "picks up the cup" is a change between frames -- so the
-visual sub-agent looks at a sequence instead. Sent as one grid, a sequence costs one image
+video agent looks at a sequence instead. Sent as one grid, a sequence costs one image
 rather than one per frame. Every cell is stamped with its time, so the model can say *when* in
 the window something happened, not only that it did.
 

@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, field
 
 from backend.services.video_frames import VideoFrameSource
-from backend.services.visual_search import VideoVisualMap, ready_video_map
+from backend.services.visual_search import VISUAL_UNAVAILABLE, VideoVisualMap, ready_video_map
 from backend.storage.postgres import (
     PostgresChapters,
     PostgresVideoRecords,
@@ -28,6 +28,12 @@ class ConversationDeps:
     # Whether the video has stored YouTube comments. Decides whether the agent is offered
     # `get_viewer_comments` at all, so it is read once per run rather than on every step.
     has_comments: bool = False
+
+    # Whether the video's picture can be searched and looked at: `ready`, `processing` or
+    # `unavailable` (`services/visual_search.visual_availability`). Only a ready video is offered
+    # the visual tools, and the prompt says which of the other two to tell the user, so it is
+    # read once per run like `has_comments`.
+    visual_availability: str = VISUAL_UNAVAILABLE
 
     # Where the viewer's player was when the question was sent, in seconds; None when the
     # page gave no position. What a deictic question ("what is this?") points at.

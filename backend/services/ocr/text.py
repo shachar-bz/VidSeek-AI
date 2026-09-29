@@ -2,7 +2,7 @@
 
 The blocks are joined in the engine's reading order, one per line, after dropping the ones the
 engine was unsure of: text that is probably wrong costs more in search than no text, because a
-trigram or e5 match on it sends the visual sub-agent to the wrong frame. The confidence kept is
+trigram or e5 match on it sends the video agent to the wrong frame. The confidence kept is
 the blocks' mean weighted by their length, so a long paragraph read well is not outvoted by a
 misread page number.
 

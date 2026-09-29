@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 from backend.api.dependencies import current_user
 from backend.api.routes import conversations as routes
 from backend.core.errors import VideoNotLinkedError
-from backend.storage.postgres import StoredConversation, StoredMessage, StoredUser
+from backend.services.visual_indexing import CURRENT_VISUAL_INDEX_VERSION
+from backend.services.visual_search import VISUAL_PROCESSING, VISUAL_READY, VISUAL_UNAVAILABLE
+from backend.storage.postgres import StoredConversation, StoredMessage, StoredUser, VisualIndexState
 from backend.video_agent import TextFragment, ToolFinished, ToolStarted
 from backend.video_agent.generation import GenerationRegistry
 
@@ -157,6 +159,14 @@ class MemoryComments:
         return self.comment_count if video_id == VIDEO_ID else 0
 
 
+class MemoryVisualIndex:
+    def __init__(self, state: VisualIndexState | None) -> None:
+        self.visual_state = state
+
+    def state(self, video_id):
+        return self.visual_state if video_id == VIDEO_ID else None
+
+
 class FakeRunner:
     def __init__(self, events) -> None:
         self.events = events
@@ -170,7 +180,9 @@ class FakeRunner:
             yield event
 
 
-def _app(*, ready=True, linked=True, runner=None, timing_fidelity="word", comment_count=0):
+def _app(
+    *, ready=True, linked=True, runner=None, timing_fidelity="word", comment_count=0, visual_state=None
+):
     app = FastAPI()
     app.include_router(routes.router)
     app.dependency_overrides[current_user] = lambda: USER
@@ -183,6 +195,7 @@ def _app(*, ready=True, linked=True, runner=None, timing_fidelity="word", commen
     )
     app.state.video_records_store = MemoryVideoRecords(timing_fidelity)
     app.state.comments_store = MemoryComments(comment_count)
+    app.state.visual_index_store = MemoryVisualIndex(visual_state)
     app.state.conversation_agent_runner = runner or FakeRunner([TextFragment("answer")])
     app.state.generation_registry = GenerationRegistry()
     return app
@@ -374,6 +387,30 @@ def test_the_agent_is_told_whether_the_video_has_comments() -> None:
             )
 
         assert runner.runs[0][2].has_comments is expected
+
+
+def test_the_agent_is_told_whether_the_video_s_picture_can_be_looked_at() -> None:
+    """Only a ready index with the current models is looked at; queued or indexing is on its way."""
+    cases = (
+        (VisualIndexState("ready", None, CURRENT_VISUAL_INDEX_VERSION), VISUAL_READY),
+        (VisualIndexState("ready", None, "clip@1fps"), VISUAL_UNAVAILABLE),
+        (VisualIndexState("pending", None, None), VISUAL_PROCESSING),
+        (VisualIndexState("indexing", None, None), VISUAL_PROCESSING),
+        (VisualIndexState("failed", "ffmpeg_failed", None), VISUAL_UNAVAILABLE),
+        (VisualIndexState("skipped", "ingested_before_visual_indexing", None), VISUAL_UNAVAILABLE),
+        (None, VISUAL_UNAVAILABLE),
+    )
+    for visual_state, expected in cases:
+        runner = FakeRunner([TextFragment("answer")])
+        app = _app(runner=runner, visual_state=visual_state)
+        with TestClient(app) as client:
+            conversation_id = _create(client)
+            client.post(
+                f"/v1/conversations/{conversation_id}/messages",
+                json={"content": "What is on the slide?"},
+            )
+
+        assert runner.runs[0][2].visual_availability == expected, visual_state
 
 
 def test_the_players_position_reaches_the_agent_with_the_question() -> None:

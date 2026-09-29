@@ -1,7 +1,7 @@
 """Frames of a stored video, read straight out of Blob Storage through a short-lived read link.
 
 This is the query-time half of "no frame is ever stored": indexing reads the local file while
-it still exists, and everything after that -- the visual sub-agent looking at the current
+it still exists, and everything after that -- the video agent looking at the current
 frame, a sequence, or a moment search found -- comes from here. The video is never downloaded;
 ffmpeg is handed a read-only SAS URL and seeks it over HTTP.
 
