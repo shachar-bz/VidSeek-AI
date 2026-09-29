@@ -1,8 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { StreamEvent, ToolCallTrace } from "../src/api/types";
-import { chatUnavailableMessage } from "../src/pages/video/ConversationWorkspace";
+import type { ConversationDetail, ConversationMessage, StreamEvent, ToolCallTrace, VideoDetail } from "../src/api/types";
+import { chatUnavailableMessage, ConversationWorkspace } from "../src/pages/video/ConversationWorkspace";
 import { applyStreamEvent, beginGeneration, endIncompleteStream } from "../src/pages/video/streamState";
+
+const api = vi.hoisted(() => ({
+  createConversation: vi.fn(),
+  deleteConversation: vi.fn(),
+  getConversation: vi.fn(),
+  getConversations: vi.fn(),
+  renameConversation: vi.fn(),
+  sendConversationMessage: vi.fn(),
+  stopConversation: vi.fn()
+}));
+vi.mock("../src/api/conversations", () => api);
+vi.mock("../src/api/video", () => ({
+  getPinnedAnswers: vi.fn(async () => ({ pins: [] })),
+  pinAnswer: vi.fn(),
+  unpinAnswer: vi.fn()
+}));
 
 function trace(overrides: Partial<ToolCallTrace> = {}): ToolCallTrace {
   return {
@@ -65,4 +83,152 @@ describe("conversation readiness", () => {
     expect(chatUnavailableMessage("partial")).toBeNull();
   });
 
+});
+
+const video: VideoDetail = {
+  video_id: "video-1",
+  title: "The Water Cycle",
+  custom_title: null,
+  original_title: "The Water Cycle",
+  source_site: "www.youtube.com",
+  source_url: "https://www.youtube.com/watch?v=abc",
+  duration_seconds: 600,
+  tags: [],
+  added_at: "2026-09-29T10:00:00Z",
+  stage: "ready",
+  transcript_source: "captions",
+  transcript_language: "en",
+  transcript_timing_fidelity: "caption",
+  conversation_count: 0,
+  visual_status: "ready",
+  insights: null
+};
+
+const created: ConversationDetail = {
+  conversation_id: "conversation-1",
+  video_id: "video-1",
+  title: null,
+  created_at: "2026-09-29T10:00:00Z",
+  updated_at: "2026-09-29T10:00:00Z",
+  messages: []
+};
+
+const answer: ConversationMessage = {
+  message_id: "assistant-1",
+  role: "assistant",
+  content: "Water evaporates in the sun.",
+  tool_trace: [trace({ finished_at: "2026-09-20T10:00:02Z" })],
+  created_at: "2026-09-29T10:00:00Z",
+  pinned: false
+};
+
+/** An answer stream the test feeds one event at a time. */
+function controlledStream() {
+  const queue: StreamEvent[] = [];
+  let wake: (() => void) | null = null;
+  async function* events(): AsyncGenerator<StreamEvent> {
+    for (;;) {
+      while (queue.length) yield queue.shift()!;
+      await new Promise<void>((resolve) => (wake = resolve));
+    }
+  }
+  return {
+    events,
+    async push(event: StreamEvent) {
+      await act(async () => {
+        queue.push(event);
+        wake?.();
+        wake = null;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+  };
+}
+
+function activityLine(): string | null {
+  return document.querySelector(".chat-message__activity")?.textContent ?? null;
+}
+
+function typingIndicator(): Element | null {
+  return document.querySelector(".chat-message__bubble--typing .chat-typing");
+}
+
+async function askQuestion(stream: ReturnType<typeof controlledStream>) {
+  api.sendConversationMessage.mockImplementation(stream.events);
+  render(
+    <MemoryRouter initialEntries={["/videos/video-1"]}>
+      <Routes>
+        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} />} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await screen.findByText("No chats yet.");
+  fireEvent.click(screen.getByRole("button", { name: /New chat/ }));
+  fireEvent.change(screen.getByLabelText("Ask about this video"), { target: { value: "What is evaporation?" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+  await waitFor(() => expect(api.sendConversationMessage).toHaveBeenCalled());
+  await stream.push({ type: "message_start", user_message_id: "user-1", message_id: "assistant-1" });
+}
+
+describe("the line under a pending answer", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.getConversations.mockResolvedValue({ conversations: [] });
+    api.createConversation.mockResolvedValue(created);
+    api.renameConversation.mockResolvedValue({ ...created, title: "Chat 1", message_count: 0 });
+    api.getConversation.mockResolvedValue({ ...created, title: "Chat 1", messages: [] });
+  });
+
+  it("says Thinking before any call, then the label of the call running or last run", async () => {
+    const stream = controlledStream();
+    await askQuestion(stream);
+
+    expect(activityLine()).toBe("Thinking…");
+    expect(typingIndicator()).not.toBeNull();
+
+    await stream.push({ type: "tool_call", call: trace({ activity: "Searching the video" }) });
+    expect(activityLine()).toBe("Searching the video…");
+
+    await stream.push({ type: "tool_result", call: trace({ activity: "Searching the video", finished_at: "2026-09-20T10:00:02Z" }) });
+    expect(activityLine()).toBe("Searching the video…");
+
+    await stream.push({ type: "tool_call", call: trace({ call_id: "call-2", tool: "get_chapter_context", activity: "Reading a chapter" }) });
+    expect(activityLine()).toBe("Reading a chapter…");
+  });
+
+  it("says Thinking for a call the server gave no label", async () => {
+    const stream = controlledStream();
+    await askQuestion(stream);
+
+    await stream.push({ type: "tool_call", call: trace({ tool: "a_new_tool", activity: null }) });
+    expect(activityLine()).toBe("Thinking…");
+  });
+
+  it("disappears when the answer arrives, which appears whole", async () => {
+    const stream = controlledStream();
+    api.getConversation.mockResolvedValue({ ...created, title: "Chat 1", messages: [answer] });
+    await askQuestion(stream);
+    await stream.push({ type: "tool_call", call: trace({ activity: "Searching the video" }) });
+
+    await stream.push({ type: "token", text: answer.content });
+    await stream.push({ type: "message_complete", message: answer });
+
+    await waitFor(() => expect(activityLine()).toBeNull());
+    expect(typingIndicator()).toBeNull();
+    expect(screen.getByText(answer.content)).toBeTruthy();
+  });
+
+  it.each([
+    ["stopped", { type: "stopped", message: { ...answer, content: "Water evap" } }],
+    ["error", { type: "error", message: "Unable to finish the answer." }]
+  ] as const)("disappears when the answer is %s", async (_, terminal) => {
+    const stream = controlledStream();
+    await askQuestion(stream);
+    await stream.push({ type: "tool_call", call: trace({ activity: "Searching the video" }) });
+
+    await stream.push(terminal as StreamEvent);
+
+    await waitFor(() => expect(activityLine()).toBeNull());
+    expect(typingIndicator()).toBeNull();
+  });
 });

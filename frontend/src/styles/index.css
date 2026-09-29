@@ -3905,6 +3905,45 @@ h3 {
   border-top-right-radius: 0.3rem;
 }
 
+.video-page .chat-message__bubble--empty {
+  color: #949dba;
+  font-style: italic;
+}
+
+/* What the agent is doing while the answer is being generated. */
+.chat-message__activity {
+  margin: 0;
+  padding: 0 0.3rem;
+  color: #6c7797;
+  font-size: 0.72rem;
+  animation: activity-fade 1.6s ease-in-out infinite;
+}
+
+@keyframes activity-fade {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Three dots that appear one at a time, drawn as a repeating background. */
+.chat-typing {
+  display: inline-block;
+  width: 24px;
+  height: 8px;
+  vertical-align: middle;
+  background: radial-gradient(circle, #6c7797 2.5px, transparent 3px) 0 50% / 8px 8px repeat-x;
+  animation: typing-dots 1.2s steps(4, jump-none) infinite;
+}
+
+@keyframes typing-dots {
+  from {
+    width: 0;
+  }
+  to {
+    width: 24px;
+  }
+}
+
 .video-page .chat-message__meta {
   padding: 0 0.3rem;
   color: #949dba;

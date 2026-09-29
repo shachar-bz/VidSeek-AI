@@ -26,6 +26,7 @@ import {
   type ConversationSummary,
   type PinnedAnswer,
   type SendMessageRequest,
+  type ToolCallTrace,
   type VideoDetail
 } from "../../api/types";
 import { getPinnedAnswers, pinAnswer, unpinAnswer } from "../../api/video";
@@ -139,8 +140,16 @@ export function AnswerText({
   );
 }
 
+/** The server's label for the call still running, or the last one; "Thinking" before any. */
+export function latestActivity(trace: ToolCallTrace[] | null | undefined): string {
+  const running = [...(trace ?? [])].reverse().find((call) => !call.finished_at);
+  const call = running ?? trace?.at(-1);
+  return call?.activity || "Thinking";
+}
+
 function MessageCard({
   message,
+  pending,
   pinPending,
   pinDisabled,
   highlighted,
@@ -149,6 +158,8 @@ function MessageCard({
   onTogglePin
 }: {
   message: ConversationMessage;
+  /** The answer still being generated, which shows what the agent is doing instead of text. */
+  pending: boolean;
   pinPending: boolean;
   pinDisabled: boolean;
   highlighted: boolean;
@@ -162,9 +173,18 @@ function MessageCard({
     <article id={`message-${message.message_id}`} tabIndex={-1} className={`chat-message chat-message--${message.role}${highlighted ? " chat-message--highlighted" : ""}`}>
       {assistant ? <img className="chat-message__avatar" src={agentAvatar} alt="VidSeek" /> : null}
       <div className="chat-message__body">
-        <div className="chat-message__bubble">
-          <div className="chat-message__content">{!message.content ? (assistant ? "Waiting for an answer…" : "") : assistant ? <AnswerText content={message.content} approximate={approximate} onSeek={onSeek} /> : message.content}</div>
-        </div>
+        {assistant && !message.content ? (
+          pending ? (
+            <div className="chat-message__bubble chat-message__bubble--typing"><span className="chat-typing" /></div>
+          ) : (
+            <div className="chat-message__bubble chat-message__bubble--empty">No answer was saved for this question.</div>
+          )
+        ) : (
+          <div className="chat-message__bubble">
+            <div className="chat-message__content">{assistant ? <AnswerText content={message.content} approximate={approximate} onSeek={onSeek} /> : message.content}</div>
+          </div>
+        )}
+        {pending && assistant ? <p className="chat-message__activity">{latestActivity(message.tool_trace)}…</p> : null}
         <footer className="chat-message__meta">
           {sentAt ? <time dateTime={message.created_at}>{sentAt}</time> : null}
           {assistant ? (
@@ -528,7 +548,7 @@ export function ConversationWorkspace({
         <Panel className="chat-panel">
           <header className="chat-panel__header"><h2 id="conversation-heading">Ask VidSeek</h2><p>Get answers, summaries, and insights from this video.</p></header>
           {selectedId && !detail ? <p className="muted-text">Loading chat…</p> : <>
-            <div className="chat-history" ref={historyRef} aria-live="polite" onScroll={trackHistoryScroll}>{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} highlighted={message.message_id === selectedMessageId} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
+            <div className="chat-history" ref={historyRef} aria-live="polite" onScroll={trackHistoryScroll}>{renderedMessages.length === 0 ? <section className="chat-starters" aria-labelledby="chat-starters-heading"><h3 id="chat-starters-heading">Try asking</h3><div>{starterQuestions.map((question) => <button type="button" key={question} onClick={() => chooseStarterQuestion(question)}>{question}</button>)}</div></section> : renderedMessages.map((message, index) => <MessageCard key={`${message.message_id}-${index}`} message={message} pending={message === live?.assistantMessage && !live.terminal} highlighted={message.message_id === selectedMessageId} pinPending={pinPending === message.message_id} pinDisabled={message.message_id.startsWith("pending-") || (streaming && message.message_id === live?.assistantMessage.message_id)} approximate={approximate} onSeek={onSeek} onTogglePin={(item) => void togglePin(item)} />)}</div>
             {streamError ? <div className="chat-stream-error" role="alert">{streamError}</div> : null}
             <form className="chat-composer" onSubmit={sendMessage}><label className="visually-hidden" htmlFor="video-chat-input">Ask about this video</label><textarea ref={composerRef} id="video-chat-input" maxLength={8000} rows={2} value={draft} disabled={!canChat || streaming || creating} placeholder={canChat ? "Ask anything about this video" : "Chat is unavailable while processing"} onChange={(event) => { draftConversationRef.current = selectedId; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (canChat && !streaming && !creating && draft.trim()) event.currentTarget.form?.requestSubmit(); } }} /><div>{streaming ? <Button className="danger-button" onClick={() => void stop()}>Stop generating</Button> : <Button variant="primary" type="submit" aria-label="Send message" pending={creating} disabled={!canChat || creating || !draft.trim()}><ArrowUpIcon /></Button>}</div></form>
           </>}
