@@ -22,6 +22,8 @@ from backend.video_agent.tools.search_screen_text import ScreenTextMoments, sear
 from backend.video_agent.tools.search_screen_text import tool as screen_text_tool
 from backend.video_agent.tools.search_visual_moments import PictureMatches, search_visual_moments
 from backend.video_agent.tools.search_visual_moments import tool as moments_tool
+from backend.video_agent.tools.visual_budget_spent import VisualBudgetSpent
+from backend.video_agent.visual_budget import MAX_LOOKS, MAX_VISUAL_TOOL_CALLS
 
 VIDEO_ID = "11111111-2222-3333-4444-555555555555"
 
@@ -165,6 +167,7 @@ def test_an_empty_query_searches_nothing(search) -> None:
 
     assert "query is empty" in result.note
     assert pool.recorded == []
+    assert deps.visual_budget.tool_calls_used == 0
 
 
 def test_a_picture_search_that_fails_is_reported_rather_than_failing_the_answer(monkeypatch, caplog) -> None:
@@ -259,3 +262,29 @@ def test_a_screen_text_search_that_fails_is_reported_rather_than_failing_the_ans
 
     assert result.moments == [] and "search failed" in result.note
     assert "on-screen text search failed" in caplog.text
+
+
+# --- the visual budget -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("search", ["picture", "screen"])
+def test_a_search_spends_one_visual_call_and_no_look_and_says_what_is_left(search) -> None:
+    deps = _deps(index_pool(after=[frame_scores({26.0: 0.42})] if search == "picture" else []))
+
+    result = _search_picture(deps) if search == "picture" else _search_screen(deps, words=["kafka"])
+
+    assert (deps.visual_budget.tool_calls_used, deps.visual_budget.looks_used) == (1, 0)
+    assert result.budget == f"{MAX_VISUAL_TOOL_CALLS - 1} visual tool calls and {MAX_LOOKS} looks left."
+
+
+@pytest.mark.parametrize("search", ["picture", "screen"])
+def test_after_six_visual_calls_a_search_does_no_work_and_says_the_budget_is_spent(search) -> None:
+    pool = index_pool()
+    deps = _deps(pool)
+    for _ in range(MAX_VISUAL_TOOL_CALLS):
+        deps.visual_budget.start_tool_call()
+
+    result = _search_picture(deps) if search == "picture" else _search_screen(deps, words=["kafka"])
+
+    assert isinstance(result, VisualBudgetSpent)
+    assert pool.recorded == []

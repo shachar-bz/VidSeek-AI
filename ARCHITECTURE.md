@@ -8,7 +8,7 @@ VidSeek-AI/
 ├── backend/                                # Python backend; its ASGI entry point sits at this level.
 │   ├── api/                                # The HTTP layer, the only package that imports FastAPI, and where the app is assembled.
 │   │   └── routes/                         # One module per resource the companion exposes.
-│   ├── video_agent/                        # The conversational agent that talks about a video: prompt, model runner, citations, stop control.
+│   ├── video_agent/                        # The conversational agent that talks about a video: prompt, model runner, citations, stop control, visual budget, image model.
 │   │   └── tools/                          # Pydantic AI tools the agent calls; one directory per tool.
 │   │       ├── get_chapter_context/        # Reads one whole chapter of the current video.
 │   │       ├── get_memory_context/         # Reads one memory with the memories around it in its chapter.
@@ -17,7 +17,10 @@ VidSeek-AI/
 │   │       ├── investigate_visual/         # Answers a question about what the video shows, through the visual sub-agent.
 │   │       ├── memories_semantic_search/   # Finds the current video's moments closest in meaning to a query.
 │   │       ├── search_screen_text/         # Moments by on-screen text, by meaning and by exact words, through services/visual_search/; not yet registered.
-│   │       └── search_visual_moments/      # Frames whose picture looks like a description, one per shot, through services/visual_search/; not yet registered.
+│   │       ├── search_visual_moments/      # Frames whose picture looks like a description, one per shot, through services/visual_search/; not yet registered.
+│   │       ├── view_candidates/            # Scattered frames on one contact sheet, a verdict per frame from the image model; not yet registered.
+│   │       ├── view_frames_closeup/        # One to three frames returned large to the agent itself, as images; not yet registered.
+│   │       └── view_sequence/              # Frames across a window as one grid, described by the image model; not yet registered.
 │   ├── visual_agent/                       # The visual sub-agent: searches the visual index, plans a look at the video, has frames described by an image model, answers in text.
 │   │   └── tools/                          # Pydantic AI tools the sub-agent calls; one directory per tool.
 │   │       ├── get_transcript_window/      # What was said between two times.

@@ -37,3 +37,4 @@ class PictureMatches(BaseModel):
     note: str | None = Field(
         default=None, description="Why nothing was searched, or that nothing stood out and the frames are weak."
     )
+    budget: str = Field(description="What is left of this answer's visual budget.")

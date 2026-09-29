@@ -53,3 +53,4 @@ class ScreenTextMoments(BaseModel):
     note: str | None = Field(
         default=None, description="Why nothing was found or searched, or that OCR is still reading the video."
     )
+    budget: str = Field(description="What is left of this answer's visual budget.")
