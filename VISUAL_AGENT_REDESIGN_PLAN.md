@@ -261,6 +261,37 @@ the check that picture hits carry no citable pair.
 
 ### Stage 2: looks
 
+**Done** (commit `0e8d6a9`). Everything below landed as written, except where the decisions that
+follow change it.
+
+Decisions the plan didn't cover, or that changed it:
+
+- **Copied, not moved.** `visual_agent/` may not import `video_agent/` (ARCHITECTURE.md), so the
+  budget, `image_analysis.py` and `view_sequence` are adapted copies. `visual_agent/` and its
+  tests are untouched and still work; stage 3 deletes them.
+- **`view_sequence` result fields renamed**, so the citation walk collects exactly "first to last
+  frame of each scene". The window is `first_frame_seconds`/`last_frame_seconds`, a scene's index
+  bounds are `scene_start_seconds`/`scene_end_seconds`, and each scene's
+  `start_seconds`/`end_seconds` are its first and last frame. Frames whose scene isn't known form
+  one entry with `scene: None`, citable from first to last.
+- **Citability comes only from result fields.** No tool records spans itself any more: the
+  runner's walk over `start_seconds`/`end_seconds` is the one mechanism.
+- **The visual deps are on `ConversationDeps` already**: `visual_budget`, `frame_source`,
+  `image_analyzer`, `video_map()` and `chapter_at()`, since the look tools need them to be
+  tested. Stage 3 adds only `visual_index_ready`.
+- **The search wrappers spend a call now**, and every visual result carries a `budget` line
+  ("5 visual tool calls and 3 looks left."). A call that can't run (empty query, no times)
+  spends nothing. A look tool with no look left still spends its call, as before.
+- **No hard stop.** The old sub-agent's `UsageLimits` wasn't carried over; the cap is soft only.
+- The image model's two prompts live in `video_agent/image_analysis.py`.
+- `view_candidates` keeps the order the times were given (best hit first), not time order.
+  Cells are labelled with their times, as in a sequence grid.
+- **No live `gpt-6-sol` test**, by choice. A runner test with `FunctionModel` checks that the
+  close-up images reach the model and that `draft.spans` gets the frame times.
+- New tests: `test_video_agent_visual_budget.py`, `test_video_agent_view_sequence.py`,
+  `test_video_agent_view_candidates.py`, `test_video_agent_view_frames_closeup.py`, with shared
+  fakes in `tests/fake_visual_looks.py`.
+
 **Budget.** Move `InvestigationBudget` into `video_agent/visual_budget.py` as `VisualBudget`:
 6 calls and 4 looks, one per turn, held on `ConversationDeps`. The soft "budget spent" message
 stays, and it doesn't count transcript tools.
