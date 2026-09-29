@@ -1,18 +1,17 @@
-"""What both visual searches return, and the steps they share on the way to it.
+"""What the visual searches return, and the steps they share on the way to it.
 
-Both searches -- by what is shown (`moment_search.py`) and by the characters written on screen
-(`text_search.py`) -- find hits, turn them into moments inside one visual segment, limit them to
-the window asked about, and fill each moment with where it is and what surrounds it:
+The searches -- by what the picture shows (`moment_search.py`) and by the text written on screen
+(`text_search.py`) -- find hits, turn them into moments inside one visual segment, and place each
+moment in its segment and chapter:
 
 * the index is opened the same way: a video whose index is not `ready`, or was built with other
   models than the current ones, is not searched, and the caller is told which it was;
 * a keyframe's text stands for the stretch from that keyframe to the next keyframe of its
   segment, or to the segment's end; the matching keyframes of one segment merge into one moment;
-* every moment carries its segment and chapter, the on-screen text of the keyframe covering it,
-  and what was said while it was on screen, read by time from the transcript.
+* a picture moment carries the frame that matched best and no text: what it shows is for a look
+  to say. A screen-text moment carries the text read there.
 
-Every moment reports plain `start_seconds`/`end_seconds`: the visual sub-agent checks its own
-findings against them.
+Neither search reads the transcript: the agent has its own tools for what was said.
 """
 
 from __future__ import annotations
@@ -22,7 +21,6 @@ from dataclasses import dataclass
 
 from backend.services.visual_indexing import CURRENT_VISUAL_INDEX_VERSION
 from backend.storage.postgres import (
-    PostgresTranscriptSegments,
     PostgresVisualIndex,
     StoredChapterOutline,
     StoredVisualSegment,
@@ -41,22 +39,16 @@ INDEX_READY = "ready"
 INDEX_NOT_READY = "not_ready"
 INDEX_OUTDATED = "outdated"
 
-# How much of a keyframe's text, and of the speech around a moment, a moment carries. The
-# sub-agent reads the rest with its own tools when it needs it.
+# How much of a keyframe's text a screen-text moment carries. The agent looks at the frame
+# when it needs the rest.
 ON_SCREEN_TEXT_CHARACTERS = 400
-TRANSCRIPT_CHARACTERS = 600
-
-# A moment shorter than this is read with the speech either side of it: a frame is an instant,
-# and what was said about it is rarely said in the same two seconds.
-SHORT_MOMENT_SECONDS = 10.0
-TRANSCRIPT_WIDENING_SECONDS = 5.0
 
 TRUNCATION_MARK = "…"
 
 
 @dataclass(frozen=True)
 class VisualMoment:
-    """One stretch of one segment that matched, where it is, and what surrounds it."""
+    """One stretch of one segment that matched, and where it is."""
 
     start_seconds: float
     end_seconds: float
@@ -64,13 +56,15 @@ class VisualMoment:
     chapter: StoredChapterOutline | None
     # The lists that found it: `image`, `text_meaning`, `text_characters`.
     found_by: tuple[str, ...]
-    # The text read on the keyframe covering the moment, when it shows any.
-    on_screen_text: str | None = None
-    # What was said while it was on screen, widened for a short moment.
-    transcript: str | None = None
-    # How far the best frame stood out, when the picture matched.
+    # The frame whose picture matched best; picture moments only.
+    frame_seconds: float | None = None
+    # How far that frame stood out from the rest of the video; picture moments only.
     peak_z_score: float | None = None
-    # The words asked for that were found, as the caller wrote them; `search_visual_text` only.
+    # A picture moment returned although nothing stood out: one of the closest frames, not a hit.
+    weak: bool = False
+    # The text read on the keyframe covering the moment; screen-text moments only.
+    on_screen_text: str | None = None
+    # The words asked for that were found, as the caller wrote them; exact-word matches only.
     matched_words: tuple[str, ...] = ()
 
 
@@ -82,6 +76,9 @@ class VisualSearchResult:
     still being built, failed, or was skipped, which `visual_status` names -- or `outdated`, an
     index built with other models than the ones this backend embeds queries with.
 
+    `nothing_stood_out` is set by the picture search when no frame was a hit, and the moments
+    are the closest frames instead, each marked `weak`.
+
     `unread_keyframe_count` is how many keyframes OCR has not read yet. While it is above zero,
     an on-screen text search that found nothing does not mean the text is not on screen.
     """
@@ -89,6 +86,7 @@ class VisualSearchResult:
     index_status: str
     visual_status: str | None = None
     moments: tuple[VisualMoment, ...] = ()
+    nothing_stood_out: bool = False
     unread_keyframe_count: int = 0
 
     @property
@@ -98,37 +96,8 @@ class VisualSearchResult:
 
 
 @dataclass(frozen=True)
-class TimeWindow:
-    """The part of the video a search is limited to; either end may be open."""
-
-    start_seconds: float | None = None
-    end_seconds: float | None = None
-
-    def __post_init__(self) -> None:
-        if (
-            self.start_seconds is not None
-            and self.end_seconds is not None
-            and self.end_seconds < self.start_seconds
-        ):
-            raise ValueError(
-                f"the window ends at {self.end_seconds}s, before it starts at {self.start_seconds}s"
-            )
-
-    def contains(self, time_seconds: float) -> bool:
-        return (self.start_seconds is None or time_seconds >= self.start_seconds) and (
-            self.end_seconds is None or time_seconds <= self.end_seconds
-        )
-
-    def clip(self, start_seconds: float, end_seconds: float) -> tuple[float, float] | None:
-        """The part of this stretch inside the window, or None when none of it is."""
-        start = start_seconds if self.start_seconds is None else max(start_seconds, self.start_seconds)
-        end = end_seconds if self.end_seconds is None else min(end_seconds, self.end_seconds)
-        return (start, end) if end >= start else None
-
-
-@dataclass(frozen=True)
 class SearchContext:
-    """What both searches read about a video before they look for anything in it."""
+    """What the searches read about a video before they look for anything in it."""
 
     video_id: str
     visual_status: str
@@ -140,7 +109,7 @@ class SearchContext:
 
 @dataclass(frozen=True)
 class FoundMoment:
-    """A moment one list, or both, found, before it is filled with what surrounds it."""
+    """A moment one list found, before it is placed in its chapter and given its text."""
 
     segment: StoredVisualSegment
     start_seconds: float
@@ -148,7 +117,9 @@ class FoundMoment:
     found_by: tuple[str, ...]
     # The keyframe whose text the moment shows; the one covering its start when None.
     keyframe_time_seconds: float | None = None
+    frame_seconds: float | None = None
     peak_z_score: float | None = None
+    weak: bool = False
     matched_words: tuple[str, ...] = ()
 
 
@@ -159,7 +130,7 @@ class KeyframeTextMoment:
     segment: StoredVisualSegment
     start_seconds: float
     end_seconds: float
-    # The matching keyframes whose stretch reaches into the window, in time order.
+    # The matching keyframes, in time order.
     keyframe_times: tuple[float, ...]
 
 
@@ -194,32 +165,28 @@ def ready_video_map(video_id: str, *, pool=None) -> VideoVisualMap | None:
 
 
 def keyframe_text_moments(
-    keyframe_times: Iterable[float], video_map: VideoVisualMap, window: TimeWindow
+    keyframe_times: Iterable[float], video_map: VideoVisualMap
 ) -> list[KeyframeTextMoment]:
-    """Matching keyframes turned into moments: one per segment, clipped to the window, in time order.
+    """Matching keyframes turned into moments: one per segment, in time order.
 
     A keyframe's text stands for the stretch from it to the next keyframe of its segment, or to
     the segment's end. The stretches of one segment's matching keyframes merge into one moment
-    that spans them all; a keyframe whose stretch lies outside the window adds nothing.
+    that spans them all.
     """
-    by_segment: dict[int, tuple[StoredVisualSegment, list[tuple[float, float, float]]]] = {}
+    by_segment: dict[int, tuple[StoredVisualSegment, list[float]]] = {}
     for time_seconds in sorted(set(keyframe_times)):
         segment = segment_of_keyframe(video_map, time_seconds)
         if segment is None:
             continue
-        clipped = window.clip(time_seconds, keyframe_stretch_end(segment, time_seconds))
-        if clipped is None:
-            continue
-        entry = by_segment.setdefault(segment.segment_index, (segment, []))
-        entry[1].append((time_seconds, *clipped))
+        by_segment.setdefault(segment.segment_index, (segment, []))[1].append(time_seconds)
     return [
         KeyframeTextMoment(
             segment=segment,
-            start_seconds=min(start for _, start, _ in stretches),
-            end_seconds=max(end for _, _, end in stretches),
-            keyframe_times=tuple(time for time, _, _ in stretches),
+            start_seconds=times[0],
+            end_seconds=max(keyframe_stretch_end(segment, time) for time in times),
+            keyframe_times=tuple(times),
         )
-        for _, (segment, stretches) in sorted(by_segment.items())
+        for _, (segment, times) in sorted(by_segment.items())
     ]
 
 
@@ -237,42 +204,28 @@ def keyframe_stretch_end(segment: StoredVisualSegment, time_seconds: float) -> f
     return min(later) if later else max(segment.end_seconds, time_seconds)
 
 
-def ranges_overlap(first: FoundMoment, second: FoundMoment) -> bool:
-    """Whether two moments are in the same segment and share at least an instant."""
-    return (
-        first.segment.segment_index == second.segment.segment_index
-        and first.start_seconds <= second.end_seconds
-        and second.start_seconds <= first.end_seconds
-    )
-
-
-def fill_moments(
-    found: Iterable[FoundMoment], context: SearchContext, *, pool=None
-) -> tuple[VisualMoment, ...]:
-    """Each found moment with its chapter, its on-screen text and the speech around it."""
-    transcripts = PostgresTranscriptSegments(pool=pool)
+def fill_moments(found: Iterable[FoundMoment], context: SearchContext) -> tuple[VisualMoment, ...]:
+    """Each found moment placed in its chapter; a screen-text moment also with the text read there."""
     moments = []
     for moment in found:
-        keyframe = moment.keyframe_time_seconds
-        if keyframe is None:
-            keyframe = covering_keyframe(moment.segment, moment.start_seconds)
-        on_screen = context.keyframe_texts.get(keyframe) if keyframe is not None else None
-        read_from, read_to = transcript_window(moment.start_seconds, moment.end_seconds)
-        spoken = " ".join(
-            segment.text.strip()
-            for segment in transcripts.overlapping(context.video_id, read_from, read_to)
-            if segment.text.strip()
-        )
+        on_screen = None
+        if IMAGE not in moment.found_by:
+            keyframe = moment.keyframe_time_seconds
+            if keyframe is None:
+                keyframe = covering_keyframe(moment.segment, moment.start_seconds)
+            on_screen = context.keyframe_texts.get(keyframe) if keyframe is not None else None
+        placed_at = moment.frame_seconds if moment.frame_seconds is not None else moment.start_seconds
         moments.append(
             VisualMoment(
                 start_seconds=moment.start_seconds,
                 end_seconds=moment.end_seconds,
                 segment=moment.segment,
-                chapter=context.video_map.chapter_at(moment.start_seconds),
+                chapter=context.video_map.chapter_at(placed_at),
                 found_by=moment.found_by,
-                on_screen_text=capped(on_screen, ON_SCREEN_TEXT_CHARACTERS),
-                transcript=capped(spoken, TRANSCRIPT_CHARACTERS),
+                frame_seconds=moment.frame_seconds,
                 peak_z_score=moment.peak_z_score,
+                weak=moment.weak,
+                on_screen_text=capped(on_screen, ON_SCREEN_TEXT_CHARACTERS),
                 matched_words=moment.matched_words,
             )
         )
@@ -289,16 +242,6 @@ def covering_keyframe(segment: StoredVisualSegment, time_seconds: float) -> floa
         return None
     earlier = [keyframe for keyframe in segment.keyframe_times if keyframe <= time_seconds]
     return max(earlier) if earlier else min(segment.keyframe_times)
-
-
-def transcript_window(start_seconds: float, end_seconds: float) -> tuple[float, float]:
-    """The times to read the speech of a moment from: the moment itself, widened when it is short."""
-    if end_seconds - start_seconds >= SHORT_MOMENT_SECONDS:
-        return start_seconds, end_seconds
-    return (
-        max(0.0, start_seconds - TRANSCRIPT_WIDENING_SECONDS),
-        end_seconds + TRANSCRIPT_WIDENING_SECONDS,
-    )
 
 
 def capped(text: str | None, limit: int) -> str | None:

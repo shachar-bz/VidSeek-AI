@@ -5,8 +5,10 @@ and e5's are high and bunched together, and the same number means something diff
 video: a lecture's slides all look alike to the model, a travel video's frames do not. So a
 frame, or a keyframe's text, is a hit when it stands out from *its own video's* scores -- its
 z-score against every score of that video is at least the threshold -- and when even the best
-one does not stand out, there is no hit at all rather than the least-bad ones. Without that, a
-sub-agent handed "the closest frames" will find its answer in them whether it is there or not.
+one does not stand out, there is no hit at all rather than the least-bad ones. Without that, an
+agent handed "the closest frames" will find its answer in them whether it is there or not; the
+picture search does hand the closest few back when nothing stood out, but marked `weak` and
+saying so, never as hits.
 
 Frames have one more way to be a hit. Something on screen for most of the video -- "a padel
 court", at 0.18 in every frame -- stands out nowhere, so a frame at or above a *present* level
@@ -16,8 +18,8 @@ There is no similarity floor under the z-score, and that is on purpose. SigLIP s
 video are tightly bunched (a standard deviation around 0.005), so in a video where nothing
 matches, some frames still stand out by chance: on a padel match, "a dog" found a frame at z 4.3
 with a similarity of 0.03, where a real match scores 0.12 or more. That is still true, and a floor
-(0.08) once dropped those. It was removed on purpose: the sub-agent looks at every moment it is
-handed, and that look is the acceptance step, so the search favours catching a match over
+(0.08) once dropped those. It was removed on purpose: a hit cannot be cited until the agent has
+looked at it, and that look is the acceptance step, so the search favours catching a match over
 precision.
 
 Keyframe texts are few -- often a handful in a whole video -- and a z-score over so few scores
@@ -120,7 +122,7 @@ def merge_into_ranges(
 
     Two frames are consecutive when no sample lies between them. A range runs from its first
     frame to its last, so a single frame is a range of zero length: that is what was actually
-    observed, and the sub-agent can look either side of it.
+    observed, and the agent can look either side of it.
     """
     ranges: list[HitRange] = []
     for frame in sorted(frames, key=lambda item: item.time_seconds):

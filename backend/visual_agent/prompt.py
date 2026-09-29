@@ -29,12 +29,10 @@ Before calling any tool, decide two things.
 2. Find the moment, only when it is not known
 - Search for whatever best marks the moment, which need not be what the question asks about: the
   words of a slide's title, a label likely on screen, the scene around it.
-- Text: search_visual_text with the words you expect on screen; search_visual_moments when you
-  know what the text is about but not its words.
+- Text: search_visual_text with the words you expect on screen.
 - Scene: search_visual_moments with a plain description of what it looks like.
-- Both: both searches in the same round. A moment found both ways is the strongest candidate: one
-  whose found_by names both the picture and the text, or one both searches return at overlapping
-  times.
+- Both: both searches in the same round. A moment both searches return at overlapping times is
+  the strongest candidate.
 - The message may say what the main agent already knows. Use it as hints: search or look first
   where it points, but never take it as what is shown, and search beyond it when it leads nowhere.
 - With no viewer position and no range, a question that names what it asks about ("what is this
@@ -64,14 +62,11 @@ Before calling any tool, decide two things.
 What was said
 Never take what was said as what is shown: speech and picture often part, and only a look says
 what is on screen. What was said helps choose what to search for and what to ask the image model.
-Search moments already carry the speech around them; get_transcript_window is for more.
+get_transcript_window reads what was said around a moment.
 
 Where to look
-- When a time range is given, the question is about that part of the video: pass it to the
-  searches as start_seconds and end_seconds, and stay inside it, but for a second or two at its
-  edges.
-- With no range, search the whole video. Narrow a search only when sure which part is meant: a
-  window that is too narrow hides the answer.
+- The searches always cover the whole video. When a time range is given, the question is about
+  that part of it: keep to the moments inside it, but for a second or two at its edges.
 - When a search says the index cannot be searched, it found nothing. Look instead where its note
   says -- the range given, else the viewer's position -- and say that you could not search the
   whole video; when the range is longer than one sequence covers well, say it was only sampled.

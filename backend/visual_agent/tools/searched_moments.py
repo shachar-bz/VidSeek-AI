@@ -62,13 +62,6 @@ class SearchedMoment(BaseModel):
             "moment running over several keyframes may show more. None when there is none."
         ),
     )
-    transcript: str | None = Field(
-        default=None,
-        description=(
-            "What was said while it was on screen, and for a moment under ten seconds also in the "
-            "five seconds either side; it ends with … when cut. None when nothing was said."
-        ),
-    )
     peak_z_score: float | None = Field(
         default=None,
         description=(
@@ -100,16 +93,17 @@ def searched_moments(
     deps: VisualDeps,
     result: VisualSearchResult,
     notes: list[str],
-    window: tuple[float | None, float | None] = (None, None),
 ) -> SearchedMoments:
     """The service's result as the agent reads it, each moment recorded as a span it may cite."""
     notes = list(notes)
     if result.index_status in (INDEX_NOT_READY, INDEX_OUTDATED):
-        notes.append(unsearchable_note(deps, result, window))
+        notes.append(unsearchable_note(deps, result))
         return SearchedMoments(note=" ".join(notes), budget=deps.budget.remaining())
 
     moments = []
-    for moment in result.moments:
+    # A weak frame is the picture search's closest guess when nothing stood out; this agent
+    # was never handed those, and is told nothing matched instead.
+    for moment in (moment for moment in result.moments if not moment.weak):
         needs_look = not (TEXT_MEANING in moment.found_by or TEXT_CHARACTERS in moment.found_by)
         if not needs_look:
             deps.record_span(moment.start_seconds, moment.end_seconds)
@@ -123,7 +117,6 @@ def searched_moments(
                 segment_boundary=moment.segment.boundary_kind,
                 found_by=list(moment.found_by),
                 on_screen_text=moment.on_screen_text,
-                transcript=moment.transcript,
                 peak_z_score=round(moment.peak_z_score, 2) if moment.peak_z_score is not None else None,
                 matched_words=list(moment.matched_words),
                 needs_look=needs_look,
@@ -139,24 +132,14 @@ def searched_moments(
     return SearchedMoments(moments=moments, note=" ".join(notes) or None, budget=deps.budget.remaining())
 
 
-def unsearchable_note(
-    deps: VisualDeps,
-    result: VisualSearchResult,
-    window: tuple[float | None, float | None] = (None, None),
-) -> str:
-    """Why the index could not be searched, and where to look instead: the window searched, else the viewer's moment."""
+def unsearchable_note(deps: VisualDeps, result: VisualSearchResult) -> str:
+    """Why the index could not be searched, and where to look instead: the viewer's moment, when known."""
     if result.index_status == INDEX_OUTDATED:
         reason = "The video's visual index was built with other models than the current ones, so it cannot be searched."
     else:
         status = f" (status: {result.visual_status})" if result.visual_status else ""
         reason = f"The video's visual index is not ready{status}, so it cannot be searched."
-    start, end = window
-    if start is not None and end is not None:
-        instead = (
-            f"Look across the part searched, {format_timestamp(start)}-{format_timestamp(end)} "
-            f"({start:.1f}-{end:.1f} s), with view_sequence or read_frame_text instead."
-        )
-    elif deps.current_time_seconds is None:
+    if deps.current_time_seconds is None:
         instead = "Look at the frames the question points to with view_sequence or read_frame_text instead."
     else:
         instead = (
@@ -166,16 +149,3 @@ def unsearchable_note(
         )
     return f"{reason} {instead}"
 
-
-def search_window(
-    start_seconds: float | None, end_seconds: float | None
-) -> tuple[float | None, float | None] | str:
-    """The window to search, a start before the video moved to its beginning; a note when it ends before it starts."""
-    start = max(float(start_seconds), 0.0) if start_seconds is not None else None
-    end = float(end_seconds) if end_seconds is not None else None
-    if end is not None and end < (start or 0.0):
-        return (
-            "Nothing was searched, and no tool call was spent: end_seconds is before start_seconds. "
-            "Give a window that ends after it starts, or leave both out to search the whole video."
-        )
-    return start, end
