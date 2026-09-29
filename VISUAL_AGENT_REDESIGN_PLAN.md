@@ -134,7 +134,26 @@ Each stage leaves the test suite green.
 
 ### Stage 0: the same progress line in both chats
 
-**Where things stand.** The answer isn't streamed, and that stays. `video_agent/runner.py`
+**Done** (commits `852b8e7`, `bd184b7`, `5c75a4e`). Everything below landed as written:
+
+- `ToolStarted.activity` reads the label from `video_agent/activity.py`.
+- `ToolCallTrace.activity` is streamed, and `_finalize` saves the trace without it.
+- The extension's `TOOL_ACTIVITY` table is gone.
+- The website shows the extension's typing indicator and activity line.
+- Tests: `test_conversation_routes.py`, `conversation-stream.test.tsx`, and a new
+  `chrome-extension/tests/chat-activity.test.ts`.
+
+Two decisions the plan didn't cover:
+
+- `get_viewer_comments` gets the label "Reading viewer comments". The extension's old table
+  had none for it, so it showed "Thinking…".
+- On the website, an empty answer that is no longer being generated (stopped or failed
+  before any text) reads "No answer was saved for this question.", as in the extension. It
+  used to still say "Waiting for an answer…".
+
+The manual check below has not been done yet.
+
+**Where things stood.** The answer isn't streamed, and that stays. `video_agent/runner.py`
 holds the text until `_verify_citations` passes and sends it once, so the citation retry can
 rewrite a bad answer without the user seeing text replaced. What the user sees while waiting
 differs between the two chats:
