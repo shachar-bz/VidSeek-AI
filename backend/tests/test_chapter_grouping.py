@@ -188,7 +188,7 @@ def test_the_model_is_given_the_prompt_and_the_numbered_memories() -> None:
     group_memories(memories, client=client)
 
     call = client.responses.calls[0]
-    assert call["model"] == "gpt-6-sol"
+    assert call["model"] == "gpt-6.1-sol"
     assert call["instructions"] == chapter_grouping_prompt()
     assert call["input"] == MemoryIndex(memories.memories).render()
     assert call["text_format"] is VideoChapterBoundaries
@@ -278,7 +278,7 @@ def test_a_chapter_serializes_with_its_times_resolved() -> None:
 
     payload = group_memories(_memories(), client=client).to_payload()
 
-    assert payload["model"] == "gpt-6-sol"
+    assert payload["model"] == "gpt-6.1-sol"
     assert payload["chapter_count"] == 1
     assert payload["chapters"][0] == {
         "index": 0,

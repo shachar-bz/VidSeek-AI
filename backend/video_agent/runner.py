@@ -58,7 +58,7 @@ from .tools.visual_tools import VISUAL_TOOLS
 # transcriber) reads this same key explicitly; pydantic_ai's default OpenAI provider
 # looks for the standard OPENAI_API_KEY instead, which this project never sets.
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
-MODEL_NAME = "gpt-6-sol"
+MODEL_NAME = "gpt-6.1-sol"
 PARTIAL_TIMING_PROMPT = (
     "The current video's transcript timing may be unreliable. Warn the user when making "
     "timestamp-based statements, while still answering from the retrieved video content."
@@ -129,7 +129,7 @@ def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
     ready visual index is offered, and the comments tool a YouTube video with stored comments is
     offered."""
 
-    # The Responses API rather than Chat Completions: gpt-6-sol refuses function tools on
+    # The Responses API rather than Chat Completions: gpt-6.1-sol refuses function tools on
     # Chat Completions while it reasons, which failed every conversation.
     chat_model = OpenAIResponsesModel(
         model, provider=OpenAIProvider(api_key=config.require(API_KEY_NAME))

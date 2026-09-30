@@ -162,7 +162,7 @@ def test_the_model_is_given_the_prompt_and_the_numbered_transcript() -> None:
     segment_transcript(transcript, client=client)
 
     call = client.responses.calls[0]
-    assert call["model"] == "gpt-6-sol"
+    assert call["model"] == "gpt-6.1-sol"
     assert call["instructions"] == memory_segmentation_prompt()
     assert call["input"] == SegmentIndex(transcript.segments).render()
     assert call["text_format"] is TranscriptMemoryBoundaries
@@ -251,7 +251,7 @@ def test_a_memory_serializes_with_its_transcript_and_its_times_resolved() -> Non
 
     payload = segment_transcript(transcript, client=client).to_payload()
 
-    assert payload["model"] == "gpt-6-sol"
+    assert payload["model"] == "gpt-6.1-sol"
     assert payload["memory_count"] == 1
     assert payload["memories"][0] == {
         "index": 0,
