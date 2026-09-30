@@ -487,3 +487,7 @@ def test_stop_persists_partial_text_and_emits_stopped() -> None:
             pass
 
     asyncio.run(scenario())
+
+
+def test_a_video_without_a_record_is_not_reported_as_untimed() -> None:
+    assert routes._timestamps_reliable("unknown-video", MemoryVideoRecords("word")) is True

@@ -216,12 +216,13 @@ def test_system_prompt_does_not_embed_a_transcript() -> None:
     assert "full transcript" not in runner.SYSTEM_PROMPT.lower()
 
 
-def test_partial_video_history_warns_that_timestamps_may_be_unreliable() -> None:
+def test_untimed_video_history_tells_the_agent_not_to_give_timestamps() -> None:
     converted = runner._model_history(
         [], deps=ConversationDeps(video_id="video", timestamps_reliable=False)
     )
 
     assert converted[1].parts[0].content == runner.PARTIAL_TIMING_PROMPT
+    assert "no timing data" in runner.PARTIAL_TIMING_PROMPT
 
 
 def test_an_answer_citing_only_retrieved_moments_is_accepted() -> None:
