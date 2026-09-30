@@ -444,7 +444,10 @@ def _require_chat_capable(
 
 def _timestamps_reliable(video_id: str, video_records: PostgresVideoRecords) -> bool:
     record = video_records.get_by_id(video_id)
-    return bool(record and record.video.transcript_timing_fidelity)
+    if record is None:
+        # Nothing is known about the timing, which is not the same as knowing there is none.
+        return True
+    return bool(record.video.transcript_timing_fidelity)
 
 
 def _owned_conversation(

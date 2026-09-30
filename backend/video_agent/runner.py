@@ -60,8 +60,9 @@ from .tools.visual_tools import VISUAL_TOOLS
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 MODEL_NAME = "gpt-6.1-sol"
 PARTIAL_TIMING_PROMPT = (
-    "The current video's transcript timing may be unreliable. Warn the user when making "
-    "timestamp-based statements, while still answering from the retrieved video content."
+    "The current video's transcript has no timing data, so the moments you retrieve carry no "
+    "reliable timestamps. Do not give timestamps or time ranges; tell the user they are "
+    "unavailable for this video, and still answer from the retrieved video content."
 )
 TOOLS = (
     get_video_info,
