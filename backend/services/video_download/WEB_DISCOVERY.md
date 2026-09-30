@@ -34,7 +34,7 @@ Configuration in backend/.env or the process environment:
 
 ```
 VIDSEEK_DISCOVERY_LLM=true
-VIDSEEK_DISCOVERY_MODEL=gpt-6-sol
+VIDSEEK_DISCOVERY_MODEL=gpt-6.1-sol
 ```
 
 The resolver uses the project's existing OPENAI_API_KEY_DUDU. Set

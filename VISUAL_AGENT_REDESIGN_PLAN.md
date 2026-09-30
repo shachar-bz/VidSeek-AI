@@ -286,7 +286,7 @@ Decisions the plan didn't cover, or that changed it:
 - The image model's two prompts live in `video_agent/image_analysis.py`.
 - `view_candidates` keeps the order the times were given (best hit first), not time order.
   Cells are labelled with their times, as in a sequence grid.
-- **No live `gpt-6-sol` test**, by choice. A runner test with `FunctionModel` checks that the
+- **No live `gpt-6.1-sol` test**, by choice. A runner test with `FunctionModel` checks that the
   close-up images reach the model and that `draft.spans` gets the frame times.
 - New tests: `test_video_agent_visual_budget.py`, `test_video_agent_view_sequence.py`,
   `test_video_agent_view_candidates.py`, `test_video_agent_view_frames_closeup.py`, with shared
@@ -327,7 +327,7 @@ Its docstring says the default window is the shot the start falls in.
     `FunctionToolResultEvent`.
   - `content`: each frame after a `Frame N at MM:SS` label, as `BinaryContent`.
 - One look per call.
-- Test with a real `gpt-6-sol` call through the Responses API that the agent receives the
+- Test with a real `gpt-6.1-sol` call through the Responses API that the agent receives the
   images. A unit test checks that `draft.spans` gets the frame times.
 
 **Tests.** Move and adapt `test_visual_agent_view_sequence.py` and the close-up and budget
