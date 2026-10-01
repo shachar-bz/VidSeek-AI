@@ -243,7 +243,7 @@ def test_keyframe_text_is_read_after_the_index_is_ready_and_stored_batch_by_batc
     order = []
     slide = OnScreenText("System design", "en", 0.9)
 
-    def read(local_path, keyframe_times, engine, *, stop_event):
+    def read(local_path, keyframe_times, engine, *, batch_size, stop_event):
         order.append(("read", status_writes(pool)[-1][0], local_path.exists(), list(keyframe_times)))
         return batches([KeyframeReading(0.0, slide)], [KeyframeReading(2.0, None)])
 
@@ -286,7 +286,7 @@ def test_an_ocr_failure_keeps_the_index_ready_and_what_was_read_before_it(tmp_pa
     path = local_video(tmp_path)
     pool = FakePool()
 
-    def read(local_path, keyframe_times, engine, *, stop_event):
+    def read(local_path, keyframe_times, engine, *, batch_size, stop_event):
         yield [KeyframeReading(0.0, OnScreenText("Agenda", "en", 0.8))]
         raise OcrError("Surya's worker exited")
 
