@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+from backend.core.captions import CaptionSegment, split_glued_cues
 from backend.schemas.browser import CaptionCandidate
 from backend.services.forced_alignment import AlignedWord, ForcedAlignmentResult
 from backend.services.video_download.web.transcript import (
@@ -24,6 +25,48 @@ def test_webvtt_parser_preserves_timing_and_removes_markup() -> None:
     assert segments[0].text == "Hello world"
     assert segments[0].start_seconds == 1.0
     assert segments[0].end_seconds == 2.5
+
+
+def test_webvtt_parser_splits_cues_with_no_blank_line_between_them() -> None:
+    segments = parse_webvtt_or_srt(
+        "WEBVTT\n\n"
+        "00:08:55.865 --> 00:08:58.902\nwe can maintain an incredible lead.\n"
+        "00:09:00.403 --> 00:09:04.774\nSA: beg them to give us their GPUs.\n\n"
+        "00:09:05.000 --> 00:09:07.000\nNext cue\n"
+    )
+    assert [(segment.start_seconds, segment.end_seconds, segment.text) for segment in segments] == [
+        (535.865, 538.902, "we can maintain an incredible lead."),
+        (540.403, 544.774, "SA: beg them to give us their GPUs."),
+        (545.0, 547.0, "Next cue"),
+    ]
+
+
+def test_srt_parser_drops_the_identifier_of_a_cue_with_no_blank_line_before_it() -> None:
+    segments = parse_webvtt_or_srt(
+        "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:02,000 --> 00:00:03,000\nSecond\n"
+    )
+    assert [segment.text for segment in segments] == ["First", "Second"]
+
+
+def test_a_glued_cue_is_split_back_out_with_its_own_times() -> None:
+    pieces = split_glued_cues(
+        "we can maintain an incredible lead. 00:09:00.403 --> 00:09:04.774 SA: beg them for GPUs.",
+        535.865,
+        538.902,
+    )
+    assert [(piece.start_seconds, piece.end_seconds, piece.text) for piece in pieces] == [
+        (535.865, 538.902, "we can maintain an incredible lead."),
+        (540.403, 544.774, "SA: beg them for GPUs."),
+    ]
+
+
+def test_a_glued_cue_merged_with_a_later_cue_ends_where_the_stretch_does() -> None:
+    pieces = split_glued_cues("Hi 00:00:01.000 --> 00:00:02.000 there, and later words", 0.0, 6.0)
+    assert [(piece.start_seconds, piece.end_seconds) for piece in pieces] == [(0.0, 6.0), (1.0, 6.0)]
+
+
+def test_text_with_no_glued_cue_comes_back_whole() -> None:
+    assert split_glued_cues("Just speech", 1.0, 2.0) == [CaptionSegment("Just speech", 1.0, 2.0)]
 
 
 def test_ttml_parser_reads_paragraph_cues() -> None:

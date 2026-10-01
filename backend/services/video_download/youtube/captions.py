@@ -91,29 +91,26 @@ def _iter_cues(vtt_text: str):
     """Yield each cue as `(start_seconds, end_seconds, text_lines)`, skipping non-cue blocks.
 
     A block with no timing line is the WEBVTT header, a NOTE or a style block, and is left
-    out entirely. `text_lines` is everything after the timing line; a line before it is the
-    cue's optional identifier, which is not part of what anyone said.
+    out entirely. `text_lines` is everything after the timing line up to the next one; a line
+    before the first is the cue's optional identifier, which is not part of what anyone said.
+    A block holding several timing lines is several cues whose blank lines were left out, and
+    each is yielded on its own rather than read as one cue's text.
     """
     for block in CUE_SEPARATOR_PATTERN.split(vtt_text.replace("\r\n", "\n")):
         lines = block.splitlines()
-        timing_index = next(
-            (index for index, line in enumerate(lines) if CUE_TIMING_SEPARATOR in line),
-            None,
-        )
-        if timing_index is None:
-            continue
+        timing_indexes = [index for index, line in enumerate(lines) if CUE_TIMING_SEPARATOR in line]
+        for timing_index, text_end in zip(timing_indexes, [*timing_indexes[1:], len(lines)]):
+            start_raw, _, end_raw = lines[timing_index].partition(CUE_TIMING_SEPARATOR)
+            # Cue settings such as `align:start position:0%` ride along after the end stamp.
+            end_stamp = end_raw.split()
+            if not end_stamp:
+                continue
 
-        start_raw, _, end_raw = lines[timing_index].partition(CUE_TIMING_SEPARATOR)
-        # Cue settings such as `align:start position:0%` ride along after the end stamp.
-        end_stamp = end_raw.split()
-        if not end_stamp:
-            continue
-
-        yield (
-            parse_timestamp_seconds(start_raw),
-            parse_timestamp_seconds(end_stamp[0]),
-            lines[timing_index + 1 :],
-        )
+            yield (
+                parse_timestamp_seconds(start_raw),
+                parse_timestamp_seconds(end_stamp[0]),
+                lines[timing_index + 1 : text_end],
+            )
 
 
 def _parse_cue_lines(cues) -> list[CaptionSegment]:

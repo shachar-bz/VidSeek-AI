@@ -13,6 +13,20 @@ import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 
+# A WebVTT or SRT timestamp: hours optional, comma or dot before the milliseconds.
+_TIMESTAMP = r"\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3}"
+
+# One cue: its timing line, then its text up to a blank line, the next cue's timing line
+# (with or without an SRT identifier above it), or the end of the file.
+CUE_PATTERN = re.compile(
+    rf"(?P<start>{_TIMESTAMP})\s+-->\s+(?P<end>{_TIMESTAMP})[^\n]*\n"
+    rf"(?P<text>.*?)(?=\n\s*\n|\n(?:\d+\n)?{_TIMESTAMP}\s+-->|\Z)",
+    re.DOTALL,
+)
+
+# A cue's timing line as it reads once glued into another cue's text, the line breaks gone.
+GLUED_TIMING_PATTERN = re.compile(rf"\s*({_TIMESTAMP})\s+-->\s+({_TIMESTAMP})\s*")
+
 
 @dataclass(frozen=True)
 class CaptionSegment:
@@ -43,16 +57,16 @@ def clean_caption_text(value: str) -> str:
 
 
 def parse_webvtt_or_srt(content: str) -> list[CaptionSegment]:
-    """Parse ordinary WebVTT or SRT cues without retaining formatting tags."""
+    """Parse ordinary WebVTT or SRT cues without retaining formatting tags.
+
+    A cue's text ends at a blank line, or at the next cue's timing line when the file leaves
+    the blank line out, as some sites' tracks do. Without the second stop the next cue is
+    swallowed whole, its timing line read as speech and its words timed as this cue's.
+    A number on the line just before that timing line is the next cue's SRT identifier.
+    """
     normalized = content.replace("\r\n", "\n").replace("\r", "\n")
-    timing = re.compile(
-        r"(?P<start>\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3})\s+-->\s+"
-        r"(?P<end>\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3})[^\n]*\n"
-        r"(?P<text>.*?)(?=\n\s*\n|\Z)",
-        re.DOTALL,
-    )
     segments = []
-    for match in timing.finditer(normalized):
+    for match in CUE_PATTERN.finditer(normalized):
         cue_text = clean_caption_text(" ".join(match.group("text").splitlines()))
         if cue_text:
             segments.append(
@@ -63,6 +77,36 @@ def parse_webvtt_or_srt(content: str) -> list[CaptionSegment]:
                 )
             )
     return segments
+
+
+def split_glued_cues(text: str, start_seconds: float, end_seconds: float) -> list[CaptionSegment]:
+    """Undo what the parser did before it stopped at a timing line: one stretch, several cues.
+
+    For repairing a transcript stored while that bug stood, where a swallowed cue's timing
+    line sits inside the text it was glued into. The words after each glued timing line are
+    given that line's times; the words before the first keep the stretch's own. A glued cue
+    may have been merged with a later cue whose words cannot be told apart from its own, so
+    the last piece ends at whichever is later, its own end or the stretch's: wide, but never
+    claiming less than was said. Text with no timing line in it comes back as one piece.
+    """
+    parts = GLUED_TIMING_PATTERN.split(text)
+    pieces = []
+    if parts[0].strip():
+        pieces.append(CaptionSegment(text=parts[0].strip(), start_seconds=start_seconds, end_seconds=end_seconds))
+    for position in range(1, len(parts), 3):
+        glued_text = parts[position + 2].strip()
+        if not glued_text:
+            continue
+        glued_end = parse_timestamp_seconds(parts[position + 1])
+        is_last = position + 3 >= len(parts)
+        pieces.append(
+            CaptionSegment(
+                text=glued_text,
+                start_seconds=parse_timestamp_seconds(parts[position]),
+                end_seconds=max(glued_end, end_seconds) if is_last else glued_end,
+            )
+        )
+    return pieces
 
 
 def parse_ttml(content: str) -> list[CaptionSegment]:

@@ -46,6 +46,15 @@ def test_manual_captions_stay_at_cue_level() -> None:
     ]
 
 
+def test_cues_with_no_blank_line_between_them_stay_separate() -> None:
+    segments, _ = parse_vtt(MANUAL_VTT.replace("show.\n\n", "show.\n"), is_automatic=False)
+
+    assert [(segment.start_seconds, segment.end_seconds, segment.text) for segment in segments] == [
+        (0.0, 3.5, "Hello everyone, welcome to the show."),
+        (3.5, 7.0, "Today we talk about testing."),
+    ]
+
+
 def test_automatic_captions_are_read_word_by_word() -> None:
     segments, timing_fidelity = parse_vtt(AUTOMATIC_VTT, is_automatic=True)
 
