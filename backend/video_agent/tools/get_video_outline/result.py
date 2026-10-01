@@ -2,10 +2,10 @@
 
 Pydantic models rather than the store's dataclasses, for the same reason
 `get_chapter_context.result` has its own: this is the tool's contract with the model.
-Pydantic AI turns these into the JSON schema the outline is serialized against, and the
-field descriptions below are what the model reads to know that the times are seconds into
-the video, that the chapters arrive in the order they are watched in, and that a summary
-is all it is being given of each one.
+Pydantic AI serializes the outline through these, but the model is not sent their schema: it
+sees field names and values only. So what it must know to read the result, that the chapters
+arrive in the order they are watched in and that a summary is all it is being given of each
+one, is said in the tool's docstring, and the field descriptions below document the code.
 """
 
 from __future__ import annotations

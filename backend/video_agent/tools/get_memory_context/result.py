@@ -2,10 +2,11 @@
 
 An envelope rather than a flat list of memories, because a flat list cannot say the three
 things the agent needs alongside the text: which memory it asked about, which section it is
-reading, and why a side stopped where it did. Pydantic AI turns these models into the JSON
-schema the result is serialized against, so the field descriptions below are what the model
-reads to know that the times are seconds into the video and that an absent boundary means
-nothing was left out.
+reading, and why a side stopped where it did. Pydantic AI serializes the result through these
+models, but the model is not sent their schema: it sees field names and values only. So what
+it must know to read the result, such as that an absent boundary means nothing was left out
+and what each boundary reason means, is said in the tool's docstring, and the field
+descriptions below document the code.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from pydantic import BaseModel, Field
 # Why one side of the window holds fewer memories than were asked for. `chapter_start` and
 # `chapter_end` are the chapter's own edges; `memory_not_grouped` is the different case of
 # a memory the chapter-grouping stage has not reached yet, which has no chapter to read
-# around at all. A Literal rather than a sentence: the model sees the whole set of states
-# in the schema instead of parsing prose to find out which one it is in.
+# around at all. A Literal rather than a sentence: a fixed set of states the tool's
+# docstring can name, instead of prose the model would parse to find out which one it is in.
 BoundaryReason = Literal["chapter_start", "chapter_end", "memory_not_grouped"]
 
 

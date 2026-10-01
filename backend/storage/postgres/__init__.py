@@ -24,8 +24,8 @@ from .memories import NewMemory, PostgresMemories, StoredMemory
 from .memory_embeddings import (
     MemoryEmbedding,
     MemoryForEmbedding,
-    MemoryMatch,
     PostgresMemoryEmbeddings,
+    ScoredMemory,
 )
 from .library_views import LibraryViewRow, PostgresLibraryViews
 from .messages import PostgresMessages, StoredMessage
@@ -62,7 +62,6 @@ __all__ = [
     "KeyframeTextMatch",
     "MemoryEmbedding",
     "MemoryForEmbedding",
-    "MemoryMatch",
     "LibraryViewRow",
     "NewChapter",
     "NewFrameEmbedding",
@@ -90,6 +89,7 @@ __all__ = [
     "PostgresVideoJobs",
     "PostgresVideoRecords",
     "PostgresVisualIndex",
+    "ScoredMemory",
     "StoredChapter",
     "StoredChapterMemory",
     "StoredChapterOutline",

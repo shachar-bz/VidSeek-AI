@@ -4,6 +4,9 @@ A frame here resembles the query; it is not known to show it. So no field is nam
 `start_seconds`/`end_seconds`: the citation check collects every such pair in a tool result
 (`video_agent/citations.py`), and a frame only the embeddings have seen must not become
 something the answer may cite. It becomes citable once a look tool has shown it.
+
+The frames come best first, without how far each stood out from the rest of the video: the
+order and `weak` are what the agent reads them by.
 """
 
 from __future__ import annotations
@@ -21,9 +24,6 @@ class PictureMatch(BaseModel):
     shot_start_seconds: float = Field(description="Where the shot the frame is in starts, in seconds.")
     shot_end_seconds: float = Field(description="Where that shot ends, in seconds.")
     chapter: str | None = Field(default=None, description="The title of the chapter the frame is in, if any.")
-    score: float = Field(
-        description="How far the frame stood out from the rest of this video, in standard deviations; higher is a stronger match."
-    )
     weak: bool = Field(
         default=False,
         description="True when nothing stood out and this is only one of the closest frames: probably not what was asked for.",

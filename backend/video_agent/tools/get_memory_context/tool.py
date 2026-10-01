@@ -35,25 +35,29 @@ def get_memory_context(
     memory_id: str,
     context_range: int = DEFAULT_CONTEXT_RANGE,
 ) -> MemoryContext:
-    """Read a memory of this video together with the memories around it in the same chapter.
+    """Read what was said in a moment of this video, with the moments around it in the same chapter.
 
-    Call this when you have a memory id, from a search or from an earlier lookup, and need
-    what was said around it to understand it: what led up to a moment, or what followed it.
-    Context never crosses into another chapter; when a side runs out, the result names the
-    chapter beyond it so you can follow the thread there.
+    Call this when you have a moment's memory id, from a search or from an earlier lookup,
+    and need what was said in it or around it: the words themselves, what led up to them, or
+    what followed. Context never crosses into another chapter; when a side runs out, the
+    result names the chapter beyond it so you can follow the thread there.
 
     Args:
-        memory_id: The id of the memory to read around.
-        context_range: How many memories to read on each side of it. Each side is bounded
-            independently, so a side that runs out of chapter does not make the other side
-            any shorter. Clamped to at most 10.
+        memory_id: The memory id of the moment to read.
+        context_range: How many moments to read on each side of it; 0 reads just the moment
+            itself. Each side is bounded independently, so a side that runs out of chapter
+            does not make the other side any shorter. Clamped to 0-10.
 
     Returns:
-        The memory, the memories either side of it within its chapter, and, for each side
-        that was cut short, why it stopped and which chapter lies beyond.
+        The moment and the moments either side of it within its chapter, each with what was
+        said (`text`) and a one-line summary. `context_range_used` is the range actually
+        read, after clamping. A side's boundary is null when that side gave the full range;
+        otherwise its `reason` is `chapter_start` or `chapter_end`, with the chapter beyond
+        it (no chapter id where the video itself begins or ends), or `memory_not_grouped`:
+        the moment is in no chapter yet, so nothing around it can be read.
 
     Raises:
-        ModelRetry: No memory of this video has that id.
+        ModelRetry: No moment of this video has that memory id.
     """
     resolved_range = _clamp(context_range)
     target = _load_target(ctx, memory_id)
@@ -114,8 +118,8 @@ def _load_target(ctx: RunContext[ConversationDeps], memory_id: str) -> StoredMem
         target = PostgresMemories(ctx.deps.pool).get(ctx.deps.video_id, memory_id)
     if target is None:
         raise ModelRetry(
-            f"No memory of this video has the id {memory_id!r}. "
-            "Search the video's memories to get an id that exists."
+            f"No moment of this video has the memory id {memory_id!r}. "
+            "Search the video's moments to get an id that exists."
         )
     return target
 

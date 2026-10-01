@@ -119,7 +119,8 @@ def test_a_picture_hit_comes_back_as_a_frame_in_its_shot_and_is_not_citable() ->
     assert (frame.frame_seconds, frame.timestamp) == (26.0, "00:26")
     assert (frame.shot_start_seconds, frame.shot_end_seconds) == (20.0, 40.0)
     assert frame.chapter == "Opening"
-    assert frame.score > 1.5 and frame.score == round(frame.score, 2)
+    # How far a frame stood out ranks the frames; the agent is given the order, not the number.
+    assert "score" not in frame.model_dump()
     assert frame.weak is False
     assert result.note is None
     # Resembling the query is not showing it: nothing here is a span the answer may cite.

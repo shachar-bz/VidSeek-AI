@@ -48,7 +48,11 @@ async def search_screen_text(
 
     Returns:
         The moments found, exact-word matches first, and a note when nothing was searched or
-        found, or OCR is still reading.
+        found, or OCR is still reading. Each moment's `found_by` says what matched:
+        `text_characters` (the exact words) or `text_meaning`. Its `on_screen_text` is what OCR
+        read on one keyframe, ending with … when cut; a moment over several keyframes may show
+        more. Its `shot_boundary` says how its shot began: `video_start`, `scene_change`, or
+        `text_change` (new text on the same screen, such as the next slide).
     """
     deps = ctx.deps
     budget = deps.visual_budget
