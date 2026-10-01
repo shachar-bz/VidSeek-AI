@@ -117,6 +117,24 @@ def visual_indexing_enabled() -> bool:
     )
 
 
+def model_preload_enabled() -> bool:
+    """Whether the API loads its embedding models in the background as soon as it starts.
+
+    On by default, so the first chat question after a restart does not wait for the text
+    model and the first visual search does not wait for SigLIP 2. Turning it off leaves
+    both to load on first use, which is how a machine short on memory, or a test, avoids
+    holding them.
+    """
+    raw_value = (get("VIDSEEK_PRELOAD_MODELS", "true") or "true").strip().lower()
+    if raw_value in {"true", "1", "yes", "on"}:
+        return True
+    if raw_value in {"false", "0", "no", "off"}:
+        return False
+    raise RuntimeError(
+        f"VIDSEEK_PRELOAD_MODELS must be true or false (received {raw_value!r})"
+    )
+
+
 def ocr_python_path() -> Path | None:
     """The Python interpreter of the separate environment Surya is installed in, or None.
 

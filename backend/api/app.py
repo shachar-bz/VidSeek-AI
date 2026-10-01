@@ -32,6 +32,7 @@ from backend.storage.postgres import (
 from backend.video_agent import ConversationAgentRunner, PydanticConversationAgentRunner
 from backend.video_agent.generation import GenerationRegistry
 
+from .model_preload import start_model_preload
 from .routes import account, auth, conversations, health, library, sessions, video_jobs, videos
 
 LOOPBACK_CLIENTS = {"127.0.0.1", "::1", "testclient"}
@@ -77,6 +78,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        start_model_preload()
         yield
         manager.shutdown()
 
