@@ -144,6 +144,14 @@ from public.video_keyframes
 where video_id = %s::uuid and ocr_engine is null
 """
 
+# The times of the keyframes OCR has not read, in time order.
+UNREAD_KEYFRAME_TIMES_SQL = """
+select time_seconds
+from public.video_keyframes
+where video_id = %s::uuid and ocr_engine is null
+order by time_seconds
+"""
+
 # Every keyframe of one video with what OCR made of it and the segment it belongs to, in time
 # order: enough to tell which keyframe's text covers a given time, and whether it was read.
 KEYFRAMES_SQL = """
@@ -463,6 +471,12 @@ class PostgresVisualIndex:
         with connection(self._pool) as open_connection:
             row = open_connection.execute(UNREAD_KEYFRAME_COUNT_SQL, (video_id,)).fetchone()
         return int(row["unread_count"]) if row else 0
+
+    def unread_keyframe_times(self, video_id: str) -> list[float]:
+        """The times of this video's keyframes OCR has not read, in time order."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(UNREAD_KEYFRAME_TIMES_SQL, (video_id,)).fetchall()
+        return [float(row["time_seconds"]) for row in rows]
 
 
 def _keyframe_text_match(row: dict) -> KeyframeTextMatch:

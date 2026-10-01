@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,7 +39,7 @@ from backend.services.visual_indexing import (
     read_keyframe_text,
 )
 from backend.services.ocr import OcrEngine
-from backend.services.visual_indexing.segments import VisualSegment
+from backend.services.visual_indexing.keyframe_text import KEYFRAMES_PER_BATCH
 from backend.storage.postgres import (
     KeyframeText,
     NewFrameEmbedding,
@@ -168,11 +168,11 @@ def index_video_visually(
             ],
             index_version=CURRENT_VISUAL_INDEX_VERSION,
         )
-        text_reading = _read_on_screen_text(
+        text_reading = read_on_screen_text(
             store,
             video_id,
             local_path,
-            built.segments,
+            [time_seconds for segment in built.segments for time_seconds in segment.keyframe_times],
             engine=ocr_engine,
             embed_texts=embed_texts,
             stop_event=stop_event,
@@ -201,17 +201,18 @@ def index_video_visually(
         _delete_local_copy(local_path)
 
 
-def _read_on_screen_text(
+def read_on_screen_text(
     store: PostgresVisualIndex,
     video_id: str,
     local_path: Path,
-    segments: tuple[VisualSegment, ...],
+    keyframe_times: Sequence[float],
     *,
     engine: OcrEngine | None,
     embed_texts: EmbedTexts | None,
     stop_event: threading.Event | None,
+    batch_size: int = KEYFRAMES_PER_BATCH,
 ) -> _TextReadingOutcome:
-    """Read every keyframe's text and store it batch by batch; never raises.
+    """Read the text of these keyframes and store it batch by batch; never raises.
 
     The index is already `ready`, so a failure here costs only the text not yet read: what
     was stored before it stays, and the keyframes after it keep no engine on their rows.
@@ -220,10 +221,11 @@ def _read_on_screen_text(
         logger.info("No OCR engine is set up; the keyframes of video %s are left unread", video_id)
         return _TextReadingOutcome()
     embed_texts = embed_texts or _embed_with_e5
-    keyframe_times = [time_seconds for segment in segments for time_seconds in segment.keyframe_times]
     read = with_text = 0
     try:
-        for batch in read_keyframe_text(local_path, keyframe_times, engine, stop_event=stop_event):
+        for batch in read_keyframe_text(
+            local_path, keyframe_times, engine, batch_size=batch_size, stop_event=stop_event
+        ):
             shown = [reading.text for reading in batch if reading.text is not None]
             vectors = iter(embed_texts([text.text for text in shown]) if shown else ())
             store.set_keyframe_text(

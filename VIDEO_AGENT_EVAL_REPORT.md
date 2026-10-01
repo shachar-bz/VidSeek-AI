@@ -445,7 +445,7 @@ The memories and chapters of these two videos were rebuilt by the LLM, so their 
 
 Still open:
 
-- §8.8, OCR: `visual_status` still says `ready` while OCR is incomplete, and an interrupted OCR pass never resumes, because the local video file is deleted once indexing ends (`bdeac510`: 8 of 78 keyframes read). Left for a separate run. A resume would read frames back from Blob Storage, which `ARCHITECTURE.md` currently rules out for visual indexing.
+- §8.8, OCR: `visual_status` still says `ready` while OCR is incomplete. Missing frames were read on 2026-10-01 with `python -m backend.download_pipeline.resume_keyframe_text VIDEO_ID --apply`, which fetches the video back from Blob Storage and reads only the unread keyframes: `bdeac510` (70, 4 with text), `b713291c` (24, 4) and `55705079` (9, 0) are complete. `3e04897d` (46 of 58 unread) is not: its slides are dense, and batches of four timed out or stalled; the script now reads one frame at a time, untested. An interrupted OCR pass still does not resume by itself.
 - §7 issue 5 and §8.4: the visual routing is still too broad (T14).
 - §8.1 follow-up: the fixed questions are now about 2 to 5 times slower (T2, T11, T15). This could be cut by not repeating a search once the outline already names the candidates.
 - §7 issue 4 and §8.6: the citation check is still loose.

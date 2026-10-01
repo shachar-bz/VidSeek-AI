@@ -124,7 +124,9 @@ The rules bind production code. Tests (`backend/tests/`, `frontend/tests/`,
   and is the only declaration of the wire format the website is written against.
 * `services/video_frames/` is used only at query time. Visual indexing reads the local copy
   of a video while it exists and never goes through Blob Storage; nothing reads frames back
-  from anywhere but the stored video, because no frame is ever stored.
+  from anywhere but the stored video, because no frame is ever stored. The one exception is
+  the one-off `download_pipeline/resume_keyframe_text.py`, which fetches the stored video back
+  to read the keyframes an interrupted OCR pass left unread.
 * `services/visual_indexing/` touches no database; `download_pipeline/visual_indexing.py`
   stores what it builds and is the one stage that owns, and deletes, the local video file.
 * `services/ocr/surya/worker.py` runs in Surya's own Python environment, not
