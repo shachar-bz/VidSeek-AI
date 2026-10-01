@@ -361,6 +361,7 @@ Ordered by expected impact. Which of these have been implemented since is listed
    - The prompt should say it returns summaries.
    - The recipe should end with `get_memory_context(memory_id, context_range=0)`.
    - Alternatively, have `get_video_outline` return each chapter's memory ids and spans. That would cut T4-style questions from 3 sequential rounds to 2.
+   - **Done:** the first two bullets, see §10 (§7 issue 2). The outline alternative was deliberately not taken: it helps only time-based questions, since ids and spans say nothing about what a moment contains, and it would grow every outline call for about 2.5 s saved.
 3. **Pair "where is X" transcript searches with the outline.** The outline is a 20 ms call, and together they cover more than the top 5 hits (issue 3). Also consider returning a similarity score, so "off-target" can be judged from data.
 4. **Narrow the visual routing (issue 5).** Visual tools should handle "what does it look like / what is on screen". Locating an activity that is also narrated should go to transcript tools first, with visual tools only if speech fails. This saves 20–40 s on such questions.
 5. **Cut perceived latency.**
