@@ -4,7 +4,7 @@
 - **Agent under test:** `backend/video_agent`, model `gpt-6.1-sol` on the OpenAI Responses API, image model `gpt-6-luna`.
 - **Scope:** a one-off check of tool choice, tool order, how tool results are used, grounding, tool descriptions, and latency.
 - **Method:** each test ran once. Every claim in every answer was checked against the database, and the visual answers against extracted frames.
-- **Code changes:** none. The agent implementation was not modified.
+- **Code changes:** none during the evaluation itself. The agent implementation was not modified. A follow-up fix is described in §10.
 
 ## 1. Summary
 
@@ -377,3 +377,28 @@ Ordered by expected impact.
 - **Multi-turn follow-ups:** not tested, including reuse of earlier timestamps (issue 6).
 - **Run-to-run variance:** each test ran once.
 - **The HTTP/SSE layer.**
+
+## 10. Follow-up: fixes made after this report
+
+Branch `fix/video-agent-tool-descriptions`, merged into `main` on 2026-10-01. The test results above describe the agent as it was on 2026-09-30 and were not re-run. The unit tests pass (964 passed, 1 skipped); nothing has been re-checked against the live model.
+
+Done:
+
+| Item | Change |
+|---|---|
+| §7 issue 1, §8.7 (field descriptions never sent) | Not fixed by enabling the return schema. The field meanings the model needs were moved into the tool docstrings (`get_memory_context`, `search_screen_text`, `view_sequence`). The other tools were already covered by the prompt or self-explanatory. |
+| §7 issue 2, §8.2 (`get_chapter_context`) | The prompt's tool list was removed in favor of two routing lines. The docstrings of `get_chapter_context` and `get_video_outline` no longer imply full text, and `get_chapter_context` points to `get_memory_context` for the words. The timestamp recipe now ends with `get_memory_context(memory_id, context_range=0)`. |
+| §7 issue 3, §8.3 (search always returns 5 hits) | `memories_semantic_search` scores every memory of the video and returns those with z >= 1.5 against the video's own scores, at most 8, closest first. When none stands out, it returns the 3 closest marked `weak`, with a note. The z-score is not sent to the model. The logic is in `backend/services/memory_search.py`. |
+| §8.3 (pair "where is X" with the outline) | The prompt now has the model call search and `get_video_outline` in the same round for "where / when" questions. |
+| §7 issue 6 (wording) | "segments" is now "moments" throughout, and the "semanitc" typo is gone. |
+| Not in the report | `search_visual_moments` no longer sends its `score` field. |
+
+Still open:
+
+- §7 issue 5 and §8.4: the visual routing is still too broad (T14).
+- §8.1: multi-part completeness (T2, T11, T15).
+- §7 issue 4 and §8.6: the citation check is still loose.
+- §8.5: latency, including preloading the embedding models and streaming the answer.
+- §8.8: data hygiene.
+
+To re-check: T4, T10, T11, T12, T14 and T15 through the production runner. T11 matters most, since z >= 1.5 gives fewer hits on some searches (3 for "seam carving", 6 for "pumpkin pie" on the dev data), and the 8-hit cap is untested against T14.
