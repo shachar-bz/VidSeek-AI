@@ -361,6 +361,7 @@ Ordered by expected impact. Which of these have been implemented since is listed
    - The prompt should say it returns summaries.
    - The recipe should end with `get_memory_context(memory_id, context_range=0)`.
    - Alternatively, have `get_video_outline` return each chapter's memory ids and spans. That would cut T4-style questions from 3 sequential rounds to 2.
+   - **Done:** the first two bullets, see §10 (§7 issue 2). The outline alternative was deliberately not taken: it helps only time-based questions, since ids and spans say nothing about what a moment contains, and it would grow every outline call for about 2.5 s saved.
 3. **Pair "where is X" transcript searches with the outline.** The outline is a 20 ms call, and together they cover more than the top 5 hits (issue 3). Also consider returning a similarity score, so "off-target" can be judged from data.
 4. **Narrow the visual routing (issue 5).** Visual tools should handle "what does it look like / what is on screen". Locating an activity that is also narrated should go to transcript tools first, with visual tools only if speech fails. This saves 20–40 s on such questions.
 5. **Cut perceived latency.**
@@ -450,6 +451,6 @@ Still open:
 - §7 issue 4 and §8.6: the citation check is still loose.
 - §8.5: cutting sequential rounds. The model preload and answer streaming are done; streaming is checked against the live model for two questions, not re-measured across the suite, and the web client and extension were not run against it.
 
-Migration `0028_message_retrieved_spans.sql` is applied to the dev database. Any other database needs `python -m backend.storage.postgres.migrate` before the streaming code is deployed, because finalizing an answer writes the new column.
+Migration `0028_message_retrieved_spans.sql` is applied to the Azure database (the only one the project configures); `schema_migrations` records it on 2026-10-01 and `messages.retrieved_spans` exists. A database created elsewhere needs `python -m backend.storage.postgres.migrate` before the streaming code runs against it, because finalizing an answer writes the new column.
 
 To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. Also T5 to T9, whose two videos were re-segmented by the caption repair; T8 should now cite the GPU line at [09:00]. T11 and T15 were re-checked with the multi-part fix above; both passed. All of them now run through the streaming runner too.
