@@ -48,6 +48,14 @@ where video_id = %s::uuid and start_seconds < %s and end_seconds > %s
 order by segment_index
 """
 
+# Every video with a caption cue's timing line inside a segment's text, which only the caption
+# parser's old blank-line bug put there.
+GLUED_CUE_VIDEOS_SQL = rf"""
+select distinct video_id::text as video_id from public.{TABLE_NAME}
+where text ~ '\d{{1,2}}:\d{{2}}(:\d{{2}})?[.,]\d{{3}}\s+-->\s+\d{{1,2}}:\d{{2}}(:\d{{2}})?[.,]\d{{3}}'
+order by 1
+"""
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,6 +118,12 @@ class PostgresTranscriptSegments:
                 OVERLAPPING_SQL, (video_id, end_seconds, start_seconds)
             ).fetchall()
         return [_from_row(row) for row in rows]
+
+    def video_ids_with_glued_cues(self) -> list[str]:
+        """Every video whose stored speech still holds a caption cue's timing line."""
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(GLUED_CUE_VIDEOS_SQL).fetchall()
+        return [row["video_id"] for row in rows]
 
     def delete(self, video_id: str) -> None:
         """Forget this video's transcript, leaving the video itself alone."""

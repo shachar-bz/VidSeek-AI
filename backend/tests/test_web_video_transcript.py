@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+from backend.core.captions import CaptionSegment, split_glued_cues
 from backend.schemas.browser import CaptionCandidate
 from backend.services.forced_alignment import AlignedWord, ForcedAlignmentResult
 from backend.services.video_download.web.transcript import (
@@ -45,6 +46,27 @@ def test_srt_parser_drops_the_identifier_of_a_cue_with_no_blank_line_before_it()
         "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:02,000 --> 00:00:03,000\nSecond\n"
     )
     assert [segment.text for segment in segments] == ["First", "Second"]
+
+
+def test_a_glued_cue_is_split_back_out_with_its_own_times() -> None:
+    pieces = split_glued_cues(
+        "we can maintain an incredible lead. 00:09:00.403 --> 00:09:04.774 SA: beg them for GPUs.",
+        535.865,
+        538.902,
+    )
+    assert [(piece.start_seconds, piece.end_seconds, piece.text) for piece in pieces] == [
+        (535.865, 538.902, "we can maintain an incredible lead."),
+        (540.403, 544.774, "SA: beg them for GPUs."),
+    ]
+
+
+def test_a_glued_cue_merged_with_a_later_cue_ends_where_the_stretch_does() -> None:
+    pieces = split_glued_cues("Hi 00:00:01.000 --> 00:00:02.000 there, and later words", 0.0, 6.0)
+    assert [(piece.start_seconds, piece.end_seconds) for piece in pieces] == [(0.0, 6.0), (1.0, 6.0)]
+
+
+def test_text_with_no_glued_cue_comes_back_whole() -> None:
+    assert split_glued_cues("Just speech", 1.0, 2.0) == [CaptionSegment("Just speech", 1.0, 2.0)]
 
 
 def test_ttml_parser_reads_paragraph_cues() -> None:
