@@ -7,18 +7,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Protocol
 
-from pydantic import TypeAdapter
 from pydantic_ai import (
     Agent,
-    AgentRunResultEvent,
     FunctionToolCallEvent,
     FunctionToolResultEvent,
-    ModelRetry,
     PartDeltaEvent,
     PartStartEvent,
-    RunContext,
     TextPartDelta,
-    UnexpectedModelBehavior,
 )
 from pydantic_ai.messages import (
     ModelMessage,
@@ -59,6 +54,7 @@ from .tools.visual_tools import VISUAL_TOOLS
 # looks for the standard OPENAI_API_KEY instead, which this project never sets.
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 MODEL_NAME = "gpt-6.1-sol"
+PARAGRAPH_BREAK = "\n\n"
 PARTIAL_TIMING_PROMPT = (
     "The current video's transcript has no timing data, so the moments you retrieve carry no "
     "reliable timestamps. Do not give timestamps or time ranges; tell the user they are "
@@ -143,30 +139,7 @@ def build_agent(model: str = MODEL_NAME) -> Agent[ConversationDeps, str]:
         tools=list(TOOLS),
         defer_model_check=True,
     )
-    agent.output_validator(_verify_citations)
     return agent
-
-
-def _verify_citations(ctx: RunContext[ConversationDeps], output: str) -> str:
-    """Hold a finished answer to the standard a tool already holds a memory id to.
-
-    A timestamp the model reconstructed reads exactly like one it retrieved, and the website
-    turns each of them into a button that seeks the video, so an unchecked citation is a
-    control that lies about where it goes. Rejecting one costs a whole regenerated answer,
-    which is why the budget is a single retry and why an unfixable answer is stripped rather
-    than refused.
-    """
-
-    unsupported = citations.unverified(output, ctx.deps.draft.spans)
-    if not unsupported:
-        return output
-    ctx.deps.draft.text = output
-    ctx.deps.draft.rejected = True
-    raise ModelRetry(
-        f"These citations name moments no tool returned during this answer: {', '.join(unsupported)}. "
-        "Cite only timestamps that appeared in a tool result, written as [MM:SS] or "
-        "[H:MM:SS], or retrieve the moment before citing it."
-    )
 
 
 class PydanticConversationAgentRunner:
@@ -183,46 +156,48 @@ class PydanticConversationAgentRunner:
         deps: ConversationDeps,
     ) -> AsyncIterator[AgentEvent]:
         agent = self._agent or build_agent()
-        try:
-            async with agent.run_stream_events(
-                prompt, deps=deps, message_history=_model_history(history, deps=deps)
-            ) as events:
-                async for event in events:
-                    # Written text is collected rather than forwarded. Citations can only be
-                    # checked once the answer is whole, and a rejected answer is replaced by
-                    # a freshly streamed one with no signal to discard what came before, so
-                    # anything forwarded early is text the reader would have to un-read.
-                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
-                        deps.draft.text = event.part.content or ""
-                    elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                        deps.draft.text += event.delta.content_delta or ""
-                    elif isinstance(event, FunctionToolCallEvent):
-                        yield ToolStarted(
-                            call_id=event.part.tool_call_id,
-                            tool=event.part.tool_name,
-                            arguments=event.part.args_as_dict(raise_if_invalid=True),
-                            started_at=_now(),
-                        )
-                    elif isinstance(event, FunctionToolResultEvent):
-                        is_error = getattr(event.part, "part_kind", "") == "retry-prompt"
-                        if not is_error:
-                            deps.draft.record(event.part.content)
-                        yield ToolFinished(
-                            call_id=event.tool_call_id,
-                            summary=None if is_error else _summarize_result(event.part.content),
-                            finished_at=_now(),
-                            error="Retrieval failed" if is_error else None,
-                        )
-                    elif isinstance(event, AgentRunResultEvent):
-                        yield TextFragment(TypeAdapter(str).validate_python(event.result.output))
-        except UnexpectedModelBehavior:
-            # Only the retry budget running out on the citation check is recoverable here:
-            # the answer itself is almost certainly sound and it is the citation that is
-            # wrong, so it is delivered without the timestamps it could not support. Any
-            # other unexpected behaviour is a real failure and stays one.
-            if not deps.draft.rejected:
-                raise
-            yield TextFragment(deps.draft.verifiable_text())
+        # Citations are checked one at a time as they close, so the answer can be forwarded as
+        # it is written. A citation no tool backs is dropped instead of sending the whole answer
+        # back to be rewritten, which would leave the reader with text they would have to unread.
+        citation_filter = citations.CitationFilter(deps.retrieved.spans)
+        shown_any = False
+
+        async with agent.run_stream_events(
+            prompt, deps=deps, message_history=_model_history(history, deps=deps)
+        ) as events:
+            async for event in events:
+                written: str | None = None
+                if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                    # Text a model writes before calling a tool, and again once the tool has
+                    # answered, would run together as one sentence without this break.
+                    written = (PARAGRAPH_BREAK if shown_any else "") + citation_filter.feed(
+                        event.part.content or ""
+                    )
+                elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                    written = citation_filter.feed(event.delta.content_delta or "")
+                elif isinstance(event, FunctionToolCallEvent):
+                    yield ToolStarted(
+                        call_id=event.part.tool_call_id,
+                        tool=event.part.tool_name,
+                        arguments=event.part.args_as_dict(raise_if_invalid=True),
+                        started_at=_now(),
+                    )
+                elif isinstance(event, FunctionToolResultEvent):
+                    is_error = getattr(event.part, "part_kind", "") == "retry-prompt"
+                    if not is_error:
+                        deps.retrieved.record(event.part.content)
+                    yield ToolFinished(
+                        call_id=event.tool_call_id,
+                        summary=None if is_error else _summarize_result(event.part.content),
+                        finished_at=_now(),
+                        error="Retrieval failed" if is_error else None,
+                    )
+                if written:
+                    shown_any = True
+                    yield TextFragment(written)
+        tail = citation_filter.finish()
+        if tail:
+            yield TextFragment(tail)
 
 
 def _model_history(

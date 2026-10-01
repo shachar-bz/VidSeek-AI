@@ -13,7 +13,7 @@ from backend.storage.postgres import (
     StoredChapterOutline,
 )
 
-from ..citations import AnswerDraft
+from ..citations import RetrievedSpans
 from ..image_analysis import ImageAnalyzer, OpenAIImageAnalyzer
 from ..visual_budget import VisualBudget
 
@@ -44,11 +44,12 @@ class ConversationDeps:
     # page did not say.
     player_paused: bool | None = None
 
-    # Shared, and deliberately mutable: the runner fills it as the agent retrieves and
-    # writes, the citation check reads it to decide what the answer may claim, and the API
-    # falls back to it when a run ends with no checked answer to send. All three need the
-    # same per-run record, and deps is the one thing all three already hold.
-    draft: AnswerDraft = field(default_factory=AnswerDraft)
+    # Shared, and deliberately mutable: the runner fills it as the agent retrieves, and the
+    # citation filter reads it to decide which of the answer's citations to keep. The
+    # conversation API seeds it with the spans earlier turns retrieved and reads it back to store
+    # this turn's. All three need the same per-run record, and deps is the one thing all three
+    # already hold.
+    retrieved: RetrievedSpans = field(default_factory=RetrievedSpans)
 
     # The connection pool every tool's store is built on, rather than a store per tool: a
     # store holds nothing but its pool, so injecting one per table would be injecting the

@@ -1,6 +1,7 @@
 """The `messages` table: one turn of a conversation, either side of it.
 
-Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0015_messages.sql` applied.
+Needs AZURE_DATABASE_URL in `backend/.env`, and `migrations/0015_messages.sql` and
+`migrations/0028_message_retrieved_spans.sql` applied.
 """
 
 from __future__ import annotations
@@ -30,6 +31,9 @@ class StoredMessage:
     content: str
     tool_trace: dict | list | None
     created_at: str
+    # The (start, end) seconds the tools returned while answering, so a later turn can still
+    # cite them. Null for a user message, and for an answer that retrieved nothing.
+    retrieved_spans: list[list[float]] | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> StoredMessage:
@@ -40,6 +44,7 @@ class StoredMessage:
             content=row["content"],
             tool_trace=row.get("tool_trace"),
             created_at=iso_text(row["created_at"]),
+            retrieved_spans=row.get("retrieved_spans"),
         )
 
 
@@ -93,6 +98,7 @@ class PostgresMessages:
         message_id: str,
         content: str,
         tool_trace: dict | list | None = None,
+        retrieved_spans: list[list[float]] | None = None,
     ) -> StoredMessage | None:
         """Finalize an assistant placeholder, or return None if it no longer exists.
 
@@ -101,11 +107,12 @@ class PostgresMessages:
         """
         with connection(self._pool) as open_connection:
             row = open_connection.execute(
-                f"update public.{TABLE_NAME} set content = %s, tool_trace = %s "
+                f"update public.{TABLE_NAME} set content = %s, tool_trace = %s, retrieved_spans = %s "
                 "where id = %s::uuid and role = 'assistant' returning *",
                 (
                     content,
                     Jsonb(tool_trace) if tool_trace is not None else None,
+                    Jsonb(retrieved_spans) if retrieved_spans is not None else None,
                     message_id,
                 ),
             ).fetchone()

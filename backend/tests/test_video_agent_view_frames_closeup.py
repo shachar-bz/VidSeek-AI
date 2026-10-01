@@ -171,7 +171,6 @@ def test_through_the_runner_the_model_receives_the_images_and_the_frame_times_be
         output_type=str,
         tools=[view_frames_closeup],
     )
-    agent.output_validator(runner._verify_citations)
     deps = _deps()
 
     async def collect():
@@ -188,8 +187,6 @@ def test_through_the_runner_the_model_receives_the_images_and_the_frame_times_be
     [follow_up] = received
     assert [item for item in follow_up.content if isinstance(item, str)] == ["Frame 1 at 02:10", "Frame 2 at 02:11"]
     assert sum(isinstance(item, BinaryContent) for item in follow_up.content) == 2
-    # The citation check holds the frames' times, so the answer citing one passes unchanged.
-    assert deps.draft.spans == [(130.0, 130.0), (131.5, 131.5)]
-    assert deps.draft.rejected is False
-    assert isinstance(events[-1], runner.TextFragment)
-    assert events[-1].text == "The whiteboard shows a partition diagram [02:10]."
+    # The citation filter holds the frames' times, so the answer citing one passes unchanged.
+    assert deps.retrieved.spans == [(130.0, 130.0), (131.5, 131.5)]
+    assert "".join(event.text for event in events if isinstance(event, runner.TextFragment)) == "The whiteboard shows a partition diagram [02:10]."
