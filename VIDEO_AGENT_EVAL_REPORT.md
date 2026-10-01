@@ -398,10 +398,31 @@ Done:
 | Not in the report | `search_visual_moments` no longer sends its `score` field. |
 | §8.5 (cold starts) | Branch `perf/preload-embedding-models`, merged into `main` on 2026-10-01. The API `lifespan` starts `start_model_preload()` (`backend/api/model_preload.py`), which loads the text-embedding model and then, when `VIDSEEK_VISUAL_INDEXING` is on, SigLIP, on a daemon thread. A model that fails to load is logged and loads on first use instead. `VIDSEEK_PRELOAD_MODELS=false` turns it off, and the test suite does so. Not re-measured: the 12 s and 10 s figures are the pre-fix ones. Cost: each API process holds both models in memory from startup. |
 
+### Multi-part answers (§8.1)
+
+Branch `fix/video-agent-multi-part-answers`. Prompt-only change in `backend/video_agent/prompt.py`:
+
+- A new section, "Questions About a Part of the Video". In one round, it calls the outline and search. Then, in one round, it calls `get_chapter_context` on every chapter the topic spans: chapters whose title or summary covers it, plus chapters a relevant hit falls in. The answer covers each of them. It summarizes from the moment summaries and reads a moment's words only for a missing detail.
+- A new section, "Questions With More Than One Possible Meaning". It finds every candidate with the outline and search in one round. When each answer is short, it answers for every candidate instead of asking, and says which candidates the video leaves unanswered. It asks a question back only when answering everything would be long, and then lists every candidate.
+- Tone: "Answer only what was asked" became "…but all of it", so brevity no longer drops parts of an answer.
+- The examples in the prompt are deliberately not from the test videos.
+
+Re-run on 2026-10-01 through the production runner, once per test, with the same queries and empty history:
+
+| Test | Before | After | Tools called (after) | Latency |
+|---|---|---|---|---|
+| T2 | Partial | Pass. Names both terms: "valuemaxxing" is credited to Mark Boroditsky [04:24–05:16]; "tokenmaxxing" is explained, but the video names no one who coined it [00:42–01:48]. | outline + search → search | 4.6 → 21.5 s |
+| T11 | Partial | Pass. Covers all 3 chapters, including the NumPy/Jupyter tools and the optional Numba speed-up [56:03–59:30]. | outline + search → 3 × chapter | 15.7 → 31.0 s |
+| T15 | Partial | Pass. Answers without asking, for all 4 desserts. Only the fruit crisp has a stated time, 30 + 15 min [05:21–06:18]. No time is given for the crème caramel/bread pudding or the squash pies, and the meringue takes "a few minutes". | outline + search → search + 2 × chapter | 6.1 → 12.8 s |
+| T3 | Pass | Pass, unchanged. | outline | 8.7 → 12.3 s |
+| T5 | Pass | Pass, unchanged. | search | 4.4 → 5.1 s |
+
+All citations passed the check, with 0 rejections. On a first run, without the "summaries are usually enough" line, T11 added a fourth round of `get_memory_context` calls (28.6 s), and T15 took 4 rounds (16.6 s). The cost is latency: the extra rounds, plus long model think time between them (T2 spent about 14 s before its second search, and T11 about 13 s before its chapter reads). Each test ran once, so the latency figures are leads, not rates.
+
 Still open:
 
 - §7 issue 5 and §8.4: the visual routing is still too broad (T14).
-- §8.1: multi-part completeness (T2, T11, T15).
+- §8.1 follow-up: ambiguous questions are now 2 to 4 times slower (T2, T15). This could be cut by not repeating a search once the outline already names the candidates.
 - §7 issue 4 and §8.6: the citation check is still loose.
 - §8.5: the rest of the latency work, streaming the answer and cutting sequential rounds. The model preload is done.
 - §8.8: data hygiene.
