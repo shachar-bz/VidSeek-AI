@@ -58,6 +58,12 @@ def visual_indexing_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def model_preload_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Starting the app in a test does not load the embedding models in the background."""
+    monkeypatch.setenv("VIDSEEK_PRELOAD_MODELS", "false")
+
+
+@pytest.fixture(autouse=True)
 def ocr_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test starts a real Surya worker; a test about OCR hands in an engine of its own."""
     monkeypatch.delenv("VIDSEEK_OCR_PYTHON", raising=False)
