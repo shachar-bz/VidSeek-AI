@@ -4,7 +4,7 @@
 - **Agent under test:** `backend/video_agent`, model `gpt-6.1-sol` on the OpenAI Responses API, image model `gpt-6-luna`.
 - **Scope:** a one-off check of tool choice, tool order, how tool results are used, grounding, tool descriptions, and latency.
 - **Method:** each test ran once. Every claim in every answer was checked against the database, and the visual answers against extracted frames.
-- **Code changes:** none during the evaluation itself. The agent implementation was not modified. Follow-up fixes, including the model preload, are described in §10.
+- **Code changes:** none during the evaluation itself. The agent implementation was not modified. Follow-up fixes, including the model preload and the multi-part answer fix, are described in §10.
 
 ## 1. Summary
 
@@ -40,6 +40,7 @@ What to fix (details in §6–§7):
    - T11 read 1 of the 3 seam-carving chapters and missed the NumPy/Numba part.
    - T15 asked which dessert was meant but offered only 2 of the 4.
    - T2 did not say that "tokenmaxxing" is credited to no one.
+   - **Addressed after the evaluation:** a prompt change made T2, T11 and T15 pass on a re-run, at a latency cost (see §10).
 2. **T14 took the visual path for a "where do they work on X" question.** It used picture search and a contact sheet, taking 28 s where about 6 s was expected. The transcript search's top 5 hits missed one of the two work sessions. The picture search recovered it by chance; the agent never checked the outline, which would have shown it in about 20 ms.
 3. **Latency depends on the number of model round trips, not on the tools.**
    - Model time is 74% of the total, at about 2.7 s per round trip.
@@ -355,6 +356,7 @@ Ordered by expected impact. Which of these have been implemented since is listed
 1. **Make the multi-part cases complete.**
    - For section questions, add prompt guidance to read every chapter a topic spans (T11).
    - When asking a clarifying question, list every candidate the video contains, and answer the ones the video does answer (T2, T15).
+   - **Done:** see §10, "Multi-part answers".
 2. **Fix the chapter-context description and the timestamp recipe (issue 2).**
    - The prompt should say it returns summaries.
    - The recipe should end with `get_memory_context(memory_id, context_range=0)`.
@@ -400,7 +402,7 @@ Done:
 
 ### Multi-part answers (§8.1)
 
-Branch `fix/video-agent-multi-part-answers`. Prompt-only change in `backend/video_agent/prompt.py`:
+Branch `fix/video-agent-multi-part-answers`, merged into `main` on 2026-10-01. Prompt-only change in `backend/video_agent/prompt.py`:
 
 - A new section, "Questions About a Part of the Video". In one round, it calls the outline and search. Then, in one round, it calls `get_chapter_context` on every chapter the topic spans: chapters whose title or summary covers it, plus chapters a relevant hit falls in. The answer covers each of them. It summarizes from the moment summaries and reads a moment's words only for a missing detail.
 - A new section, "Questions With More Than One Possible Meaning". It finds every candidate with the outline and search in one round. When each answer is short, it answers for every candidate instead of asking, and says which candidates the video leaves unanswered. It asks a question back only when answering everything would be long, and then lists every candidate.
@@ -422,9 +424,9 @@ All citations passed the check, with 0 rejections. On a first run, without the "
 Still open:
 
 - §7 issue 5 and §8.4: the visual routing is still too broad (T14).
-- §8.1 follow-up: ambiguous questions are now 2 to 4 times slower (T2, T15). This could be cut by not repeating a search once the outline already names the candidates.
+- §8.1 follow-up: the fixed questions are now about 2 to 5 times slower (T2, T11, T15). This could be cut by not repeating a search once the outline already names the candidates.
 - §7 issue 4 and §8.6: the citation check is still loose.
 - §8.5: the rest of the latency work, streaming the answer and cutting sequential rounds. The model preload is done.
 - §8.8: data hygiene.
 
-To re-check: T4, T10, T11, T12, T14 and T15 through the production runner. T11 matters most, since z >= 1.5 gives fewer hits on some searches (3 for "seam carving", 6 for "pumpkin pie" on the dev data), and the 8-hit cap is untested against T14.
+To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. T11 and T15 were re-checked with the multi-part fix above; both passed.
