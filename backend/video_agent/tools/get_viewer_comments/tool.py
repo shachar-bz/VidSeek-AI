@@ -17,7 +17,8 @@ from ..deps import ConversationDeps
 from .result import ViewerComment, ViewerComments
 
 # How many comments one call answers with: enough to see the themes, and a bounded read at
-# `MAX_TEXT_CHARS` each. A constant for the reason `memories_semantic_search.TOP_K` is one.
+# `MAX_TEXT_CHARS` each. A constant rather than an argument: how much the agent can usefully read
+# at once is not the model's to judge, the reason `MemorySearchSettings.max_moments` is a setting.
 MAX_COMMENTS = 20
 
 # Where a comment is cut, so one essay-length comment cannot crowd out the other nineteen.

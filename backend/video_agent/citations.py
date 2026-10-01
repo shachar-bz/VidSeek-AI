@@ -41,7 +41,7 @@ def spans_of(result: object) -> list[TimeSpan]:
     """Every start/end pair anywhere inside one tool's return value.
 
     The walk is structural rather than typed because the five tools nest their times
-    differently: a search returns a flat list of hits, a chapter carries its own range plus
+    differently: a search returns its moments in a list beside a note, a chapter carries its own range plus
     one per memory it contains, and a memory context holds a target with neighbours either
     side. Reading whatever carries both fields keeps this from needing an update every time
     a result model grows a field.

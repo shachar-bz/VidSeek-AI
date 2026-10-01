@@ -154,6 +154,7 @@ MATCH_ROWS = [
         "chapter_title": "The transcription pipeline",
         "start_seconds": 12.5,
         "end_seconds": 31.0,
+        "similarity": 0.91,
     },
     {
         "memory_id": MEMORY_ID_2,
@@ -163,6 +164,7 @@ MATCH_ROWS = [
         "chapter_title": None,
         "start_seconds": 44.0,
         "end_seconds": 58.25,
+        "similarity": 0.84,
     },
 ]
 
@@ -170,14 +172,25 @@ QUERY_VECTOR = [0.7, 0.8, 0.9]
 MODEL = "intfloat/multilingual-e5-small"
 
 
-def test_search_orders_by_cosine_distance_and_filters_to_the_one_video() -> None:
+def test_search_scores_by_cosine_similarity_closest_first_within_the_one_video() -> None:
     store, pool = _store(MATCH_ROWS)
-    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
+    store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL)
 
     statement = pool.statements[0]
-    assert "e.embedding <=> %s::vector" in statement
+    assert "1 - (e.embedding <=> %s::vector) as similarity" in statement
+    assert "order by similarity desc" in statement
     assert "where e.video_id = %s::uuid and e.model = %s" in statement
-    assert pool.recorded[0].parameters == (VIDEO_ID, MODEL, QUERY_VECTOR, 5)
+    assert pool.recorded[0].parameters == (QUERY_VECTOR, VIDEO_ID, MODEL)
+
+
+def test_search_scores_every_memory_of_the_video_rather_than_the_nearest_few() -> None:
+    """Whether a memory is a hit is judged against all of its video's scores, so the store
+    must hand back every one of them and leave the cutoff to `services/memory_search.py`.
+    """
+    store, pool = _store(MATCH_ROWS)
+    store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL)
+
+    assert "limit" not in pool.statements[0]
 
 
 def test_search_reaches_the_video_through_the_embeddings_table_not_through_memories() -> None:
@@ -185,7 +198,7 @@ def test_search_reaches_the_video_through_the_embeddings_table_not_through_memor
     for exactly this: filtering through `memories` instead would join the whole table first.
     """
     store, pool = _store(MATCH_ROWS)
-    store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
+    store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL)
 
     statement = pool.statements[0]
     assert "m.video_id" not in statement
@@ -197,15 +210,15 @@ def test_search_keeps_a_memory_that_was_never_grouped_into_a_chapter() -> None:
     chapter join is a left one and its title comes back as None rather than dropping the row.
     """
     store, pool = _store(MATCH_ROWS)
-    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
+    matches = store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL)
 
     assert "left join public.chapters" in pool.statements[0]
     assert [match.chapter_title for match in matches] == ["The transcription pipeline", None]
 
 
-def test_search_answers_with_what_was_said_and_when() -> None:
+def test_search_answers_with_what_was_said_when_and_how_close() -> None:
     store, _ = _store(MATCH_ROWS)
-    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
+    matches = store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL)
 
     assert len(matches) == len(MATCH_ROWS)
     first = matches[0]
@@ -214,11 +227,12 @@ def test_search_answers_with_what_was_said_and_when() -> None:
     assert first.text == MATCH_ROWS[0]["text"]
     assert first.summary == MATCH_ROWS[0]["summary"]
     assert (first.start_seconds, first.end_seconds) == (12.5, 31.0)
+    assert [match.similarity for match in matches] == [0.91, 0.84]
 
 
 def test_search_leaves_the_chapter_id_none_when_ungrouped() -> None:
     store, _ = _store(MATCH_ROWS)
-    matches = store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL)
+    matches = store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL)
 
     assert matches[1].chapter_id is None
 
@@ -226,7 +240,7 @@ def test_search_leaves_the_chapter_id_none_when_ungrouped() -> None:
 def test_search_of_a_video_with_nothing_embedded_returns_no_matches() -> None:
     store, _ = _store([])
 
-    assert store.nearest_memories(VIDEO_ID, QUERY_VECTOR, 5, model=MODEL) == []
+    assert store.memory_similarities(VIDEO_ID, QUERY_VECTOR, model=MODEL) == []
 
 
 def test_videos_holding_another_models_vectors_are_listed_once_each() -> None:

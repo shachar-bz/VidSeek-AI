@@ -1,7 +1,9 @@
 """The `memory_embeddings` table: one vector per memory, for semantic search.
 
 Both sides of that live here: `memories_for_video` and `replace` fill the table, and
-`nearest_memories` is the search itself, which is what the vectors were ever written for.
+`memory_similarities` scores a video's memories against a search, which is what the vectors
+were ever written for. Which of those scores count as a hit is decided above the store, in
+`backend.services.memory_search`.
 
 Both reads join `memories` to `chapters`, which is why neither moved to `memories.py`
 when that module was added: embedding a memory needs its chapter's title alongside it, and
@@ -71,13 +73,14 @@ class MemoryEmbedding:
 
 
 @dataclass(frozen=True)
-class MemoryMatch:
-    """One memory a semantic search found, as the caller needs to answer with it.
+class ScoredMemory:
+    """One memory scored against a semantic search, as the caller needs to answer with it.
 
     `text` is the speech the memory was built from and `summary` is the one line the
     segmentation model wrote about it. Both, along with the chapter title, are what the
     vector that was searched was built from -- see
-    `backend.services.embeddings.memory_embedding.text`.
+    `backend.services.embeddings.memory_embedding.text`. `similarity` is the cosine
+    similarity of that vector to the query's, higher is closer.
     """
 
     memory_id: str
@@ -87,6 +90,7 @@ class MemoryMatch:
     chapter_title: str | None
     start_seconds: float
     end_seconds: float
+    similarity: float
 
 
 class PostgresMemoryEmbeddings:
@@ -123,13 +127,16 @@ class PostgresMemoryEmbeddings:
             for row in rows
         ]
 
-    def nearest_memories(
-        self, video_id: str, embedding: Sequence[float], limit: int, *, model: str
-    ) -> list[MemoryMatch]:
-        """This video's memories whose vectors are closest to `embedding`, nearest first.
+    def memory_similarities(
+        self, video_id: str, embedding: Sequence[float], *, model: str
+    ) -> list[ScoredMemory]:
+        """Every memory of this video with its cosine similarity to `embedding`, closest first.
 
-        Ordered by cosine distance (`<=>`), which is what multilingual-e5-small is trained
-        for.
+        Every one rather than the nearest few, because whether a memory is a hit is judged
+        against the rest of its own video's scores (`backend.services.memory_search`), and
+        that needs all of them. A video has tens of memories, not thousands, so reading them
+        all costs nothing worth saving. Similarity is `1 - <=>`, cosine distance turned
+        around, which is what multilingual-e5-small is trained for.
 
         Filtered on `memory_embeddings.video_id` rather than through `memories`, which is
         the reason 0010_memory_embeddings_video_chapter.sql put that column here: one
@@ -149,16 +156,17 @@ class PostgresMemoryEmbeddings:
             rows = open_connection.execute(
                 "select e.memory_id as memory_id, e.chapter_id as chapter_id, "
                 "m.text as text, m.summary as summary, c.title as chapter_title, "
-                "m.start_seconds as start_seconds, m.end_seconds as end_seconds "
+                "m.start_seconds as start_seconds, m.end_seconds as end_seconds, "
+                "1 - (e.embedding <=> %s::vector) as similarity "
                 f"from public.{TABLE_NAME} e "
                 "join public.memories m on m.id = e.memory_id "
                 "left join public.chapters c on c.id = m.chapter_id "
                 "where e.video_id = %s::uuid and e.model = %s "
-                "order by e.embedding <=> %s::vector limit %s",
-                (video_id, model, list(embedding), limit),
+                "order by similarity desc, m.start_seconds",
+                (list(embedding), video_id, model),
             ).fetchall()
         return [
-            MemoryMatch(
+            ScoredMemory(
                 memory_id=str(row["memory_id"]),
                 chapter_id=str(row["chapter_id"]) if row["chapter_id"] else None,
                 text=row["text"],
@@ -166,6 +174,7 @@ class PostgresMemoryEmbeddings:
                 chapter_title=row["chapter_title"],
                 start_seconds=float(row["start_seconds"]),
                 end_seconds=float(row["end_seconds"]),
+                similarity=float(row["similarity"]),
             )
             for row in rows
         ]
