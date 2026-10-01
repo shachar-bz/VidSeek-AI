@@ -451,6 +451,6 @@ Still open:
 - §7 issue 4 and §8.6: the citation check is still loose.
 - §8.5: cutting sequential rounds. The model preload and answer streaming are done; streaming is checked against the live model for two questions, not re-measured across the suite, and the web client and extension were not run against it.
 
-Migration `0028_message_retrieved_spans.sql` is applied to the dev database. Any other database needs `python -m backend.storage.postgres.migrate` before the streaming code is deployed, because finalizing an answer writes the new column.
+Migration `0028_message_retrieved_spans.sql` is applied to the Azure database (the only one the project configures); `schema_migrations` records it on 2026-10-01 and `messages.retrieved_spans` exists. A database created elsewhere needs `python -m backend.storage.postgres.migrate` before the streaming code runs against it, because finalizing an answer writes the new column.
 
 To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. Also T5 to T9, whose two videos were re-segmented by the caption repair; T8 should now cite the GPU line at [09:00]. T11 and T15 were re-checked with the multi-part fix above; both passed. All of them now run through the streaming runner too.
