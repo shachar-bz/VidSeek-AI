@@ -168,7 +168,7 @@ Times are in seconds from the start of the run. The number after each tool is it
 - **Calls:** `memories_semantic_search`, then `get_memory_context` on the growth memory with `context_range=1`. That returned the previous memory, and a boundary on the following side.
 - **Answer:** Altman described OpenAI's compute shortage: "all day long" calling people and begging for GPUs. This was a response to Anderson's question about DeepSeek and massive investment. Then came "incredibly constrained" while growth surged, which prompted the growth question. [07:39–08:58] [09:05–10:26]
 - **Check:** correct, and it read the "why" properly. The transcript shows Anderson asking whether DeepSeek's cheaper model is "life-threatening" to "massive scale, tens of billions of dollars of investment" (08:41–08:58). That is followed by the GPU line, then "We are so incredibly constrained" (09:05) and "Tell us about the growth" (09:13).
-- **Data issue:** the GPU line is spoken at about 09:00–09:04, but its text sits in the memory stored as 07:39–08:58. So the only citation available to the agent lands about 80 s early; see §6.
+- **Data issue:** the GPU line is spoken at about 09:00–09:04, but its text sits in the memory stored as 07:39–08:58. So the only citation available to the agent lands about 80 s early; see §6. **Fixed since:** the line is now timed 09:00.4 and sits in a memory spanning 08:26.8–09:13.5; see §10, "Caption cue repair". T8 was not re-run.
 
 ### T9: Viewer position, visual, paused (Pass)
 - **Query:** "What is this?" The player was paused at 37:12.
@@ -335,7 +335,7 @@ Times are in seconds from the start of the run. The number after each tool is it
 
 Problems found in the data (not the agent):
 
-- **Captioned videos contain cue artifacts and gap text.** Memory text includes caption cue lines such as `00:09:00.403 --> 00:09:04.774`, plus speech that is timed in the gap between two memories. The result is a citation that points to the wrong window: in T8 the GPU line is spoken at about 09:00, but it is citable only as [07:39–08:58]. This affects `bdeac510` and `55705079`.
+- **Captioned videos contain cue artifacts and gap text.** Memory text includes caption cue lines such as `00:09:00.403 --> 00:09:04.774`, plus speech that is timed in the gap between two memories. The result is a citation that points to the wrong window: in T8 the GPU line is spoken at about 09:00, but it is citable only as [07:39–08:58]. This affects `bdeac510` and `55705079`. **Fixed since**, and the "gap text" turned out to have the same cause as the cue lines; see §10, "Caption cue repair".
 - **OCR is incomplete on `bdeac510`.** 70 of its 78 keyframes are unread, yet `visual_status` is `ready`. The screen-text tool reports this correctly in its note.
 
 ## 7. Tool descriptions: accuracy against actual behavior
@@ -374,6 +374,7 @@ Ordered by expected impact. Which of these have been implemented since is listed
 6. **Tighten the citation check (issue 4).** Accept a citation only inside memory-level or look-level spans, not chapter ranges. Stop treating picture-search times as citable.
 7. **Send result field descriptions (issue 1).** Either enable the return schema, or move the rules the model must follow into the docstrings.
 8. **Data hygiene.** Strip caption cue lines from memory text, and assign gap speech to the memory it is spoken in (T8). Don't report the visual index as ready while OCR is still incomplete, or make that state explicit.
+   - **Done for the captions:** see §10, "Caption cue repair". The OCR half is still open.
 
 ## 9. Not covered
 
@@ -421,12 +422,29 @@ Re-run on 2026-10-01 through the production runner, once per test, with the same
 
 All citations passed the check, with 0 rejections. On a first run, without the "summaries are usually enough" line, T11 added a fourth round of `get_memory_context` calls (28.6 s), and T15 took 4 rounds (16.6 s). The cost is latency: the extra rounds, plus long model think time between them (T2 spent about 14 s before its second search, and T11 about 13 s before its chapter reads). Each test ran once, so the latency figures are leads, not rates.
 
+### Caption cue repair (§8.8, captions)
+
+Branch `fix/caption-cues-without-blank-lines`, merged into `main` on 2026-10-01.
+
+The cue lines and the "gap speech" in §6 had one cause. These two videos' WebVTT tracks sometimes leave out the blank line between two cues. The shared caption parser (`backend/core/captions.py`) ended a cue's text only at a blank line, so it swallowed the next cue whole: that cue's timing line was stored as speech, and its words were timed as the cue before it. The GPU line in T8 was stored inside a segment timed 08:55.9–08:58.9. It was never speech between two memories.
+
+- **Parser:** a cue's text now also ends at the next timing line, dropping an SRT cue number just above it. The YouTube caption reader had the same weakness and was fixed the same way.
+- **Stored data:** a one-off repair, `python -m backend.download_pipeline.repair_glued_caption_cues`, which reports only unless given `--apply`. It split each stored segment back into cues at the timing lines left in its text, normalized the result, and re-ran memories, chapters, embeddings and insights. It was applied on 2026-10-01 to the only 2 of the 8 videos affected:
+
+| Video | Segments with a cue line | Segments | Memories | Chapters |
+|---|---|---|---|---|
+| `55705079` | 95 → 0 | 263 → 268 | 31 → 33 | 13 → 12 |
+| `bdeac510` | 26 → 0 | 64 → 65 | 11 → 10 | 5 → 5 |
+
+Before the repair, every memory on both videos held a cue line. The T8 GPU line is now timed 09:00.4 and sits in memory 9 (08:26.8–09:13.5), so [09:00] is citable. The unit tests pass (974 passed, 1 skipped).
+
+The memories and chapters of these two videos were rebuilt by the LLM, so their boundaries and summaries differ from the ones T5 to T9 ran against. Those tests' results describe the old data and were not re-run.
+
 Still open:
 
+- §8.8, OCR: `visual_status` still says `ready` while OCR is incomplete, and an interrupted OCR pass never resumes, because the local video file is deleted once indexing ends (`bdeac510`: 8 of 78 keyframes read). Left for a separate run. A resume would read frames back from Blob Storage, which `ARCHITECTURE.md` currently rules out for visual indexing.
 - §7 issue 5 and §8.4: the visual routing is still too broad (T14).
 - §8.1 follow-up: the fixed questions are now about 2 to 5 times slower (T2, T11, T15). This could be cut by not repeating a search once the outline already names the candidates.
 - §7 issue 4 and §8.6: the citation check is still loose.
 - §8.5: the rest of the latency work, streaming the answer and cutting sequential rounds. The model preload is done.
-- §8.8: data hygiene.
-
-To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. T11 and T15 were re-checked with the multi-part fix above; both passed.
+To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. Also T5 to T9, whose two videos were re-segmented by the caption repair; T8 should now cite the GPU line at [09:00]. T11 and T15 were re-checked with the multi-part fix above; both passed.
