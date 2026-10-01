@@ -4,7 +4,7 @@
 - **Agent under test:** `backend/video_agent`, model `gpt-6.1-sol` on the OpenAI Responses API, image model `gpt-6-luna`.
 - **Scope:** a one-off check of tool choice, tool order, how tool results are used, grounding, tool descriptions, and latency.
 - **Method:** each test ran once. Every claim in every answer was checked against the database, and the visual answers against extracted frames.
-- **Code changes:** none during the evaluation itself. The agent implementation was not modified. A follow-up fix is described in §10.
+- **Code changes:** none during the evaluation itself. The agent implementation was not modified. Follow-up fixes, including the model preload, are described in §10.
 
 ## 1. Summary
 
@@ -44,7 +44,7 @@ What to fix (details in §6–§7):
 3. **Latency depends on the number of model round trips, not on the tools.**
    - Model time is 74% of the total, at about 2.7 s per round trip.
    - Transcript tools take 20–70 ms each.
-   - Two cold starts (~12 s and ~10 s) fall on the first queries of an API process, because nothing preloads the embedding models.
+   - Two cold starts (~12 s and ~10 s) fell on the first queries of an API process, because nothing preloaded the embedding models. **Addressed after the evaluation:** the API now preloads both models in the background at startup (see §8 item 5). Not yet re-measured.
    - The answer is sent only after it is fully generated, so the user sees no answer text until the very end.
 4. **The tool descriptions have accuracy gaps.**
    - Result field descriptions are never sent to the model.
@@ -312,8 +312,8 @@ Times are in seconds from the start of the run. The number after each tool is it
    - Latency is therefore roughly 2.5 s times the number of sequential rounds, plus the answer-writing time. Transcript tools contribute almost nothing.
    - The multi-round tests show this: T4, with 3 sequential calls, took 10.7 s; T10, with 4 calls, took 11.6 s.
 2. **Answer writing is hidden time.** From first answer text to done took about 8 s in T11 (477 tokens) and 3.6 s in T3. Because the answer is buffered for the citation check, the user waits through all of it with no text.
-3. **Cold starts are not preloaded.**
-   - The `lifespan` in `api/app.py:79-81` loads nothing.
+3. **Cold starts were not preloaded.** *(Fixed after this evaluation: the `lifespan` now starts `api/model_preload.py`, which loads both models on a background thread. The description below is of the code as tested.)*
+   - The `lifespan` in `api/app.py:79-81` loaded nothing.
    - The first chat question on a fresh API process pays about 12 s to load the text-embedding model and open the DB pool. That was measured in this harness's warm-up and excluded from the table.
    - The first visual search pays about 10 s to load the SigLIP encoder (`image_embedding.shared_encoder()`, measured at 10.1 s). That is included in T14.
 4. **Visual looks are the expensive tools.** A sequence takes about 10–12 s and a contact sheet about 4–5 s; both are image-model calls. A visual question that uses the full recipe (search, sheet, sequence) costs 25–45 s.
@@ -348,9 +348,9 @@ Problems found in the data (not the agent):
 | 5 | **The visual prompt's routing is broader than intended.** "Where, when, or what happens (… an action)" sends speech-answerable "where do they do X" questions to the visual tools. | `prompt.py:153,160` | T14: 28 s, where about 6 s was expected. |
 | 6 | **Minor issues.** The prompt says "segments" while the tools say "memories" or "moments"; there is a typo, "semanitc"; retrieved spans reset every turn, so a follow-up that reuses an earlier timestamp is rejected, and the prompt doesn't say so. | `prompt.py:40,79`, `conversations.py:292` | No observed effect. The span reset was not tested, since this run had no multi-turn tests. |
 
-## 8. Recommendations (not implemented)
+## 8. Recommendations
 
-Ordered by expected impact.
+Ordered by expected impact. Which of these have been implemented since is listed in §10.
 
 1. **Make the multi-part cases complete.**
    - For section questions, add prompt guidance to read every chapter a topic spans (T11).
@@ -362,7 +362,11 @@ Ordered by expected impact.
 3. **Pair "where is X" transcript searches with the outline.** The outline is a 20 ms call, and together they cover more than the top 5 hits (issue 3). Also consider returning a similarity score, so "off-target" can be judged from data.
 4. **Narrow the visual routing (issue 5).** Visual tools should handle "what does it look like / what is on screen". Locating an activity that is also narrated should go to transcript tools first, with visual tools only if speech fails. This saves 20–40 s on such questions.
 5. **Cut perceived latency.**
-   - Preload the text-embedding model and the SigLIP encoder in the API `lifespan`, saving about 12 s and 10 s on the first queries of each process.
+   - **Done (not yet re-measured):** preload the text-embedding model and the SigLIP encoder at API startup, saving about 12 s and 10 s on the first queries of each process.
+     - The `lifespan` starts `start_model_preload()` (`api/model_preload.py`), which loads the text model first, then SigLIP only when `VIDSEEK_VISUAL_INDEXING` is on, on a daemon thread.
+     - A model that fails to load is logged and falls back to loading on first use.
+     - `VIDSEEK_PRELOAD_MODELS=false` turns it off; the test suite does so.
+     - Cost: every API process holds both models in memory from startup, so each extra worker holds its own copy.
    - Consider streaming the answer and fixing citations afterwards, instead of buffering the whole answer. Today about 3–8 s of answer writing is invisible to the user.
    - Fewer sequential rounds (item 2) is the other lever, at about 2.5 s per round.
 6. **Tighten the citation check (issue 4).** Accept a citation only inside memory-level or look-level spans, not chapter ranges. Stop treating picture-search times as citable.
@@ -392,13 +396,14 @@ Done:
 | §8.3 (pair "where is X" with the outline) | The prompt now has the model call search and `get_video_outline` in the same round for "where / when" questions. |
 | §7 issue 6 (wording) | "segments" is now "moments" throughout, and the "semanitc" typo is gone. |
 | Not in the report | `search_visual_moments` no longer sends its `score` field. |
+| §8.5 (cold starts) | Branch `perf/preload-embedding-models`, merged into `main` on 2026-10-01. The API `lifespan` starts `start_model_preload()` (`backend/api/model_preload.py`), which loads the text-embedding model and then, when `VIDSEEK_VISUAL_INDEXING` is on, SigLIP, on a daemon thread. A model that fails to load is logged and loads on first use instead. `VIDSEEK_PRELOAD_MODELS=false` turns it off, and the test suite does so. Not re-measured: the 12 s and 10 s figures are the pre-fix ones. Cost: each API process holds both models in memory from startup. |
 
 Still open:
 
 - §7 issue 5 and §8.4: the visual routing is still too broad (T14).
 - §8.1: multi-part completeness (T2, T11, T15).
 - §7 issue 4 and §8.6: the citation check is still loose.
-- §8.5: latency, including preloading the embedding models and streaming the answer.
+- §8.5: the rest of the latency work, streaming the answer and cutting sequential rounds. The model preload is done.
 - §8.8: data hygiene.
 
 To re-check: T4, T10, T11, T12, T14 and T15 through the production runner. T11 matters most, since z >= 1.5 gives fewer hits on some searches (3 for "seam carving", 6 for "pumpkin pie" on the dev data), and the 8-hit cap is untested against T14.
