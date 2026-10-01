@@ -1,17 +1,16 @@
-"""Tests the agent's fixed model, tool set, citation check, and persisted-history conversion."""
+"""Tests the agent's fixed model, tool set, streamed citation check, and persisted-history conversion."""
 
 import asyncio
 
 import pytest
 from pydantic_ai import (
     Agent,
-    AgentRunResultEvent,
-    ModelRetry,
+    FunctionToolCallEvent,
+    FunctionToolResultEvent,
     PartDeltaEvent,
     PartStartEvent,
-    UnexpectedModelBehavior,
 )
-from pydantic_ai.messages import ModelResponse, TextPart, TextPartDelta
+from pydantic_ai.messages import ModelResponse, TextPart, TextPartDelta, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from backend.services.visual_search import VISUAL_PROCESSING, VISUAL_READY, VISUAL_UNAVAILABLE
@@ -24,15 +23,8 @@ NOW = "2026-09-19T10:00:00+00:00"
 RETRIEVED = [(730.0, 760.0)]
 
 
-class FakeRunContext:
-    """The single attribute the citation check reads off a RunContext."""
-
-    def __init__(self, deps: ConversationDeps):
-        self.deps = deps
-
-
 class FakeEventStream:
-    """One agent run's events, optionally ending the way a spent retry budget ends it."""
+    """One agent run's events, optionally ending in a failure."""
 
     def __init__(self, events, failure=None):
         self._events = events
@@ -225,72 +217,90 @@ def test_untimed_video_history_tells_the_agent_not_to_give_timestamps() -> None:
     assert "no timing data" in runner.PARTIAL_TIMING_PROMPT
 
 
-def test_an_answer_citing_only_retrieved_moments_is_accepted() -> None:
+def _text_of(events) -> str:
+    return "".join(event.text for event in events if isinstance(event, runner.TextFragment))
+
+
+def test_the_answer_reaches_the_reader_as_it_is_written() -> None:
     deps = ConversationDeps(video_id="video")
-    deps.draft.spans = list(RETRIEVED)
-
-    answer = "The model is used last. [12:14]"
-
-    assert runner._verify_citations(FakeRunContext(deps), answer) == answer
-
-
-def test_an_invented_citation_is_sent_back_for_a_rewrite() -> None:
-    deps = ConversationDeps(video_id="video")
-    deps.draft.spans = list(RETRIEVED)
-
-    with pytest.raises(ModelRetry) as raised:
-        runner._verify_citations(FakeRunContext(deps), "Claimed without evidence. [13:05]")
-
-    assert "[13:05]" in str(raised.value)
-
-
-def test_a_refused_answer_is_kept_so_it_can_be_delivered_without_its_bad_citation() -> None:
-    deps = ConversationDeps(video_id="video")
-    deps.draft.spans = list(RETRIEVED)
-
-    with pytest.raises(ModelRetry):
-        runner._verify_citations(FakeRunContext(deps), "Grounded. [12:14] Invented. [13:05]")
-
-    assert deps.draft.rejected is True
-    assert deps.draft.verifiable_text() == "Grounded. [12:14] Invented."
-
-
-def test_no_text_reaches_the_reader_before_the_checked_answer_does() -> None:
-    deps = ConversationDeps(video_id="video")
-    answer = "The model is used last. [12:14]"
     agent = FakeStreamingAgent(
-        [*_written(answer), AgentRunResultEvent(result=_FakeResult(answer))]
+        [
+            PartStartEvent(index=0, part=TextPart(content="The model")),
+            PartDeltaEvent(index=0, delta=TextPartDelta(content_delta=" is used")),
+            PartDeltaEvent(index=0, delta=TextPartDelta(content_delta=" last.")),
+        ]
     )
 
     emitted = _run(agent, deps)
 
-    assert [event.text for event in emitted] == [answer]
+    assert [event.text for event in emitted] == ["The model", " is used", " last."]
 
 
-def test_an_answer_that_never_passed_the_check_is_delivered_without_its_citations() -> None:
+def test_an_answer_citing_only_retrieved_moments_keeps_its_citation() -> None:
     deps = ConversationDeps(video_id="video")
-    deps.draft.spans = list(RETRIEVED)
-    deps.draft.rejected = True
+    deps.retrieved.spans = list(RETRIEVED)
+
+    emitted = _run(FakeStreamingAgent(_written("The model is used last. [12:14]")), deps)
+
+    assert _text_of(emitted) == "The model is used last. [12:14]"
+
+
+def test_a_citation_no_tool_returned_is_dropped_and_the_rest_of_the_answer_stands() -> None:
+    deps = ConversationDeps(video_id="video")
+    deps.retrieved.spans = list(RETRIEVED)
+
+    emitted = _run(FakeStreamingAgent(_written("Grounded. [12:14] Invented. [13:05] Done.")), deps)
+
+    assert _text_of(emitted) == "Grounded. [12:14] Invented. Done."
+
+
+def test_a_moment_an_earlier_turn_retrieved_is_still_citable() -> None:
+    deps = ConversationDeps(video_id="video")
+    deps.retrieved.restore(RETRIEVED)
+
+    emitted = _run(FakeStreamingAgent(_written("As said before. [12:14]")), deps)
+
+    assert _text_of(emitted) == "As said before. [12:14]"
+
+
+def test_a_moment_a_tool_returns_during_the_turn_becomes_citable() -> None:
+    deps = ConversationDeps(video_id="video")
+    result = {"memories": [{"start_seconds": 730.0, "end_seconds": 760.0}]}
     agent = FakeStreamingAgent(
-        _written("Grounded. [12:14] Invented. [13:05]"),
-        failure=UnexpectedModelBehavior("Exceeded maximum output retries (1)"),
+        [
+            FunctionToolCallEvent(part=ToolCallPart(tool_name="search", args={}, tool_call_id="call")),
+            FunctionToolResultEvent(
+                part=ToolReturnPart(tool_name="search", content=result, tool_call_id="call")
+            ),
+            *_written("Found it. [12:14]"),
+        ]
     )
 
     emitted = _run(agent, deps)
 
-    assert [event.text for event in emitted] == ["Grounded. [12:14] Invented."]
+    assert deps.retrieved.spans == [(730.0, 760.0)]
+    assert _text_of(emitted) == "Found it. [12:14]"
 
 
-def test_unexpected_behaviour_that_is_not_a_refused_citation_still_fails() -> None:
+def test_text_written_before_and_after_a_tool_call_does_not_run_together() -> None:
     deps = ConversationDeps(video_id="video")
     agent = FakeStreamingAgent(
-        _written("Half an answer"), failure=UnexpectedModelBehavior("Received empty response")
+        [
+            PartStartEvent(index=0, part=TextPart(content="Let me look.")),
+            FunctionToolCallEvent(part=ToolCallPart(tool_name="search", args={}, tool_call_id="call")),
+            FunctionToolResultEvent(
+                part=ToolReturnPart(tool_name="search", content={}, tool_call_id="call")
+            ),
+            PartStartEvent(index=0, part=TextPart(content="Here it is.")),
+        ]
     )
 
-    with pytest.raises(UnexpectedModelBehavior):
+    assert _text_of(_run(agent, deps)) == f"Let me look.{runner.PARAGRAPH_BREAK}Here it is."
+
+
+def test_a_failure_while_streaming_reaches_the_caller() -> None:
+    deps = ConversationDeps(video_id="video")
+    agent = FakeStreamingAgent(_written("Half an answer"), failure=RuntimeError("model went away"))
+
+    with pytest.raises(RuntimeError):
         _run(agent, deps)
-
-
-class _FakeResult:
-    def __init__(self, output: str):
-        self.output = output

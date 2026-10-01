@@ -91,11 +91,13 @@ class MemoryMessages:
     def get(self, message_id: str):
         return self.items.get(message_id)
 
-    def update_assistant(self, message_id, content, tool_trace=None):
+    def update_assistant(self, message_id, content, tool_trace=None, retrieved_spans=None):
         item = self.items.get(message_id)
         if item is None or item.role != "assistant":
             return None
-        updated = replace(item, content=content, tool_trace=tool_trace)
+        updated = replace(
+            item, content=content, tool_trace=tool_trace, retrieved_spans=retrieved_spans
+        )
         self.items[message_id] = updated
         return updated
 
@@ -168,12 +170,16 @@ class MemoryVisualIndex:
 
 
 class FakeRunner:
-    def __init__(self, events) -> None:
+    def __init__(self, events, *, retrieves=()) -> None:
         self.events = events
+        self.retrieves = list(retrieves)
         self.runs = []
+        self.spans_at_start = []
 
     async def stream(self, prompt, *, history, deps):
         self.runs.append((prompt, list(history), deps))
+        self.spans_at_start.append(list(deps.retrieved.spans))
+        deps.retrieved.spans.extend(self.retrieves)
         for event in self.events:
             if isinstance(event, Exception):
                 raise event
@@ -491,3 +497,31 @@ def test_stop_persists_partial_text_and_emits_stopped() -> None:
 
 def test_a_video_without_a_record_is_not_reported_as_untimed() -> None:
     assert routes._timestamps_reliable("unknown-video", MemoryVideoRecords("word")) is True
+
+
+def test_the_spans_an_answer_retrieved_are_stored_and_restored_for_the_next_turn() -> None:
+    runner = FakeRunner([TextFragment("answer")], retrieves=[(730.0, 760.0)])
+    app = _app(runner=runner)
+    with TestClient(app) as client:
+        conversation_id = _create(client)
+        first = client.post(
+            f"/v1/conversations/{conversation_id}/messages", json={"content": "Where?"}
+        )
+        client.post(
+            f"/v1/conversations/{conversation_id}/messages", json={"content": "And again?"}
+        )
+
+    first_answer = app.state.messages_store.get(_events(first)[0]["message_id"])
+    assert first_answer.retrieved_spans == [[730.0, 760.0]]
+    assert runner.spans_at_start == [[], [(730.0, 760.0)]]
+
+
+def test_an_answer_that_retrieved_nothing_stores_no_spans() -> None:
+    app = _app(runner=FakeRunner([TextFragment("answer")]))
+    with TestClient(app) as client:
+        conversation_id = _create(client)
+        response = client.post(
+            f"/v1/conversations/{conversation_id}/messages", json={"content": "Hi"}
+        )
+
+    assert app.state.messages_store.get(_events(response)[0]["message_id"]).retrieved_spans is None

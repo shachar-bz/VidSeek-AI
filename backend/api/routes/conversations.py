@@ -298,15 +298,9 @@ async def _answer_stream(
         player_paused=player_paused,
         pool=getattr(messages, "_pool", None),
     )
-
-    def delivered() -> str:
-        """The answer to keep, whether or not the run got to finish one.
-
-        A checked answer arrives whole and becomes `content`. Until it does there is nothing
-        to show but the draft the agent was still writing, and no chance to ask it to fix a
-        citation, so the draft is handed back with only the citations it can support.
-        """
-        return content or deps.draft.verifiable_text()
+    # What earlier turns retrieved stays citable, so reusing one of their timestamps is not
+    # mistaken for an invented one. Only what a tool returned is stored, never what was said.
+    deps.retrieved.restore(_retrieved_spans_of(history))
 
     async def produce() -> None:
         try:
@@ -333,11 +327,10 @@ async def _answer_stream(
                 producer.cancel()
                 with suppress(asyncio.CancelledError):
                     await producer
-                kept = delivered()
                 persisted = await _finalize(
-                    generation, assistant.id, kept, trace, messages
+                    generation, assistant.id, content, trace, deps.retrieved.spans, messages
                 )
-                _maybe_title(first_exchange, conversation, prompt, kept, conversations)
+                _maybe_title(first_exchange, conversation, prompt, content, conversations)
                 completed = True
                 yield _sse(StoppedEvent(message=_message(persisted, pinned=False)))
                 return
@@ -374,15 +367,14 @@ async def _answer_stream(
                     )
                     yield _sse(ToolResultEvent(call=trace[index]))
             elif kind == "error":
-                kept = delivered()
-                await _finalize(generation, assistant.id, kept, trace, messages)
-                _maybe_title(first_exchange, conversation, prompt, kept, conversations)
+                await _finalize(generation, assistant.id, content, trace, deps.retrieved.spans, messages)
+                _maybe_title(first_exchange, conversation, prompt, content, conversations)
                 completed = True
                 yield _sse(ErrorEvent(message="Unable to finish the answer."))
                 return
             elif kind == "done":
                 persisted = await _finalize(
-                    generation, assistant.id, content, trace, messages
+                    generation, assistant.id, content, trace, deps.retrieved.spans, messages
                 )
                 _maybe_title(first_exchange, conversation, prompt, content, conversations)
                 completed = True
@@ -394,10 +386,21 @@ async def _answer_stream(
             with suppress(asyncio.CancelledError):
                 await producer
         if not completed:
-            kept = delivered()
-            await _finalize(generation, assistant.id, kept, trace, messages)
-            _maybe_title(first_exchange, conversation, prompt, kept, conversations)
+            await _finalize(generation, assistant.id, content, trace, deps.retrieved.spans, messages)
+            _maybe_title(first_exchange, conversation, prompt, content, conversations)
         await generations.finish(conversation.id, generation)
+
+
+def _retrieved_spans_of(history: Sequence[StoredMessage]) -> list[tuple[float, float]]:
+    """Every span the assistant's earlier turns retrieved, each listed once."""
+
+    spans = {
+        (start, end)
+        for message in history
+        if message.role == "assistant"
+        for start, end in message.retrieved_spans or ()
+    }
+    return sorted(spans)
 
 
 async def _finalize(
@@ -405,6 +408,7 @@ async def _finalize(
     message_id: str,
     content: str,
     trace: Sequence[ToolCallTrace],
+    retrieved_spans: Sequence[tuple[float, float]],
     messages: PostgresMessages,
 ) -> StoredMessage:
     async with generation.finalize_lock:
@@ -414,6 +418,7 @@ async def _finalize(
                 content,
                 # The activity label is only for display while waiting, so it is not kept.
                 [call.model_dump(mode="json", exclude={"activity"}) for call in trace] or None,
+                retrieved_spans=[list(span) for span in retrieved_spans] or None,
             )
             if stored is None:
                 raise RuntimeError("Assistant message disappeared during generation")

@@ -387,7 +387,7 @@ Ordered by expected impact. Which of these have been implemented since is listed
 
 ## 10. Follow-up: fixes made after this report
 
-Branch `fix/video-agent-tool-descriptions`, merged into `main` on 2026-10-01. The test results above describe the agent as it was on 2026-09-30 and were not re-run. The unit tests pass (964 passed, 1 skipped); nothing has been re-checked against the live model.
+Branches `fix/video-agent-tool-descriptions` and `perf/preload-embedding-models`, merged into `main` on 2026-10-01, and `feat/stream-answer-persist-citation-spans` (the last two rows below). The test results above describe the agent as it was on 2026-09-30 and were not re-run. The unit tests pass (964 passed, 1 skipped); nothing has been re-checked against the live model.
 
 Done:
 
@@ -400,6 +400,8 @@ Done:
 | §7 issue 6 (wording) | "segments" is now "moments" throughout, and the "semanitc" typo is gone. |
 | Not in the report | `search_visual_moments` no longer sends its `score` field. |
 | §8.5 (cold starts) | Branch `perf/preload-embedding-models`, merged into `main` on 2026-10-01. The API `lifespan` starts `start_model_preload()` (`backend/api/model_preload.py`), which loads the text-embedding model and then, when `VIDSEEK_VISUAL_INDEXING` is on, SigLIP, on a daemon thread. A model that fails to load is logged and loads on first use instead. `VIDSEEK_PRELOAD_MODELS=false` turns it off, and the test suite does so. Not re-measured: the 12 s and 10 s figures are the pre-fix ones. Cost: each API process holds both models in memory from startup. |
+| §8.5 (streaming the answer) | The runner forwards the answer as it is written instead of buffering it for a whole-answer check. `CitationFilter` (`video_agent/citations.py`) holds back only an open `[`, and checks the citation when its `]` arrives: its shape and whether a tool returned the moment. A citation that fails is dropped with the space before it. The retry on a bad citation is gone (`_verify_citations`, `AnswerDraft.text`, `strip_unverified`); it fired 0 times in the 16 tests. Text a model writes before a tool call is separated from the answer by a paragraph break; none was seen in the production runs, and the stream's `FinalResultEvent` fires on that text too, so it cannot tell the two apart. Live check, one T8-style question: the first answer text appeared 1.5 s before the answer finished, where it used to appear only at the end. |
+| §7 issue 6 (spans reset every turn) | Each assistant message now stores the spans its tools returned (`messages.retrieved_spans`, migration `0028_message_retrieved_spans.sql`). The next turn starts with them restored, so a moment cited earlier stays citable. Only tool-returned spans are stored, never times found in chat text. The prompt says so. |
 
 ### Multi-part answers (§8.1)
 
@@ -446,5 +448,8 @@ Still open:
 - §7 issue 5 and §8.4: the visual routing is still too broad (T14).
 - §8.1 follow-up: the fixed questions are now about 2 to 5 times slower (T2, T11, T15). This could be cut by not repeating a search once the outline already names the candidates.
 - §7 issue 4 and §8.6: the citation check is still loose.
-- §8.5: the rest of the latency work, streaming the answer and cutting sequential rounds. The model preload is done.
-To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. Also T5 to T9, whose two videos were re-segmented by the caption repair; T8 should now cite the GPU line at [09:00]. T11 and T15 were re-checked with the multi-part fix above; both passed.
+- §8.5: cutting sequential rounds. The model preload and answer streaming are done; streaming is checked against the live model for two questions, not re-measured across the suite, and the web client and extension were not run against it.
+
+Migration `0028_message_retrieved_spans.sql` is applied to the dev database. Any other database needs `python -m backend.storage.postgres.migrate` before the streaming code is deployed, because finalizing an answer writes the new column.
+
+To re-check: T4, T10, T12 and T14 through the production runner, and the 8-hit search cap against T14. Also T5 to T9, whose two videos were re-segmented by the caption repair; T8 should now cite the GPU line at [09:00]. T11 and T15 were re-checked with the multi-part fix above; both passed. All of them now run through the streaming runner too.

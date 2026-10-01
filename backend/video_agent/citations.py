@@ -1,4 +1,4 @@
-"""The timestamp citation grammar, and checking an answer's citations against what was retrieved."""
+"""The timestamp citation grammar, and checking each citation of a streamed answer against what was retrieved."""
 
 from __future__ import annotations
 
@@ -13,10 +13,15 @@ TimeSpan = tuple[float, float]
 # those two faithful readings would be rejected as an invention.
 SLACK_SECONDS = 1.0
 
+# A well-formed citation is at most "[1:23:45 – 1:23:45]" plus a little spacing. A bracket that
+# stays open past this is prose that happens to contain a "[", and holding it back any longer
+# would only delay text the reader is waiting for.
+MAX_CITATION_LENGTH = 40
+
 _TIME = r"(?:\d{1,2}:)?\d{1,2}:[0-5]\d"
 
 # The prompt asks for an en dash between the ends of a range, but models reach for a plain
-# hyphen often enough that refusing one would spend the answer's only retry on punctuation.
+# hyphen often enough that refusing one would drop a faithful citation over punctuation.
 _DASH = r"[-\u2013\u2014]"
 
 _CITATION = re.compile(
@@ -66,27 +71,6 @@ def _collect(value: object, found: list[TimeSpan]) -> None:
             _collect(item, found)
 
 
-def unverified(text: str, spans: list[TimeSpan]) -> list[str]:
-    """The citations in an answer that are misshapen, or name a moment no tool returned."""
-
-    return [attempt.group() for attempt in _ATTEMPT.finditer(text) if not _holds_up(attempt.group(), spans)]
-
-
-def strip_unverified(text: str, spans: list[TimeSpan]) -> str:
-    """The same answer with every citation it could not stand behind removed.
-
-    Used where re-prompting is no longer possible: the model has spent its retry, or the
-    user stopped the answer mid-sentence. Deleting the citation leaves the claim uncited
-    rather than propping it up with a moment that may not exist.
-    """
-
-    cleaned = _ATTEMPT.sub(
-        lambda attempt: attempt.group() if _holds_up(attempt.group(), spans) else "", text
-    )
-    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-    return "\n".join(line.rstrip() for line in cleaned.split("\n"))
-
-
 def _holds_up(attempt: str, spans: list[TimeSpan]) -> bool:
     match = _CITATION.fullmatch(attempt)
     if match is None:
@@ -102,21 +86,76 @@ def _retrieved(second: float, spans: list[TimeSpan]) -> bool:
 
 
 @dataclass
-class AnswerDraft:
-    """What one run has retrieved and written so far.
+class RetrievedSpans:
+    """The moments the tools have returned, which are the only ones an answer may cite.
 
-    The agent's own streamed text is not shown to the user until it has been checked, so
-    when a run ends without a checked answer — the user stopped it, or the model could not
-    produce citations it could support — this is the only record of what had been written,
-    and the only way to hand back the part of it that is verifiable.
+    Filled from this turn's tool results, and before the turn starts from the earlier turns of
+    the conversation (see `restore`). A time that only ever appeared in chat text was never
+    returned by a tool, so it is never added here.
     """
 
-    text: str = ""
     spans: list[TimeSpan] = field(default_factory=list)
-    rejected: bool = False
 
     def record(self, result: object) -> None:
         self.spans.extend(spans_of(result))
 
-    def verifiable_text(self) -> str:
-        return strip_unverified(self.text, self.spans)
+    def restore(self, earlier: list[TimeSpan]) -> None:
+        self.spans.extend(earlier)
+
+
+class CitationFilter:
+    """Passes a streamed answer through, holding back and checking each citation as it closes.
+
+    Both checks a citation must pass, its shape and its being inside a retrieved span, need
+    only the bracket itself, so they run the moment the closing `]` arrives rather than once
+    the answer is whole. The text before and after streams through untouched. A citation that
+    fails is dropped together with the space before it, which leaves the claim uncited rather
+    than propping it up with a moment that may not exist.
+    """
+
+    def __init__(self, spans: list[TimeSpan]):
+        self._spans = spans
+        self._space = ""
+        self._open = ""
+        self._lead = ""
+
+    def feed(self, text: str) -> str:
+        """What can be shown of the answer now, given the next piece of it."""
+
+        shown: list[str] = []
+        for character in text:
+            if self._open:
+                self._extend_bracket(character, shown)
+            elif character == "[":
+                self._open, self._lead, self._space = "[", self._space, ""
+            elif character in " \t":
+                shown.append(self._space)
+                self._space = character
+            else:
+                shown.append(self._space + character)
+                self._space = ""
+        return "".join(shown)
+
+    def finish(self) -> str:
+        """The held-back tail once the answer has ended: a bracket that never closed is just prose."""
+
+        tail = self._space + self._lead + self._open
+        self._space = self._lead = self._open = ""
+        return tail
+
+    def _extend_bracket(self, character: str, shown: list[str]) -> None:
+        if character == "[":
+            # The earlier "[" never closed, so it was not a citation; this one may be.
+            shown.append(self._lead + self._open)
+            self._open, self._lead = "[", ""
+            return
+        self._open += character
+        if character == "]":
+            bracket, lead = self._open, self._lead
+            self._open = self._lead = ""
+            if _ATTEMPT.fullmatch(bracket) is None or _holds_up(bracket, self._spans):
+                shown.append(lead + bracket)
+            return
+        if len(self._open) > MAX_CITATION_LENGTH:
+            shown.append(self._lead + self._open)
+            self._open = self._lead = ""
