@@ -13,6 +13,17 @@ import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 
+# A WebVTT or SRT timestamp: hours optional, comma or dot before the milliseconds.
+_TIMESTAMP = r"\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3}"
+
+# One cue: its timing line, then its text up to a blank line, the next cue's timing line
+# (with or without an SRT identifier above it), or the end of the file.
+CUE_PATTERN = re.compile(
+    rf"(?P<start>{_TIMESTAMP})\s+-->\s+(?P<end>{_TIMESTAMP})[^\n]*\n"
+    rf"(?P<text>.*?)(?=\n\s*\n|\n(?:\d+\n)?{_TIMESTAMP}\s+-->|\Z)",
+    re.DOTALL,
+)
+
 
 @dataclass(frozen=True)
 class CaptionSegment:
@@ -43,16 +54,16 @@ def clean_caption_text(value: str) -> str:
 
 
 def parse_webvtt_or_srt(content: str) -> list[CaptionSegment]:
-    """Parse ordinary WebVTT or SRT cues without retaining formatting tags."""
+    """Parse ordinary WebVTT or SRT cues without retaining formatting tags.
+
+    A cue's text ends at a blank line, or at the next cue's timing line when the file leaves
+    the blank line out, as some sites' tracks do. Without the second stop the next cue is
+    swallowed whole, its timing line read as speech and its words timed as this cue's.
+    A number on the line just before that timing line is the next cue's SRT identifier.
+    """
     normalized = content.replace("\r\n", "\n").replace("\r", "\n")
-    timing = re.compile(
-        r"(?P<start>\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3})\s+-->\s+"
-        r"(?P<end>\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3})[^\n]*\n"
-        r"(?P<text>.*?)(?=\n\s*\n|\Z)",
-        re.DOTALL,
-    )
     segments = []
-    for match in timing.finditer(normalized):
+    for match in CUE_PATTERN.finditer(normalized):
         cue_text = clean_caption_text(" ".join(match.group("text").splitlines()))
         if cue_text:
             segments.append(

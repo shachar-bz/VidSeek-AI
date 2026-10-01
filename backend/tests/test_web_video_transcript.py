@@ -26,6 +26,27 @@ def test_webvtt_parser_preserves_timing_and_removes_markup() -> None:
     assert segments[0].end_seconds == 2.5
 
 
+def test_webvtt_parser_splits_cues_with_no_blank_line_between_them() -> None:
+    segments = parse_webvtt_or_srt(
+        "WEBVTT\n\n"
+        "00:08:55.865 --> 00:08:58.902\nwe can maintain an incredible lead.\n"
+        "00:09:00.403 --> 00:09:04.774\nSA: beg them to give us their GPUs.\n\n"
+        "00:09:05.000 --> 00:09:07.000\nNext cue\n"
+    )
+    assert [(segment.start_seconds, segment.end_seconds, segment.text) for segment in segments] == [
+        (535.865, 538.902, "we can maintain an incredible lead."),
+        (540.403, 544.774, "SA: beg them to give us their GPUs."),
+        (545.0, 547.0, "Next cue"),
+    ]
+
+
+def test_srt_parser_drops_the_identifier_of_a_cue_with_no_blank_line_before_it() -> None:
+    segments = parse_webvtt_or_srt(
+        "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:02,000 --> 00:00:03,000\nSecond\n"
+    )
+    assert [segment.text for segment in segments] == ["First", "Second"]
+
+
 def test_ttml_parser_reads_paragraph_cues() -> None:
     segments = parse_ttml(
         '<tt xmlns="http://www.w3.org/ns/ttml"><body><div>'
