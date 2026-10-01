@@ -91,8 +91,11 @@ async def view_sequence(
             Fewer for a few seconds around one moment, more for a long stretch.
 
     Returns:
-        What the image model saw in each frame and its answer across them, and the scenes the
-        frames come from, each with the stretch of it the frames showed.
+        What the image model saw in each frame and its answer across them, which names frames
+        by their `frame` number, and the scenes the frames come from. A scene's
+        `start_seconds`-`end_seconds` is the stretch its frames showed, and only that can be
+        cited; `scene_start_seconds`-`scene_end_seconds` is the whole scene from the index,
+        not looked at.
     """
     deps = ctx.deps
     budget = deps.visual_budget

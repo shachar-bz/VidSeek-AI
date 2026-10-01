@@ -44,8 +44,8 @@ async def search_visual_moments(
         query: What is visible, described in plain words in any language.
 
     Returns:
-        The frames found, best first, each with its shot and chapter, and a note when nothing
-        was searched or nothing stood out.
+        The frames found, best first, each the best-matching frame of its shot, with that
+        shot's bounds and chapter, and a note when nothing was searched or nothing stood out.
     """
     deps = ctx.deps
     budget = deps.visual_budget
@@ -74,7 +74,6 @@ async def search_visual_moments(
             shot_start_seconds=moment.segment.start_seconds,
             shot_end_seconds=moment.segment.end_seconds,
             chapter=moment.chapter.title if moment.chapter is not None else None,
-            score=round(moment.peak_z_score, 2),
             weak=moment.weak,
         )
         for moment in result.moments

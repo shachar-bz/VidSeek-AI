@@ -20,14 +20,16 @@ def get_chapter_context(ctx: RunContext[ConversationDeps], chapter_id: str) -> C
     returns.
 
     Every moment in the chapter is returned, however many there are, each as a one-line
-    summary rather than as what was said. Use `memories_semantic_search` when the actual
-    words matter.
+    summary and its timing, never as what was said. For the words of one of these moments,
+    call `get_memory_context` with its memory id and context_range=0; to find where a topic
+    is discussed, use `memories_semantic_search`.
 
     Args:
         chapter_id: The id of the chapter to read, as given by a moment that belongs to it.
 
     Returns:
-        The chapter's title, summary and timing, and its moments earliest first.
+        The chapter's title, summary and timing, and its moments earliest first, each with
+        its memory id.
 
     Raises:
         ChapterNotFoundError: This video has no chapter with that id.

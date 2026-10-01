@@ -15,8 +15,8 @@ def get_video_outline(ctx: RunContext[ConversationDeps]) -> VideoOutline:
     """Read this video's chapters in order.
 
     Each chapter comes back with its title, summary and timing, and nothing of what was
-    said in it. A chapter's id is what `get_chapter_context` reads to open that chapter in
-    full.
+    said in it. A chapter's id is what `get_chapter_context` reads to list that chapter's
+    moments, each with a one-line summary and its timing.
 
     Returns:
         Every chapter of the video, earliest first. Empty when this video has not been
