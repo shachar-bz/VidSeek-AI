@@ -158,21 +158,14 @@ function renderIntro(video: VideoDetail): HTMLElement {
 }
 
 function renderAnswerText(target: HTMLElement, content: string): void {
-  const approximate = state?.video.stage === "partial";
   for (const segment of splitAnswerCitations(content)) {
     if (segment.kind === "text") {
       target.append(segment.text);
       continue;
     }
-    const citation = element(
-      "button",
-      approximate ? "chat-citation chat-citation--approximate" : "chat-citation",
-      segment.text,
-    );
+    const citation = element("button", "chat-citation", segment.text);
     citation.type = "button";
-    citation.title = approximate
-      ? "Jump to this approximate moment in the video"
-      : "Jump to this moment in the video";
+    citation.title = "Jump to this moment in the video";
     citation.addEventListener("click", () => void seekTo(segment.seconds));
     target.append(citation);
   }
