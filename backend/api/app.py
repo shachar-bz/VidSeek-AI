@@ -77,6 +77,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         start_model_preload()
+        manager.resume_interrupted_visual_indexing()
         yield
         manager.shutdown()
 

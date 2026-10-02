@@ -34,7 +34,10 @@ when the run ends, however it ends, so no route or failure has to know which fil
 The one file that outlives a run is the video handed to visual indexing, which moves to
 `visual-queue` first and is deleted by the visual task. Nothing in either folder survives a
 restart that anything could use -- jobs and the visual queue are both in memory -- so a new
-manager empties both, which clears up after a process that crashed or was killed.
+manager empties both, which clears up after a process that crashed or was killed. What does
+survive is each video's `visual_status`: an index a shutdown stopped, or never got to, is
+marked interrupted, and `resume_interrupted_visual_indexing` builds it again from the copy in
+Blob Storage once the app has started.
 """
 
 from __future__ import annotations
@@ -70,7 +73,10 @@ from backend.download_pipeline import (
     AcquisitionRoute,
     ProcessedVideo,
     VideoStorageError,
+    claim_interrupted_visual_indexing,
     index_video_visually,
+    mark_visual_indexing_never_run,
+    reindex_video_visually,
     run_download_pipeline,
 )
 from backend.schemas.browser import MediaKind
@@ -264,6 +270,12 @@ def _empty_directory(directory: Path) -> None:
         _delete_local_path(child)
 
 
+def _mark_if_never_run(video_id: str, finished: Future) -> None:
+    """Mark a visual task the manager shut down before it started as interrupted."""
+    if finished.cancelled():
+        mark_visual_indexing_never_run(video_id)
+
+
 def _blob_name_for_video(video_id: str | None) -> str | None:
     """The blob name a job's recorded video lives under, or None.
 
@@ -302,6 +314,18 @@ class JobManager:
         self._visual_stop.set()
         self._executor.shutdown(wait=False, cancel_futures=True)
         self._visual_executor.shutdown(wait=False, cancel_futures=True)
+
+    def resume_interrupted_visual_indexing(self) -> None:
+        """Index again every video whose visual index an earlier shutdown interrupted.
+
+        Called once when the app starts. The claim runs on the visual executor rather than
+        here, so a slow database cannot hold up startup; each claimed video then queues behind
+        it as a task of its own, which fetches the stored video back from Blob Storage, since
+        the local copy went with the process that was interrupted.
+        """
+        if not config.visual_indexing_enabled() or not is_postgres_configured():
+            return
+        self._visual_executor.submit(self._queue_interrupted_visual_indexing)
 
     def create(
         self, request: CreateVideoJobRequest, user_id: str | None = None
@@ -621,9 +645,9 @@ class JobManager:
         workspace is deleted when the run ends and the index is built after that. The task
         deletes the local file itself when it ends. A task that never starts --
         cancelled because the manager shut down first -- cannot, so the future's callback
-        does it instead; the video's row stays `pending`, which is the truth about an index
-        nobody built. The task reads keyframe text with the machine's OCR engine, when one is
-        set up; the engine and its worker process are shared by every video.
+        does it instead, and marks the video interrupted so the next start builds its index
+        from Blob Storage. The task reads keyframe text with the machine's OCR engine, when
+        one is set up; the engine and its worker process are shared by every video.
         """
         self._visual_indexing_queue.mkdir(parents=True, exist_ok=True)
         # A name of its own rather than the video id's, so indexing one video twice cannot
@@ -644,8 +668,34 @@ class JobManager:
         def delete_if_never_run(finished: Future) -> None:
             if finished.cancelled():
                 local_path.unlink(missing_ok=True)
+            _mark_if_never_run(video_id, finished)
 
         future.add_done_callback(delete_if_never_run)
+
+    def _queue_interrupted_visual_indexing(self) -> None:
+        """Claim the interrupted indexes and queue each one; runs on the visual executor."""
+        try:
+            video_ids = claim_interrupted_visual_indexing()
+        except Exception:
+            logger.exception("Looking for interrupted visual indexes to resume failed")
+            return
+        for video_id in video_ids:
+            logger.info("Indexing video %s visually again, after an interrupted run", video_id)
+            try:
+                future = self._visual_executor.submit(
+                    reindex_video_visually,
+                    video_id,
+                    self._visual_indexing_queue,
+                    stop_event=self._visual_stop,
+                    ocr_engine=configured_ocr_engine(),
+                )
+            except RuntimeError:
+                # The manager shut down while these were being claimed.
+                mark_visual_indexing_never_run(video_id)
+                continue
+            future.add_done_callback(
+                lambda finished, video_id=video_id: _mark_if_never_run(video_id, finished)
+            )
 
     def _fail_acquisition(
         self,

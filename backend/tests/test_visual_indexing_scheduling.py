@@ -3,7 +3,8 @@
 The job manager runs visual indexing on a second single-worker executor, so a job's slot is
 free once its transcript stages end while two indexing runs never share the GPU. These tests
 check the hand-over happens right after Store, that the task runs on the visual executor and
-owns the local file, and that a task the manager never got to still does not leak the file.
+owns the local file, and that a task the manager never got to still does not leak the file
+and is marked interrupted.
 """
 
 import threading
@@ -188,7 +189,10 @@ def test_a_task_the_manager_shut_down_before_running_still_deletes_its_file(tmp_
     running.write_bytes(b"video")
     queued.write_bytes(b"video")
     manager = JobManager(tmp_path)
-    with patch(INDEX_PATH, side_effect=occupy_the_worker):
+    with (
+        patch(INDEX_PATH, side_effect=occupy_the_worker),
+        patch("backend.services.video_download.jobs.mark_visual_indexing_never_run") as mark_never_run,
+    ):
         manager._schedule_visual_indexing(VIDEO_ID, running)
         assert started.wait(timeout=10)
         manager._schedule_visual_indexing(VIDEO_ID, queued)
@@ -204,6 +208,8 @@ def test_a_task_the_manager_shut_down_before_running_still_deletes_its_file(tmp_
     assert not running.exists() and not queued.exists()
     assert list(queue.iterdir()) == indexed
     assert indexed[0].exists()
+    # The one never run is marked interrupted, so the next start builds its index.
+    assert [call.args for call in mark_never_run.call_args_list] == [(VIDEO_ID,)]
 
 
 def test_the_visual_indexing_switch_reads_true_and_false_and_nothing_else(

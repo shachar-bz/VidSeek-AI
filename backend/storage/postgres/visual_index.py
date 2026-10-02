@@ -44,6 +44,16 @@ MARK_SQL = (
     "update public.videos set visual_status = %s, visual_error = %s where id = %s::uuid"
 )
 
+# Takes every video that failed for one reason back to `pending`, and says which they were. One
+# statement both finds and re-marks them, so two processes starting together cannot both take
+# the same video.
+CLAIM_FAILED_SQL = """
+update public.videos
+set visual_status = 'pending', visual_error = null
+where visual_status = 'failed' and visual_error = %s
+returning id
+"""
+
 INSERT_FRAME_SQL = """
 insert into public.video_frame_embeddings (video_id, time_seconds, embedding)
 values (%s::uuid, %s, %s::vector)
@@ -296,6 +306,16 @@ class PostgresVisualIndex:
             raise ValueError(f"{status!r} is not a status `mark` can record")
         with connection(self._pool) as open_connection:
             open_connection.execute(MARK_SQL, (status, error, video_id))
+
+    def claim_failed(self, error: str) -> list[str]:
+        """Move every video whose index failed with `error` back to `pending`, and return their ids.
+
+        The caller now owns indexing them again: no other caller of this is given the same
+        video, because the rows no longer match once this returns.
+        """
+        with connection(self._pool) as open_connection:
+            rows = open_connection.execute(CLAIM_FAILED_SQL, (error,)).fetchall()
+        return [str(row["id"]) for row in rows]
 
     def replace(
         self,

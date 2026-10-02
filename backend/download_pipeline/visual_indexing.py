@@ -20,12 +20,19 @@ the keyframe rows as it is read. This comes last because it is the slow part: th
 searchable by its frames the whole time. OCR cannot fail the index either. A keyframe it did
 not reach keeps no engine on its row, which is how an unread keyframe is told apart from one
 that shows no text; with no engine configured, every keyframe is left that way.
+
+An index the job manager's shutdown stopped part-way, or never got to start, is marked
+`failed` as interrupted rather than left looking queued. The local file is gone by then, so
+`reindex_video_visually` fetches the stored video back from Blob Storage and builds the index
+again from the start; the job manager claims those videos with
+`claim_interrupted_visual_indexing` each time it starts.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,10 +47,12 @@ from backend.services.visual_indexing import (
 )
 from backend.services.ocr import OcrEngine
 from backend.services.visual_indexing.keyframe_text import KEYFRAMES_PER_BATCH
+from backend.storage.blob import BlobVideoStorage
 from backend.storage.postgres import (
     KeyframeText,
     NewFrameEmbedding,
     NewVisualSegment,
+    PostgresVideoRecords,
     PostgresVisualIndex,
 )
 from backend.storage.postgres.visual_index import FAILED, INDEXING, READY, SKIPPED
@@ -199,6 +208,58 @@ def index_video_visually(
         return VisualIndexingOutcome(status=FAILED, problem=VISUAL_INDEXING_FAILED)
     finally:
         _delete_local_copy(local_path)
+
+
+def claim_interrupted_visual_indexing(*, pool=None) -> list[str]:
+    """Take every video whose index was interrupted, to index again; each is now `pending`."""
+    return PostgresVisualIndex(pool=pool).claim_failed(VISUAL_INDEXING_INTERRUPTED)
+
+
+def reindex_video_visually(
+    video_id: str,
+    work_directory: Path,
+    *,
+    stop_event: threading.Event | None = None,
+    pool=None,
+    ocr_engine: OcrEngine | None = None,
+    blob_storage: BlobVideoStorage | None = None,
+) -> VisualIndexingOutcome:
+    """Fetch a stored video back from Blob Storage into `work_directory`, and index it from the start.
+
+    Once the file is here, indexing it, its outcome and deleting the file are all
+    `index_video_visually`'s. A video that cannot be fetched is marked interrupted again, so
+    the next start tries it once more: a network failure is usually passing, and one more
+    download attempt per start is all a video that is really gone costs.
+    """
+    store = PostgresVisualIndex(pool=pool)
+    if stop_event is not None and stop_event.is_set():
+        _mark(store, video_id, FAILED, error=VISUAL_INDEXING_INTERRUPTED)
+        return VisualIndexingOutcome(status=FAILED, problem=VISUAL_INDEXING_INTERRUPTED)
+    local_path: Path | None = None
+    try:
+        record = PostgresVideoRecords(pool=pool).get_by_id(video_id)
+        if record is None:
+            raise LookupError(f"There is no video {video_id}")
+        blob_name = record.video.blob_name
+        local_path = work_directory / f"{uuid.uuid4().hex}{Path(blob_name).suffix}"
+        (blob_storage or BlobVideoStorage()).download_video(blob_name, local_path)
+    except Exception:
+        logger.exception("Fetching video %s back from Blob Storage to index it again failed", video_id)
+        if local_path is not None:
+            _delete_local_copy(local_path)
+        _mark(store, video_id, FAILED, error=VISUAL_INDEXING_INTERRUPTED)
+        return VisualIndexingOutcome(status=FAILED, problem=VISUAL_INDEXING_INTERRUPTED)
+    return index_video_visually(
+        video_id, local_path, stop_event=stop_event, pool=pool, ocr_engine=ocr_engine
+    )
+
+
+def mark_visual_indexing_never_run(video_id: str, *, pool=None) -> None:
+    """Record that a queued index never started because the job manager shut down first.
+
+    It is marked interrupted, the same as an index stopped part-way, so the next start builds it.
+    """
+    _mark(PostgresVisualIndex(pool=pool), video_id, FAILED, error=VISUAL_INDEXING_INTERRUPTED)
 
 
 def read_on_screen_text(
