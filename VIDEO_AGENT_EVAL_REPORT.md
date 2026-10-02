@@ -15,6 +15,7 @@
   The 2026-09-30 report and its follow-up notes are in git history.
 - **Method:** each test ran once in the full suite. T17 and T18 also ran once earlier the same day, and both runs are reported. Every claim in every answer was checked against the database, and the visual answers against frames extracted every 1–3 s.
 - **Code changes:** none. The agent implementation was not modified.
+- **Follow-up, same day:** prompt fixes for issues 2–5 below were applied on `fix/video-agent-prompt-eval-issues` (ccdc9de), and T2, T3, T14, T15 and T17 were re-run twice each. T2, T3, T14 and T15 now pass in both runs; T17 is closer but still Partial. See §9.
 
 ## 1. Summary
 
@@ -432,6 +433,8 @@ Ordered by expected impact.
    - Re-run its visual indexing, then re-run T13 and T18. With screen text, T18 should find "details" at 17:08.
    - Make `visual_indexing_interrupted` retry or resume instead of staying `failed`. An interrupted OCR pass already has `resume_keyframe_text`; the index build needs the same.
 2. **Narrow the visual-unavailable rule (issue 1).** When the picture can't be searched and the user asks *where* something is shown, still search the speech and the chapters, and answer where it is discussed, after the prescribed message. Keep the ban on describing the picture from the transcript.
+Recommendations 3–6 were applied after this report; their re-run is in §9.
+
 3. **Make the multi-candidate answers reliable (issue 2).**
    - Before answering, name each candidate found, and say for each one what the video states or that it states nothing.
    - Re-run T2 and T15 several times, since a single run can't tell a 50% rule from a 90% one.
@@ -445,7 +448,72 @@ Ordered by expected impact.
 7. **Add an absolute floor to scored search (issue 5).** Mark a hit `weak` when its similarity is below a fixed floor, even if it stands out within the video. Then "nothing relevant" stops depending on the model's judgment alone.
 8. **Tighten the citation check (issue 7; 09-30 §8.6).** Accept citations only inside moment-level or look-level spans, not chapter ranges.
 
-## 9. Not covered
+## 9. Re-run after the prompt fixes
+
+- **Code under test:** `fix/video-agent-prompt-eval-issues` at ccdc9de, the same model, harness and warm-up as §2.
+- **Tests:** T2, T3, T14, T15 and T17, each run twice (runs A and B), one process per run.
+- **What changed** (recommendations 3–6):
+  - **Multi-candidate questions:** after listing the chapters, read every listed chapter that no search hit falls in; answer with one line per candidate, saying what the video states about it or that it states nothing; never answer only one with "if you mean X".
+  - **Visual routing:** a where/when question about an activity the speaker narrates is a "Where Is This Discussed?" question, answered without the visual tools. The picture is searched only when the first round lists no chapter it can be in.
+  - **Outline:** the `get_video_outline` docstring now says it shows the video's structure, and that it is used to understand how the video is organized, locate a topic or identify its sections. The prompt is unchanged for this.
+  - **How long:** a new "How to investigate" bullet. Leads the transcript supports come first. The last look brackets the action, from the frame before it to the frame after it. Durations are given as a range from the frame spacing, or as a rough estimate when the looks run out.
+  - **Search wording:** "Search for the thing itself ("whisking eggs"), not for what the user asks about it ("how long", "who")."
+
+### Results
+
+| Test | Before (§3) | Run A | Run B | Grade |
+|---|---|---|---|---|
+| T2 | Partial, 8.1 s | Pass, 11.8 s | Pass, 22.5 s | Partial → **Pass** |
+| T3 | Pass, over-read, 14.8 s | Pass, outline only, 7.4 s | Pass, outline only, 7.1 s | Pass → **Pass**, one round saved |
+| T14 | Deviation, 25.3 s | Pass, no visual tools, 11.5 s | Pass, no visual tools, 12.9 s | Deviation → **Pass** |
+| T15 | Partial, 3 of 4, 12.5 s | Pass, 4 of 4, 16.0 s | Pass, 4 of 4, 16.1 s | Partial → **Pass** |
+| T17 | Partial, 49.6 s | Partial, 44.2 s | Partial, closer, 48.6 s | Partial → Partial |
+
+| Test, run | Path | Total s | 1st tool s | 1st answer text s | Tool time s | Model requests | Tool calls | Output tok |
+|---|---|---|---|---|---|---|---|---|
+| T2 A | search + outline → chapter | 11.8 | 3.8 | 10.3 | 0.2 | 3 | 3 | 221 |
+| T2 B | search + outline → 2 × chapter + search | 22.5 | 6.6 | 21.0 | 0.3 | 3 | 5 | 316 |
+| T3 A | outline | 7.4 | 1.9 | 3.7 | 0.0 | 2 | 1 | 277 |
+| T3 B | outline | 7.1 | 1.7 | 3.9 | 0.0 | 2 | 1 | 223 |
+| T14 A | search + outline → chapter | 11.5 | 2.7 | 8.1 | 0.2 | 3 | 3 | 314 |
+| T14 B | search + outline → chapter | 12.9 | 3.4 | 9.1 | 0.1 | 3 | 3 | 317 |
+| T15 A | search + outline → 4 × chapter → 2 × memory | 16.0 | 3.5 | 13.1 | 0.2 | 4 | 8 | 474 |
+| T15 B | search + outline → 3 × chapter → 3 × memory | 16.1 | 3.5 | 13.1 | 0.2 | 4 | 8 | 478 |
+| T17 A | picture search + search → contact sheet → 3 × sequence + search | 44.2 | 2.8 | 39.2 | 19.1 | 4 | 7 | 605 |
+| T17 B | picture search + search → contact sheet → 2 × sequence + search → sequence | 48.6 | 3.3 | 45.3 | 25.0 | 5 | 7 | 611 |
+
+### Per test
+
+- **T2, "Who coined the term?" (Pass, both runs).**
+  - Both answers give one line per term: valuemaxxing is credited to Mark Boroditsky [04:24–05:16]; for tokenmaxxing the video names no originator [00:42–01:48]. Neither uses "if you mean".
+  - **Cost:** the read step adds a round. Run B is the slowest at 22.5 s, but its tools took 0.3 s: the model's responses were slow, and its first tool call alone came at 6.6 s against 2.6 s before.
+- **T3, outline (Pass, both runs).** One `get_video_outline` call and nothing else. The answer has all 5 chapters with the same ranges as before, in half the time (14.8 → 7.1–7.4 s).
+- **T14, "Where … do they work on the pumpkin pies?" (Pass, both runs).**
+  - No visual tools in either run. Every location is found: the squash [13:31–14:41], the filling [14:42–16:52], the baking explanation [17:03–17:22], the meringue [20:54–22:36], plus the finale [30:15–30:38]. 25.3 → 11.5–12.9 s.
+  - Run A still opens with "two main sections" and lists five items (out of scope here); run B does not.
+- **T15, "How long does it bake?" (Pass, both runs).**
+  - All 4 candidates are now covered, the meringue included: the fruit crisp, 45 min in all [05:21–06:18]; the custard desserts, "bake during the break" [09:14–09:55]; the pumpkin pies and their meringue, no exact time [17:03–17:22] [20:54–22:36].
+  - **A minor miss remains:** the meringue's "let that cook for few minutes" (22:46) sits in the next chapter, "Making Pulled-Sugar Corn and Leaves", which starts at 22:43. The meringue chapter ends at 22:36, so reading it can't reach that line. This is a chapter boundary in the data, not the rule.
+  - The pies' oven setting is not counted: the question asks how long.
+  - **Cost:** one more round than before, to read words with `get_memory_context` (12.5 → 16.0 s).
+- **T17, whisking the eggs, and for how long (Partial, both runs).**
+  - **Run A did not follow the new rule.**
+    - After the contact sheet it spent all 3 remaining looks in one round, one of them on the 17:14 lead, which the transcript doesn't support. That left nothing to narrow.
+    - Custard: "at least 7 seconds" (truth about 12 s), with no range.
+    - It also reported "a brief hand-whisking moment around 17:13–17:16". Frames every 1 s show him talking with a whisk standing in a bowl, touching it at about 17:15, before turning to the stand mixer.
+  - **Run B followed it, and the custard answer is now right.**
+    - It skipped 17:14, ran coarse sequences on the two supported sessions, then bracketed the custard with 08:32–09:02.
+    - Custard: "about 11–19 seconds, allowing for the gaps between checked frames". The truth, 08:37–08:49, about 12 s, is inside the range.
+    - Pumpkin: "at least 19 seconds, still whisking at 15:06". The truth is about 45–55 s of active whisking up to about 16:00. Its coarse sequence was 14:36–15:06, the end of a camera shot, and no look was left to extend it. The answer is honest but well short.
+
+### What is left
+
+1. **The how-long rule does not reserve the narrowing look** (T17 A). "With a look left, narrow" lets the agent spend every look on coarse sequences, a sheet-only lead included. The rule should say to keep one look for narrowing, and that a sheet-only lead comes after it.
+2. **"A sequence over its own shot" stops at a camera cut** (T17 B). The pumpkin whisking runs across several cuts, so a one-shot coarse window covers only its start. The coarse sequence should span where the transcript places the action (its moment, here 14:42–16:52), not one shot.
+3. **The multi-candidate read step costs a round.** T2 needed one more round in both runs and T15 one more round for words. That is about 3–4 s, the price of the completeness.
+4. **Still a single pair of runs.** T2, T15 and T17 varied between runs before; two passes each is a good sign, not a rate.
+
+## 10. Not covered
 
 - **`get_viewer_comments`:** `comment_embeddings` has 0 rows.
 - **Untimed transcripts and non-English transcripts:** none exist in the DB.
