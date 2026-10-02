@@ -1,13 +1,15 @@
 """Tests for how a visual index a shutdown interrupted gets built again.
 
 A shutdown stops an index part-way, or cancels one still queued, and either way the local
-video file is gone. These tests check that both leave the video marked interrupted, that the
-store hands each interrupted video to one caller only, that the stage fetches the stored copy
+video file is gone. These tests check that both leave the video marked interrupted, that a
+video a killed process left saying `indexing` or `pending` counts as interrupted once it has
+long gone unchanged, that the store hands each such video to one caller only, that the stage fetches the stored copy
 back from Blob Storage and indexes it from the start, and that the job manager does this for
 every interrupted video when it starts.
 """
 
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -15,11 +17,14 @@ from unittest.mock import patch
 import pytest
 
 from backend.download_pipeline.visual_indexing import (
+    ABANDONED_AFTER,
     VISUAL_INDEXING_INTERRUPTED,
     claim_interrupted_visual_indexing,
+    is_abandoned,
     reindex_video_visually,
 )
 from backend.services.video_download.jobs import JobManager
+from backend.storage.postgres import PostgresVisualIndex, VisualIndexState
 from backend.tests.fake_postgres import FakePool
 from backend.tests.test_visual_indexing_stage import BUILD_PATH, BUILT, PROBE_PATH, status_writes
 
@@ -52,17 +57,60 @@ def recorded_video():
     ))
 
 
-def test_claiming_moves_interrupted_videos_back_to_pending_in_one_statement() -> None:
+def test_claiming_takes_interrupted_and_abandoned_videos_back_to_pending_in_one_statement() -> None:
     pool = FakePool(rows=[{"id": VIDEO_ID}, {"id": OTHER_VIDEO_ID}])
 
     claimed = claim_interrupted_visual_indexing(pool=pool)
 
     assert claimed == [VIDEO_ID, OTHER_VIDEO_ID]
     [statement] = pool.recorded
-    assert "set visual_status = 'pending', visual_error = null" in statement.statement
-    assert "where visual_status = 'failed' and visual_error = %s" in statement.statement
+    assert "set visual_status = 'pending', visual_error = null, visual_status_changed_at = now()" in (
+        statement.statement
+    )
+    assert "(visual_status = 'failed' and visual_error = %s)" in statement.statement
+    assert "visual_status in ('pending', 'indexing')" in statement.statement
+    assert "visual_status_changed_at < now() - make_interval(secs => %s)" in statement.statement
     assert "returning id" in statement.statement
-    assert statement.parameters == (VISUAL_INDEXING_INTERRUPTED,)
+    assert statement.parameters == (VISUAL_INDEXING_INTERRUPTED, ABANDONED_AFTER.total_seconds())
+
+
+def test_every_status_write_restarts_the_clock_abandonment_is_measured_by() -> None:
+    pool = FakePool()
+    store = PostgresVisualIndex(pool=pool)
+
+    store.mark(VIDEO_ID, "indexing")
+    store.replace(VIDEO_ID, frames=[], segments=[], index_version="v")
+
+    status_writes = [item.statement for item in pool.recorded if "set visual_status" in item.statement]
+    assert len(status_writes) == 2
+    assert all("visual_status_changed_at = now()" in statement for statement in status_writes)
+
+
+@pytest.mark.parametrize(
+    "status, unchanged_for, abandoned",
+    [
+        ("indexing", ABANDONED_AFTER + timedelta(minutes=1), True),
+        ("pending", ABANDONED_AFTER + timedelta(minutes=1), True),
+        ("indexing", ABANDONED_AFTER - timedelta(minutes=1), False),
+        ("ready", ABANDONED_AFTER * 10, False),
+        ("failed", ABANDONED_AFTER * 10, False),
+    ],
+)
+def test_only_a_long_unchanged_indexing_or_pending_video_counts_as_abandoned(
+    status: str, unchanged_for: timedelta, abandoned: bool
+) -> None:
+    now = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    state = VisualIndexState(
+        status=status, error=None, index_version=None, status_changed_at=now - unchanged_for
+    )
+
+    assert is_abandoned(state, now=now) is abandoned
+
+
+def test_a_state_read_without_its_change_time_is_never_taken_as_abandoned() -> None:
+    state = VisualIndexState(status="indexing", error=None, index_version=None)
+
+    assert is_abandoned(state, now=datetime.now(timezone.utc)) is False
 
 
 def test_an_interrupted_video_is_fetched_from_blob_storage_and_indexed_from_the_start(

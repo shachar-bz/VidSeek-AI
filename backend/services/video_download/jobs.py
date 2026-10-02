@@ -36,8 +36,9 @@ The one file that outlives a run is the video handed to visual indexing, which m
 restart that anything could use -- jobs and the visual queue are both in memory -- so a new
 manager empties both, which clears up after a process that crashed or was killed. What does
 survive is each video's `visual_status`: an index a shutdown stopped, or never got to, is
-marked interrupted, and `resume_interrupted_visual_indexing` builds it again from the copy in
-Blob Storage once the app has started.
+marked interrupted, one a killed process left behind is abandoned once it has long gone
+unchanged, and `resume_interrupted_visual_indexing` builds either again from the copy in Blob
+Storage once the app has started.
 """
 
 from __future__ import annotations
@@ -316,7 +317,7 @@ class JobManager:
         self._visual_executor.shutdown(wait=False, cancel_futures=True)
 
     def resume_interrupted_visual_indexing(self) -> None:
-        """Index again every video whose visual index an earlier shutdown interrupted.
+        """Index again every video whose visual index an earlier process interrupted or abandoned.
 
         Called once when the app starts. The claim runs on the visual executor rather than
         here, so a slow database cannot hold up startup; each claimed video then queues behind

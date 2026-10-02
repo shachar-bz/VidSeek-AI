@@ -3,7 +3,8 @@
 The job manager already does this by itself, each time it starts, for every video an earlier
 shutdown interrupted. This one-off is for a video it will not pick up: one whose index failed
 for another reason, or that was skipped, or one to index now rather than at the next start.
-It refuses a video whose index is `ready` or still `indexing`.
+It refuses a video whose index is `ready`, or that says `indexing` while a process may still
+be building it: one that has not changed for `ABANDONED_AFTER` is taken as abandoned.
 
     python -m backend.download_pipeline.reindex_visually VIDEO_ID           # report only
     python -m backend.download_pipeline.reindex_visually VIDEO_ID --apply   # index and store
@@ -17,13 +18,14 @@ from __future__ import annotations
 import argparse
 import logging
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.services.ocr import configured_ocr_engine
 from backend.storage.postgres import PostgresVideoRecords
 from backend.storage.postgres.visual_index import FAILED, PENDING, READY, SKIPPED, PostgresVisualIndex
 
-from .visual_indexing import reindex_video_visually
+from .visual_indexing import is_abandoned, reindex_video_visually
 
 # The statuses of a video that has no index and none being built.
 REINDEXABLE_STATUSES = (PENDING, FAILED, SKIPPED)
@@ -49,8 +51,12 @@ def main(argv: list[str] | None = None) -> int:
         state.status,
         state.error,
     )
-    if state.status not in REINDEXABLE_STATUSES:
-        logger.error("Only a video whose status is one of %s is indexed again", ", ".join(REINDEXABLE_STATUSES))
+    abandoned = is_abandoned(state, now=datetime.now(timezone.utc))
+    if state.status not in REINDEXABLE_STATUSES and not abandoned:
+        logger.error(
+            "Only a video whose status is one of %s, or an abandoned index, is indexed again",
+            ", ".join(REINDEXABLE_STATUSES),
+        )
         return 1
     if not arguments.apply:
         logger.info("Nothing written. Run again with --apply to index it.")

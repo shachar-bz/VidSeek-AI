@@ -6,8 +6,11 @@ and every keyframe, and the `ready` status with the version that built them -- i
 transaction, so a reader never sees half of an index, or an index from one model labelled
 with another's version.
 
-The status columns live on `videos` but are written only here. `PostgresVideoRecords.upsert`
-does not know they exist, which is what keeps a re-recorded video from erasing them.
+The status columns live on `videos` but are written only here. Every status write also sets
+`visual_status_changed_at` (`migrations/0029_visual_status_changed_at.sql`), which is how a
+row a killed process left saying `indexing` is told from one still being built.
+`PostgresVideoRecords.upsert` does not know they exist, which is what keeps a re-recorded
+video from erasing them.
 
 The on-screen text of keyframes (`migrations/0024_keyframe_on_screen_text.sql`) is written
 after the rest, by `set_keyframe_text`, onto the keyframe rows `replace` created: OCR is the
@@ -22,6 +25,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from .connection import connection
 
@@ -34,23 +38,27 @@ SKIPPED = "skipped"
 VISUAL_STATUSES = (PENDING, INDEXING, READY, FAILED, SKIPPED)
 
 STATE_SQL = (
-    "select visual_status, visual_error, visual_index_version "
+    "select visual_status, visual_error, visual_index_version, visual_status_changed_at "
     "from public.videos where id = %s::uuid"
 )
 
 # `visual_index_version` is left alone: a failed re-index does not make the version of the
 # index still stored untrue, and `replace` is the only writer that changes it.
 MARK_SQL = (
-    "update public.videos set visual_status = %s, visual_error = %s where id = %s::uuid"
+    "update public.videos set visual_status = %s, visual_error = %s, "
+    "visual_status_changed_at = now() where id = %s::uuid"
 )
 
-# Takes every video that failed for one reason back to `pending`, and says which they were. One
-# statement both finds and re-marks them, so two processes starting together cannot both take
-# the same video.
-CLAIM_FAILED_SQL = """
+# Takes back to `pending` every video that failed for one reason, or that has said `pending` or
+# `indexing` for longer than the given number of seconds, and says which they were. One
+# statement both finds and re-marks them, and re-marking restarts the clock, so two processes
+# starting together cannot both take the same video.
+CLAIM_FOR_REINDEXING_SQL = """
 update public.videos
-set visual_status = 'pending', visual_error = null
-where visual_status = 'failed' and visual_error = %s
+set visual_status = 'pending', visual_error = null, visual_status_changed_at = now()
+where (visual_status = 'failed' and visual_error = %s)
+   or (visual_status in ('pending', 'indexing')
+       and visual_status_changed_at < now() - make_interval(secs => %s))
 returning id
 """
 
@@ -77,7 +85,8 @@ where s.video_id = %s::uuid and s.segment_index = %s
 
 READY_SQL = """
 update public.videos
-set visual_status = 'ready', visual_error = null, visual_index_version = %s
+set visual_status = 'ready', visual_error = null, visual_index_version = %s,
+    visual_status_changed_at = now()
 where id = %s::uuid
 """
 
@@ -188,6 +197,8 @@ class VisualIndexState:
     status: str
     error: str | None
     index_version: str | None
+    # When the status last changed; None only for a row read without the column.
+    status_changed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -294,6 +305,7 @@ class PostgresVisualIndex:
             status=row["visual_status"],
             error=row.get("visual_error"),
             index_version=row.get("visual_index_version"),
+            status_changed_at=row.get("visual_status_changed_at"),
         )
 
     def mark(self, video_id: str, status: str, *, error: str | None = None) -> None:
@@ -307,14 +319,18 @@ class PostgresVisualIndex:
         with connection(self._pool) as open_connection:
             open_connection.execute(MARK_SQL, (status, error, video_id))
 
-    def claim_failed(self, error: str) -> list[str]:
-        """Move every video whose index failed with `error` back to `pending`, and return their ids.
+    def claim_for_reindexing(self, *, failed_with: str, unchanged_for: timedelta) -> list[str]:
+        """Move back to `pending`, and return the ids of, every video whose index needs building again.
 
-        The caller now owns indexing them again: no other caller of this is given the same
-        video, because the rows no longer match once this returns.
+        Those are the videos whose index failed with `failed_with`, and those that have said
+        `pending` or `indexing` for longer than `unchanged_for`. The caller now owns indexing
+        them: no other caller of this is given the same video, because the rows no longer
+        match once this returns.
         """
         with connection(self._pool) as open_connection:
-            rows = open_connection.execute(CLAIM_FAILED_SQL, (error,)).fetchall()
+            rows = open_connection.execute(
+                CLAIM_FOR_REINDEXING_SQL, (failed_with, unchanged_for.total_seconds())
+            ).fetchall()
         return [str(row["id"]) for row in rows]
 
     def replace(
