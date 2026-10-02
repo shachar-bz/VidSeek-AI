@@ -34,7 +34,6 @@ from . import citations
 from .activity import tool_activity
 from .prompt import (
     SYSTEM_PROMPT,
-    VIEWER_COMMENTS_PROMPT,
     VISUAL_PROCESSING_PROMPT,
     VISUAL_PROMPT,
     VISUAL_UNAVAILABLE_PROMPT,
@@ -213,10 +212,6 @@ def _model_history(
     ]
     if deps is not None and not deps.timestamps_reliable:
         converted.append(ModelRequest(parts=[SystemPromptPart(content=PARTIAL_TIMING_PROMPT)]))
-    # Told about only where the tool is offered, so a prompt never describes a tool the model
-    # cannot see.
-    if deps is not None and deps.has_comments:
-        converted.append(ModelRequest(parts=[SystemPromptPart(content=VIEWER_COMMENTS_PROMPT)]))
     # The visual tools are offered only for a ready index, so the full section goes with them
     # and the other two say what to tell the user instead of looking.
     if deps is not None:
