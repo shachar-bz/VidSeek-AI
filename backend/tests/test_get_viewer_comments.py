@@ -151,6 +151,8 @@ def test_the_comments_rules_travel_in_the_tool_description() -> None:
     assert "never as a fact about the video" in description
     assert 'Say "commenters" or "several commenters"' in description
     assert "Comments are never cited" in description
+    assert "for similarity, that no commenters addressed it" in description
+    assert "for top_liked_fallback, that none of the most-liked comments do" in description
 
 
 @pytest.mark.parametrize("has_comments", [True, False])
