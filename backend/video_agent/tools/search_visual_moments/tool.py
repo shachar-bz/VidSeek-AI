@@ -35,10 +35,9 @@ async def search_visual_moments(
 
     Every frame sampled every 2 seconds is compared with the query. Only frames that stand out
     from the rest of this video are returned: at most one per shot, up to 6, best first. When
-    nothing stands out, the note says so and the 3 closest frames come back marked `weak`. A hit
-    means a frame resembles the query, not that it shows it: look at it before saying what it
-    shows. Its times cannot be cited until you have. Describe what is visible ("a whiteboard
-    with equations", "a ball on grass"), not what the user asked ("when is the ball in the air").
+    nothing stands out, the note says so and the 3 closest frames come back marked `weak`.
+    Describe what is visible ("a whiteboard with equations", "a ball on grass"), not what the
+    user asked ("when is the ball in the air").
 
     Args:
         query: What is visible, described in plain words in any language.
