@@ -17,7 +17,7 @@ class ScreenTextMoment(BaseModel):
         description="When the text appears on screen, in seconds from the beginning of the video."
     )
     end_seconds: float = Field(description="When it stops being on screen, in seconds.")
-    timestamp: str = Field(description="The same stretch written as MM:SS-MM:SS.")
+    timestamp: str = Field(description="The same stretch written as MM:SS-MM:SS, or H:MM:SS-H:MM:SS from an hour in.")
     chapter: str | None = Field(default=None, description="The title of the chapter the moment starts in, if any.")
     found_by: list[str] = Field(
         description=(

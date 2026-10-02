@@ -20,7 +20,7 @@ class PictureMatch(BaseModel):
     frame_seconds: float = Field(
         description="When the frame is, in seconds from the beginning of the video: the best-matching frame of its shot."
     )
-    timestamp: str = Field(description="The same time written as MM:SS.")
+    timestamp: str = Field(description="The same time written as MM:SS or H:MM:SS.")
     shot_start_seconds: float = Field(description="Where the shot the frame is in starts, in seconds.")
     shot_end_seconds: float = Field(description="Where that shot ends, in seconds.")
     chapter: str | None = Field(default=None, description="The title of the chapter the frame is in, if any.")
