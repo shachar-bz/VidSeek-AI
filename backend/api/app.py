@@ -26,7 +26,6 @@ from backend.storage.postgres import (
     PostgresUsers,
     PostgresUserVideos,
     PostgresVideoJobs,
-    PostgresVideoRecords,
     PostgresVisualIndex,
 )
 from backend.video_agent import ConversationAgentRunner, PydanticConversationAgentRunner
@@ -52,7 +51,6 @@ def create_app(
     pinned_answers_store: PostgresPinnedAnswers | None = None,
     conversations_store: PostgresConversations | None = None,
     messages_store: PostgresMessages | None = None,
-    video_records_store: PostgresVideoRecords | None = None,
     comments_store: PostgresComments | None = None,
     visual_index_store: PostgresVisualIndex | None = None,
     video_jobs_store: PostgresVideoJobs | None = None,
@@ -114,9 +112,6 @@ def create_app(
     )
     app.state.messages_store = (
         messages_store if messages_store is not None else PostgresMessages()
-    )
-    app.state.video_records_store = (
-        video_records_store if video_records_store is not None else PostgresVideoRecords()
     )
     app.state.comments_store = (
         comments_store if comments_store is not None else PostgresComments()
