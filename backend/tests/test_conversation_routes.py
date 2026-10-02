@@ -142,17 +142,6 @@ class MemoryPins:
         return []
 
 
-class MemoryVideoRecords:
-    def __init__(self, timing_fidelity: str | None) -> None:
-        self.timing_fidelity = timing_fidelity
-
-    def get_by_id(self, video_id):
-        if video_id != VIDEO_ID:
-            return None
-        video = type("Video", (), {"transcript_timing_fidelity": self.timing_fidelity})()
-        return type("StoredVideo", (), {"video": video})()
-
-
 class MemoryComments:
     def __init__(self, count: int = 0) -> None:
         self.comment_count = count
@@ -199,7 +188,6 @@ def _app(
     app.state.library_views_store = MemoryLibraryViews(
         ready=ready, linked=linked, timing_fidelity=timing_fidelity
     )
-    app.state.video_records_store = MemoryVideoRecords(timing_fidelity)
     app.state.comments_store = MemoryComments(comment_count)
     app.state.visual_index_store = MemoryVisualIndex(visual_state)
     app.state.conversation_agent_runner = runner or FakeRunner([TextFragment("answer")])
@@ -366,7 +354,7 @@ def test_a_link_removed_during_creation_maps_the_store_error_to_not_found() -> N
 
 
 def test_both_ready_and_partial_completed_videos_are_chat_capable() -> None:
-    for timing_fidelity, expected_reliable in (("word", True), (None, False)):
+    for timing_fidelity in ("word", None):
         runner = FakeRunner([TextFragment("answer")])
         app = _app(ready=True, runner=runner, timing_fidelity=timing_fidelity)
         with TestClient(app) as client:
@@ -377,7 +365,6 @@ def test_both_ready_and_partial_completed_videos_are_chat_capable() -> None:
             )
 
         assert response.status_code == 200
-        assert runner.runs[0][2].timestamps_reliable is expected_reliable
 
 
 def test_the_agent_is_told_whether_the_video_has_comments() -> None:
@@ -478,7 +465,6 @@ def test_stop_persists_partial_text_and_emits_stopped() -> None:
             conversations=conversations,
             messages=messages,
             pins=MemoryPins(),
-            timestamps_reliable=True,
         )
         assert "message_start" in await anext(stream)
         assert '"text":"kept"' in await anext(stream)
@@ -493,10 +479,6 @@ def test_stop_persists_partial_text_and_emits_stopped() -> None:
             pass
 
     asyncio.run(scenario())
-
-
-def test_a_video_without_a_record_is_not_reported_as_untimed() -> None:
-    assert routes._timestamps_reliable("unknown-video", MemoryVideoRecords("word")) is True
 
 
 def test_the_spans_an_answer_retrieved_are_stored_and_restored_for_the_next_turn() -> None:
