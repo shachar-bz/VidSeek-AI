@@ -23,7 +23,6 @@ class ConversationDeps:
     """Per-run state the application supplies when a conversation/agent run starts."""
 
     video_id: str
-    timestamps_reliable: bool = True
 
     # Whether the video has stored YouTube comments. Decides whether the agent is offered
     # `get_viewer_comments` at all, so it is read once per run rather than on every step.

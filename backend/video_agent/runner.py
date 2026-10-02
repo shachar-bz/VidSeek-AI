@@ -54,11 +54,6 @@ from .tools.visual_tools import VISUAL_TOOLS
 API_KEY_NAME = "OPENAI_API_KEY_DUDU"
 MODEL_NAME = "gpt-6.1-sol"
 PARAGRAPH_BREAK = "\n\n"
-PARTIAL_TIMING_PROMPT = (
-    "The current video's transcript has no timing data, so the moments you retrieve carry no "
-    "reliable timestamps. Do not give timestamps or time ranges; tell the user they are "
-    "unavailable for this video, and still answer from the retrieved video content."
-)
 TOOLS = (
     get_video_info,
     get_video_outline,
@@ -210,8 +205,6 @@ def _model_history(
     converted: list[ModelMessage] = [
         ModelRequest(parts=[SystemPromptPart(content=SYSTEM_PROMPT)])
     ]
-    if deps is not None and not deps.timestamps_reliable:
-        converted.append(ModelRequest(parts=[SystemPromptPart(content=PARTIAL_TIMING_PROMPT)]))
     # The visual tools are offered only for a ready index, so the full section goes with them
     # and the other two say what to tell the user instead of looking.
     if deps is not None:

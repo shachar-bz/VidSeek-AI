@@ -41,7 +41,6 @@ from backend.storage.postgres import (
     PostgresMessages,
     PostgresPinnedAnswers,
     PostgresUserVideos,
-    PostgresVideoRecords,
     PostgresVisualIndex,
     StoredConversation,
     StoredMessage,
@@ -77,10 +76,6 @@ def user_videos_store(request: Request) -> PostgresUserVideos:
     return request.app.state.user_videos_store
 
 
-def video_records_store(request: Request) -> PostgresVideoRecords:
-    return request.app.state.video_records_store
-
-
 def comments_store(request: Request) -> PostgresComments:
     return request.app.state.comments_store
 
@@ -102,7 +97,6 @@ Messages = Annotated[PostgresMessages, Depends(messages_store)]
 Pins = Annotated[PostgresPinnedAnswers, Depends(pinned_answers_store)]
 UserVideos = Annotated[PostgresUserVideos, Depends(user_videos_store)]
 LibraryViews = Annotated[PostgresLibraryViews, Depends(library_views)]
-VideoRecords = Annotated[PostgresVideoRecords, Depends(video_records_store)]
 Comments = Annotated[PostgresComments, Depends(comments_store)]
 VisualIndex = Annotated[PostgresVisualIndex, Depends(visual_index_store)]
 Runner = Annotated[ConversationAgentRunner, Depends(agent_runner)]
@@ -200,7 +194,6 @@ async def send_message(
     messages: Messages,
     pins: Pins,
     views: LibraryViews,
-    video_records: VideoRecords,
     comments: Comments,
     visual_index: VisualIndex,
     runner: Runner,
@@ -235,7 +228,6 @@ async def send_message(
         conversations=conversations,
         messages=messages,
         pins=pins,
-        timestamps_reliable=_timestamps_reliable(conversation.video_id, video_records),
         has_comments=comments.count(conversation.video_id) > 0,
         visual_availability=visual_availability(visual_index.state(conversation.video_id)),
         current_time_seconds=body.current_time_seconds,
@@ -275,7 +267,6 @@ async def _answer_stream(
     conversations: PostgresConversations,
     messages: PostgresMessages,
     pins: PostgresPinnedAnswers,
-    timestamps_reliable: bool,
     has_comments: bool = False,
     visual_availability: str = VISUAL_UNAVAILABLE,
     current_time_seconds: float | None = None,
@@ -291,7 +282,6 @@ async def _answer_stream(
     queue: asyncio.Queue[tuple[str, object | None]] = asyncio.Queue()
     deps = ConversationDeps(
         video_id=conversation.video_id,
-        timestamps_reliable=timestamps_reliable,
         has_comments=has_comments,
         visual_availability=visual_availability,
         current_time_seconds=current_time_seconds,
@@ -445,14 +435,6 @@ def _require_chat_capable(
         raise HTTPException(status_code=404, detail="Video not found")
     if not _stage(row).allows_chat:
         raise HTTPException(status_code=409, detail="Video is not ready for chat")
-
-
-def _timestamps_reliable(video_id: str, video_records: PostgresVideoRecords) -> bool:
-    record = video_records.get_by_id(video_id)
-    if record is None:
-        # Nothing is known about the timing, which is not the same as knowing there is none.
-        return True
-    return bool(record.video.transcript_timing_fidelity)
 
 
 def _owned_conversation(
