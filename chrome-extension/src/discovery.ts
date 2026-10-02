@@ -88,6 +88,20 @@ export function isYouTubeUrl(url: string): boolean {
   );
 }
 
+/** A provider host alone is not a downloadable video identity. */
+export function youtubeVideoUrl(value: string): string | undefined {
+  if (!isYouTubeUrl(value)) return;
+  const url = new URL(value);
+  if (!/^https?:$/.test(url.protocol)) return;
+  const id = url.hostname === "youtu.be"
+    ? url.pathname.split("/")[1]
+    : url.searchParams.get("v") ||
+      url.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]+)(?:\/|$)/)?.[1];
+  return id && /^[\w-]{11}$/.test(id)
+    ? `https://www.youtube.com/watch?v=${id}`
+    : undefined;
+}
+
 export type DrmSystem =
   "widevine" | "playready" | "fairplay" | "clearkey" | "drm";
 
@@ -335,14 +349,24 @@ function expandVideoFrames(
 ): FrameDiscoveryResult[] {
   const result: FrameDiscoveryResult[] = [];
   for (const frame of frames) {
-    for (const item of frame.result?.videos ||
+    for (let item of frame.result?.videos ||
       (frame.result ? [frame.result] : [])) {
+      const canonical = youtubeVideoUrl(item.page_url);
+      if (canonical && canonical !== item.page_url)
+        item = { ...item, page_url: canonical };
       const duplicate = result.find(
         (f) =>
           isYouTubeUrl(item.page_url) && f.result?.page_url === item.page_url,
       );
       if (duplicate) {
-        if (item.caption_candidates.length) duplicate.result = item;
+        // The full player's title is more useful than its search page's thumbnail
+        // title. Its frame also remains the right owner for subsequent inspection.
+        const playerFrame = isYouTubeUrl(item.frame_url || "");
+        const duplicatePlayerFrame = isYouTubeUrl(duplicate.result?.frame_url || "");
+        if ((playerFrame && !duplicatePlayerFrame) || item.caption_candidates.length) {
+          duplicate.result = item;
+          duplicate.frameId = frame.frameId;
+        }
       } else result.push({ frameId: frame.frameId, result: item });
     }
   }

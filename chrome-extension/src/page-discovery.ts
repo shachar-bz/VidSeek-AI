@@ -26,6 +26,7 @@ export function discoverPage(): DiscoveryResult {
   const youtube = (value: string): string | undefined => {
     try {
       const u = new URL(value, document.baseURI);
+      if (!/^https?:$/.test(u.protocol)) return;
       if (
         !/(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/.test(
           u.hostname,
@@ -36,7 +37,7 @@ export function discoverPage(): DiscoveryResult {
         u.hostname === "youtu.be"
           ? u.pathname.split("/")[1]
           : u.searchParams.get("v") ||
-            u.pathname.match(/\/(?:embed|shorts)\/([\w-]+)/)?.[1];
+            u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]+)(?:\/|$)/)?.[1];
       return id && /^[\w-]{11}$/.test(id)
         ? `https://www.youtube.com/watch?v=${id}`
         : undefined;
@@ -82,6 +83,21 @@ export function discoverPage(): DiscoveryResult {
     caption_candidates: [],
     structured_candidates: [],
   });
+  // Google configures /embed/ players without an ID in their frame URL. The
+  // player's title/watch links still identify the video; recommendations do not.
+  const embeddedYoutube = /(^|\.)(youtube\.com|youtube-nocookie\.com)$/.test(location.hostname)
+    && /^\/embed\//.test(location.pathname);
+  const playerIdentities = embeddedYoutube
+    ? [...new Set(query<HTMLAnchorElement>(
+      'a.ytp-title-link, a.ytp-youtube-button, a.ytmVideoInfoVideoTitle, a[aria-label="Watch on YouTube"]',
+    ).map((link) => youtube(link.href)).filter((url): url is string => Boolean(url)))]
+    : [];
+  const ownYoutube = youtube(location.href) ||
+    (playerIdentities.length === 1 ? playerIdentities[0] : undefined);
+  if (ownYoutube) return { ...make(), page_url: ownYoutube };
+  // Never offer an unresolved YouTube frame's /embed/ address for downloading.
+  if (/(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/.test(location.hostname))
+    return { ...make(), videos: [] };
   const groups: DiscoveryResult[] = [];
   const fallback = make();
   // Ad SDK frames can expose playable test clips and unrelated provider JSON.
@@ -383,8 +399,6 @@ export function discoverPage(): DiscoveryResult {
     if (yt || g.media_candidates.length || g.caption_candidates.length)
       groups.push(g);
   }
-  const ownYoutube = youtube(location.href);
-  if (ownYoutube) return { ...make(), page_url: ownYoutube };
   for (const frame of query<HTMLIFrameElement>("iframe")) {
     const yt = youtube(frame.src || frame.dataset.src || "");
     if (yt && !groups.some((g) => g.page_url === yt))
@@ -402,14 +416,37 @@ export function discoverPage(): DiscoveryResult {
       video.src,
       ...[...video.querySelectorAll("source")].map((s) => s.src),
     ].filter(Boolean);
+    // Google's short search previews represent the linked YouTube video. Stop at
+    // the nearest result with links, rather than borrowing another result's ID.
+    let previewYoutube: string | undefined;
+    if (sources.some((source) => {
+      try { return /^encrypted-vtbn\d+\.gstatic\.com$/.test(new URL(source).hostname); }
+      catch { return false; }
+    })) {
+      let parent = video.parentElement;
+      for (let depth = 0; parent && depth < 12; depth++, parent = parent.parentElement) {
+        const identities = [...new Set([...parent.querySelectorAll<HTMLAnchorElement>('a[href]')]
+          .map((link) => youtube(link.href)).filter((url): url is string => Boolean(url)))];
+        if (identities.length) {
+          if (identities.length === 1) previewYoutube = identities[0];
+          break;
+        }
+      }
+    }
     let g = groups.find((group) =>
+      (previewYoutube && group.page_url === previewYoutube) ||
       group.media_candidates.some((c) => sources.includes(c.url)),
     );
     // A blob player and a single structured source are normally two views of one video.
-    if (!g && groups.length === 1 && contentVideos.length === 1) g = groups[0];
+    if (!g && !previewYoutube && groups.length === 1 && contentVideos.length === 1) g = groups[0];
     if (!g) {
       g = make(undefined, video.getAttribute("aria-label") || undefined);
       groups.push(g);
+    }
+    if (previewYoutube) {
+      g.page_url = previewYoutube;
+      // Preview duration/playback describes the thumbnail, not the full video.
+      continue;
     }
     // `type` is a `<source>` attribute, never a `<video>` one: a URL takes its MIME type
     // from the `<source>` that names it, or else from the response the element got for it.

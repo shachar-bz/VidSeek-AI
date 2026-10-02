@@ -18,6 +18,7 @@ import {
   describeCapturedSources,
   findVideoGroups,
   isYouTubeUrl,
+  youtubeVideoUrl,
   mergeDiscoveryResults,
   originPatterns,
   pageOriginPatterns,
@@ -401,6 +402,12 @@ function presentDiscovery(
   playbackVerified = false,
 ): void {
   discovery = discoveryValue;
+  if (isYouTubeUrl(discoveryValue.page_url) && !youtubeVideoUrl(discoveryValue.page_url)) {
+    discovery = undefined;
+    showInspectStep("find");
+    setStatus("Couldn't identify this YouTube video", "Open the video directly on YouTube, then click Find video again.");
+    return;
+  }
   if (discoveryValue.drm_detected) {
     reportDrmBlocked(
       "This player reports DRM protection (video.mediaKeys is already set).",
@@ -508,9 +515,10 @@ async function inspectTab(): Promise<void> {
     // find nothing usable on YouTube anyway — its media URLs are expiring googlevideo
     // links — and the YouTube player reports DRM on streams the pipeline downloads fine,
     // so inspecting it would only produce a false drm_detected refusal.
-    if (isYouTubeUrl(tab.url)) {
+    const youtubeUrl = youtubeVideoUrl(tab.url);
+    if (youtubeUrl) {
       discovery = {
-        page_url: tab.url,
+        page_url: youtubeUrl,
         page_title: tab.title || "video",
         drm_detected: false,
         media_candidates: [],
@@ -537,7 +545,14 @@ async function inspectTab(): Promise<void> {
     }
 
     const merged = mergeDiscoveryResults(results);
-    if (!merged) throw new Error("The page could not be inspected");
+    if (!merged) {
+      const unresolvedYoutube = results.some(frame =>
+        frame.result && isYouTubeUrl(frame.result.page_url) && !youtubeVideoUrl(frame.result.page_url),
+      );
+      throw new Error(unresolvedYoutube
+        ? "Couldn't identify this YouTube video. Open the video directly on YouTube, then click Find video again."
+        : "The page could not be inspected");
+    }
     presentDiscovery(merged);
   } catch (error) {
     // Without this a failed re-inspect leaves the previous page's discovery armed
@@ -660,6 +675,12 @@ async function startDownload(): Promise<void> {
     // and would hand over the highest-value credential in the profile for no gain; the
     // cost is that age-restricted videos fail, with the pipeline's own message.
     const youtube = isYouTubeUrl(discovery.page_url);
+    if (youtube) {
+      const canonical = youtubeVideoUrl(discovery.page_url);
+      if (!canonical)
+        throw new Error("Couldn't identify this YouTube video. Open the video directly on YouTube, then click Find video again.");
+      discovery = { ...discovery, page_url: canonical };
+    }
     grantedOrigins = await grantSiteAccess(discovery);
     await hydrateCaptionBodies(discovery, activeTabId);
     const context = youtube

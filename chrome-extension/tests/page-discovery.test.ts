@@ -1,6 +1,6 @@
 // Regression fixtures based on the six inspected sites, without signed URLs or cookies.
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { discoverPage } from "../src/page-discovery";
 import { findVideoGroups, mergeDiscoveryResults } from "../src/discovery";
 
@@ -15,6 +15,64 @@ const json = (value: unknown) => {
   s.textContent = JSON.stringify(value);
   document.body.append(s);
 };
+afterEach(() => vi.unstubAllGlobals());
+
+describe("YouTube player identity", () => {
+  it.each([
+    'class="ytp-title-link"',
+    'class="ytmVideoInfoVideoTitle"',
+    'aria-label="Watch on YouTube"',
+  ])("resolves Google's ID-less embed from its current-video link (%s)", (attribute) => {
+    vi.stubGlobal("location", new URL("https://www.youtube.com/embed/?enablejsapi=1&embed_config=opaque"));
+    document.title = "Mac tutorial - YouTube";
+    document.body.innerHTML = `<a ${attribute} href="https://www.youtube.com/watch?v=Ag3NWYr5CD8">Mac tutorial</a>
+      <a href="https://www.youtube.com/watch?v=3G7zN5n5H1M&feature=endscreen">Another video</a>
+      <video src="blob:https://www.youtube.com/player"></video>`;
+    Object.defineProperty(document.querySelector("video"), "mediaKeys", { value: {} });
+    expect(discoverPage()).toMatchObject({
+      page_url: "https://www.youtube.com/watch?v=Ag3NWYr5CD8",
+      drm_detected: false, media_candidates: [],
+    });
+  });
+
+  it("does not use recommendation links when the current-video link is missing", () => {
+    vi.stubGlobal("location", new URL("https://www.youtube.com/embed/?enablejsapi=1"));
+    document.body.innerHTML = '<a href="https://www.youtube.com/watch?v=3G7zN5n5H1M&feature=endscreen">More videos</a>';
+    const result = discoverPage();
+    expect(result.videos).toEqual([]);
+    expect(findVideoGroups([{ frameId: 1, result }], "Google")).toBeUndefined();
+  });
+
+  it("refuses conflicting current-video links", () => {
+    vi.stubGlobal("location", new URL("https://www.youtube.com/embed/"));
+    document.body.innerHTML = '<a class="ytp-title-link" href="https://www.youtube.com/watch?v=Ag3NWYr5CD8"></a><a aria-label="Watch on YouTube" href="https://www.youtube.com/watch?v=zM9mgs11RT0"></a>';
+    expect(discoverPage().videos).toEqual([]);
+  });
+
+  it("merges a Google thumbnail with its full player, keeping other videos distinct", () => {
+    vi.stubGlobal("location", new URL("https://www.google.com/search?q=mac#fpstate=ive"));
+    document.body.innerHTML = `<div><a href="https://www.youtube.com/watch?v=Ag3NWYr5CD8">Mac tutorial</a>
+      <video src="https://encrypted-vtbn0.gstatic.com/video?q=preview"></video></div>
+      <div><a href="https://www.youtube.com/watch?v=zM9mgs11RT0">Record video</a>
+      <video src="https://encrypted-vtbn3.gstatic.com/video?q=other"></video></div>`;
+    const top = discoverPage();
+    vi.stubGlobal("location", new URL("https://www.youtube.com/embed/?enablejsapi=1"));
+    document.title = "Mac tutorial - YouTube";
+    document.body.innerHTML = '<a class="ytmVideoInfoVideoTitle" href="https://www.youtube.com/watch?v=Ag3NWYr5CD8">Mac tutorial</a>';
+    const player = discoverPage();
+    const groups = findVideoGroups([{ frameId: 0, result: top }, { frameId: 2, result: player }], "Google");
+    expect(groups).toHaveLength(2);
+    expect(groups![0]!.label).toBe("YouTube: Mac tutorial");
+    expect(groups![0]!.frameId).toBe(2);
+    expect(groups!.map(g => g.result.page_url)).toEqual([
+      "https://www.youtube.com/watch?v=Ag3NWYr5CD8",
+      "https://www.youtube.com/watch?v=zM9mgs11RT0",
+    ]);
+    expect(top.videos!.every(g => !g.media_candidates.length)).toBe(true);
+    expect(mergeDiscoveryResults([{ frameId: 0, result: { ...top, videos: [top.videos![0]!] } }, { frameId: 2, result: player }])?.page_url)
+      .toBe("https://www.youtube.com/watch?v=Ag3NWYr5CD8");
+  });
+});
 describe("rendered page discovery", () => {
   it("TED: keeps the titled talk, blob player and captions together beside IMA ads", () => {
     const title = "OpenAI's Sam Altman talks ChatGPT, AI agents and superintelligence";

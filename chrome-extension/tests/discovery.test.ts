@@ -7,6 +7,7 @@ import {
   findVideoGroups,
   isLicenseTraffic,
   isYouTubeUrl,
+  youtubeVideoUrl,
   mergeDiscoveryResults,
   originPatterns,
   pageOriginPatterns,
@@ -16,6 +17,24 @@ import type { FrameDiscoveryResult } from "../src/discovery";
 import type { DiscoveryResult } from "../src/types";
 
 describe("media discovery helpers", () => {
+  it("canonicalizes YouTube video addresses and rejects missing IDs", () => {
+    for (const url of [
+      "https://youtu.be/Ag3NWYr5CD8?t=5",
+      "https://www.youtube-nocookie.com/embed/Ag3NWYr5CD8",
+      "https://m.youtube.com/watch?v=Ag3NWYr5CD8&list=playlist",
+      "https://www.youtube.com/shorts/Ag3NWYr5CD8",
+      "https://www.youtube.com/live/Ag3NWYr5CD8",
+    ]) expect(youtubeVideoUrl(url)).toBe("https://www.youtube.com/watch?v=Ag3NWYr5CD8");
+    for (const url of ["https://www.youtube.com/embed/?enablejsapi=1", "https://www.youtube.com/watch", "https://www.youtube.com/watch?v=short", "https://youtube.com.example/watch?v=Ag3NWYr5CD8"])
+      expect(youtubeVideoUrl(url)).toBeUndefined();
+  });
+
+  it("deduplicates frame URL variants of the same YouTube video", () => {
+    const result: DiscoveryResult = { page_url: "https://www.youtube.com/watch?v=Ag3NWYr5CD8", page_title: "Mac tutorial", drm_detected: false, media_candidates: [], caption_candidates: [] };
+    const frames = [{ frameId: 0, result }, { frameId: 2, result: { ...result, page_url: "https://www.youtube-nocookie.com/embed/Ag3NWYr5CD8" } }];
+    expect(findVideoGroups(frames, "Google")).toBeUndefined();
+    expect(mergeDiscoveryResults(frames)?.page_url).toBe(result.page_url);
+  });
   it("classifies direct, HLS, and DASH media", () => {
     expect(classifyMediaUrl("https://cdn.example/video.mp4")).toBe("direct");
     expect(classifyMediaUrl("https://cdn.example/master.m3u8")).toBe("hls");
@@ -456,4 +475,3 @@ describe("resolveSelectedGroup", () => {
     expect(resolved).toBe(youtubeResult);
   });
 });
-
