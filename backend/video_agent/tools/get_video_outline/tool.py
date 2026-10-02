@@ -12,15 +12,15 @@ from .result import ChapterOutline, VideoOutline
 
 
 def get_video_outline(ctx: RunContext[ConversationDeps]) -> VideoOutline:
-    """Read this video's chapters in order.
+    """Show the structure of this video as an ordered outline of its chapters, each with
+    its title, summary, and start and end times.
 
-    Each chapter comes back with its title, summary and timing, and nothing of what was
-    said in it. A chapter's id is what `get_chapter_context` reads to list that chapter's
-    moments, each with a one-line summary and its timing.
+    Use it to understand how the video is organized, to locate where a topic or activity
+    appears, or to identify its sections.
 
     Returns:
-        Every chapter of the video, earliest first. Empty when this video has not been
-        divided into chapters.
+        The video's chapters in chronological order. Returns an empty list if no chapters
+        are available.
 
     Raises:
         VideoNotFoundError: No video exists with the current video id.
