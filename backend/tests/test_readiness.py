@@ -2,22 +2,16 @@
 
 import pytest
 
-from backend.schemas.readiness import (
-    UNTIMED_TRANSCRIPT_ERROR,
-    ReadinessStage,
-    VideoArtifacts,
-    derive_readiness_stage,
-)
+from backend.schemas.readiness import ReadinessStage, VideoArtifacts, derive_readiness_stage
 from backend.schemas.video_jobs import JobPhase, JobStatus
 
 NOTHING = VideoArtifacts()
 
-BROWSABLE = VideoArtifacts(has_video_row=True, has_transcript=True, has_timed_transcript=True)
+BROWSABLE = VideoArtifacts(has_video_row=True, has_transcript=True)
 
 EVERYTHING = VideoArtifacts(
     has_video_row=True,
     has_transcript=True,
-    has_timed_transcript=True,
     has_chapters=True,
     has_embeddings=True,
     has_insights=True,
@@ -84,18 +78,16 @@ def test_ready_needs_chapters_embeddings_and_insights_together(missing: str) -> 
     assert derive_readiness_stage(artifacts) == ReadinessStage.UNDERSTANDING
 
 
-def test_a_fully_processed_video_whose_transcript_was_never_timed_is_partial() -> None:
-    untimed = VideoArtifacts(**{**vars(EVERYTHING), "has_timed_transcript": False})
-
-    assert derive_readiness_stage(untimed) == ReadinessStage.PARTIAL
-
-
-def test_the_untimed_transcript_problem_code_alone_makes_a_video_partial() -> None:
+def test_a_video_whose_transcript_was_never_timed_is_failed() -> None:
+    # The pipeline stops before segmenting an untimed transcript, so it stores no
+    # transcript segments for the video: nothing to browse and nothing to chat about.
     stage = derive_readiness_stage(
-        EVERYTHING, job_status=JobStatus.PARTIAL_SUCCESS, job_error_code=UNTIMED_TRANSCRIPT_ERROR
+        VideoArtifacts(has_video_row=True),
+        job_status=JobStatus.PARTIAL_SUCCESS,
+        job_error_code="untimed_transcript",
     )
 
-    assert stage == ReadinessStage.PARTIAL
+    assert stage == ReadinessStage.FAILED
 
 
 @pytest.mark.parametrize("code", ["transcription_failed", "record_failed"])
@@ -155,7 +147,6 @@ def test_a_video_with_no_transcript_is_failed_even_without_a_job_to_blame() -> N
         (ReadinessStage.TRANSCRIBING, False),
         (ReadinessStage.UNDERSTANDING, False),
         (ReadinessStage.READY, True),
-        (ReadinessStage.PARTIAL, True),
         (ReadinessStage.FAILED, False),
     ],
 )
@@ -172,7 +163,6 @@ def test_chat_is_available_exactly_where_retrieval_has_something_to_find(
         (ReadinessStage.TRANSCRIBING, False),
         (ReadinessStage.UNDERSTANDING, True),
         (ReadinessStage.READY, True),
-        (ReadinessStage.PARTIAL, True),
         (ReadinessStage.FAILED, False),
     ],
 )

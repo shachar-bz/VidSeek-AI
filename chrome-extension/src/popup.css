@@ -888,11 +888,6 @@ textarea {
   background: var(--pill-dark);
 }
 
-.chat-citation--approximate {
-  border: 1px dashed var(--faint);
-  background: transparent;
-}
-
 .chat-notice {
   flex: none;
   margin: 0 16px 6px;

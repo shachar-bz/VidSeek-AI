@@ -135,12 +135,11 @@ export type ReadinessStage =
   | "transcribing"
   | "understanding"
   | "ready"
-  | "partial"
   | "failed";
 
 /** Whether the agent has anything to retrieve yet. Mirrors `ReadinessStage.allows_chat`. */
 export function allowsChat(stage: ReadinessStage): boolean {
-  return stage === "ready" || stage === "partial";
+  return stage === "ready";
 }
 
 export type VisualStatus = "pending" | "indexing" | "ready" | "failed" | "skipped";

@@ -32,7 +32,6 @@ function accountInitials(name: string): string {
 
 function completionMessage(event: LibraryProgressEvent): string {
   if (event.stage === "failed") return "Processing failed";
-  if (event.stage === "partial") return "Processing finished with limited timing";
   return "Finished processing and is ready to search";
 }
 

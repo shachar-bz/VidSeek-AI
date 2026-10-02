@@ -15,7 +15,6 @@ function scrollLineIntoView(list: HTMLOListElement, line: HTMLLIElement) {
 export interface TranscriptPanelProps {
   transcript: VideoTranscript | null;
   activeIndex: number;
-  approximate: boolean;
   embedded?: boolean;
   onSeek(seconds: number): void;
 }
@@ -23,7 +22,6 @@ export interface TranscriptPanelProps {
 export function TranscriptPanel({
   transcript,
   activeIndex,
-  approximate,
   embedded = false,
   onSeek
 }: TranscriptPanelProps) {
@@ -73,7 +71,6 @@ export function TranscriptPanel({
           </div>
         ) : null}
       </div>
-      {approximate ? <p className="inline-notice">Timestamps are approximate for this partial result. Seeking may be inaccurate.</p> : null}
       <ol
         className="transcript-lines"
         ref={listRef}
@@ -95,10 +92,10 @@ export function TranscriptPanel({
               <button
                 className="transcript-line__body"
                 type="button"
-                title={approximate ? "Seek using this approximate timestamp" : "Seek to this timestamp"}
+                title="Seek to this timestamp"
                 onClick={() => seekToLine(line.start_seconds)}
               >
-                <span className="transcript-line__time">{approximate ? "≈" : ""}{formatTimestamp(line.start_seconds)}</span>
+                <span className="transcript-line__time">{formatTimestamp(line.start_seconds)}</span>
                 <span className="transcript-line__text">{line.text}</span>
               </button>
             </li>

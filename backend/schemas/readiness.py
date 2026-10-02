@@ -12,11 +12,13 @@ whether they ever will. A job that finished with `segmentation_failed` therefore
 `understanding` permanently, which is the truth about that video -- the browsable half works
 and the rest never arrived -- and the job's own message is what explains why it stopped.
 
-Chat is gated on fully processed results: both `ready` and `partial`. Retrieval is tools-only,
-and every retrieval tool but `get_video_info` reads memories, chapters or embeddings, so a
-video that is still processing has nothing for the agent to find. `partial` differs only in
-timestamp reliability, not capability. `ReadinessStage.allows_chat` keeps that rule beside
-the stages rather than restating it at each call site.
+Chat is gated on fully processed results: `ready`. Retrieval is tools-only, and every
+retrieval tool but `get_video_info` reads memories, chapters or embeddings, so a video that
+is still processing has nothing for the agent to find. `ReadinessStage.allows_chat` keeps
+that rule beside the stages rather than restating it at each call site.
+
+A transcript with no timing never reaches `ready` or `understanding`: the pipeline stops
+before segmenting it, so the video has no transcript segments and is `failed`.
 """
 
 from __future__ import annotations
@@ -34,12 +36,6 @@ PHASES_BEFORE_A_TRANSCRIPT = frozenset(
     {JobPhase.DOWNLOAD, JobPhase.TRANSCRIPT_LOOKUP, JobPhase.TRANSCRIPTION, JobPhase.UPLOAD}
 )
 
-# The pipeline's name for a transcript that has text but no usable timings. It is the one
-# problem code that changes the stage rather than merely explaining it, because it is the
-# one the website has to keep working around: click-to-seek and every timestamp the agent
-# produces are unreliable on such a video, and `partial` is what says so.
-UNTIMED_TRANSCRIPT_ERROR = "untimed_transcript"
-
 # Problem codes that leave nothing browsable behind. `transcription_failed` keeps the video
 # but never produced text, and `record_failed` leaves the blob in the container with no row
 # to hang a transcript, chapters or a library link off; a page can show neither.
@@ -47,10 +43,10 @@ PROBLEMS_WITH_NOTHING_TO_SHOW = frozenset({"transcription_failed", "record_faile
 
 
 class ReadinessStage(str, Enum):
-    """The six states a video is shown in, from §1.3 of the website specification.
+    """The five states a video is shown in, from §1.3 of the website specification.
 
-    The first four are a sequence and the last two are terminal states outside it. There is
-    deliberately no seventh for a cancelled job: a cancel that produced no usable video is
+    The first four are a sequence and the last is a terminal state outside it. There is
+    deliberately no sixth for a cancelled job: a cancel that produced no usable video is
     reported as `FAILED`, with the job's own message saying it was cancelled, rather than
     adding a state every consumer would have to learn in order to treat it the same way.
     """
@@ -60,27 +56,16 @@ class ReadinessStage(str, Enum):
     UNDERSTANDING = "understanding"
     READY = "ready"
     FAILED = "failed"
-    PARTIAL = "partial"
 
     @property
     def allows_chat(self) -> bool:
-        """Whether the agent has anything to retrieve from this video.
-
-        True for `READY`, and for `PARTIAL` -- an untimed transcript was still segmented,
-        embedded and grouped into chapters, so every tool answers; only the timestamps in
-        those answers are unreliable, which is a caveat the page shows rather than a reason
-        to withhold the feature.
-        """
-        return self in {ReadinessStage.READY, ReadinessStage.PARTIAL}
+        """Whether the agent has anything to retrieve from this video: only once it is `READY`."""
+        return self == ReadinessStage.READY
 
     @property
     def allows_browsing(self) -> bool:
         """Whether the player and the transcript are worth putting on the page."""
-        return self in {
-            ReadinessStage.UNDERSTANDING,
-            ReadinessStage.READY,
-            ReadinessStage.PARTIAL,
-        }
+        return self in {ReadinessStage.UNDERSTANDING, ReadinessStage.READY}
 
 
 @dataclass(frozen=True)
@@ -90,17 +75,11 @@ class VideoArtifacts:
     Booleans rather than the rows themselves because the library page derives a stage for
     every video it lists, and reading each video's chapters, vectors and insights to decide
     how to label a row would make listing a library cost as much as opening every video in
-    it. A caller is expected to answer all six in one aggregate query.
-
-    `has_timed_transcript` is false only for the pipeline's `untimed_transcript` outcome: a
-    transcript whose lines carry no usable timing. It is what separates `PARTIAL` from
-    `READY`, and it is read off the job's error code or the video's own
-    `transcript_timing_fidelity`, whichever the caller has.
+    it. A caller is expected to answer all five in one aggregate query.
     """
 
     has_video_row: bool = False
     has_transcript: bool = False
-    has_timed_transcript: bool = False
     has_chapters: bool = False
     has_embeddings: bool = False
     has_insights: bool = False
@@ -131,7 +110,7 @@ def derive_readiness_stage(
     if job_status in {JobStatus.FAILED, JobStatus.CANCELLED} and not artifacts.has_transcript:
         return ReadinessStage.FAILED
 
-    return _stage_from_artifacts(artifacts, job_error_code=job_error_code)
+    return _stage_from_artifacts(artifacts)
 
 
 def _stage_while_running(
@@ -156,9 +135,7 @@ def _stage_while_running(
     return ReadinessStage.UNDERSTANDING
 
 
-def _stage_from_artifacts(
-    artifacts: VideoArtifacts, *, job_error_code: str | None
-) -> ReadinessStage:
+def _stage_from_artifacts(artifacts: VideoArtifacts) -> ReadinessStage:
     """The stage a video's own contents put it in, with no running job to consult."""
     if not artifacts.has_video_row:
         return ReadinessStage.FAILED
@@ -168,6 +145,4 @@ def _stage_from_artifacts(
         return ReadinessStage.FAILED
     if not (artifacts.has_chapters and artifacts.has_embeddings and artifacts.has_insights):
         return ReadinessStage.UNDERSTANDING
-    if job_error_code == UNTIMED_TRANSCRIPT_ERROR or not artifacts.has_timed_transcript:
-        return ReadinessStage.PARTIAL
     return ReadinessStage.READY

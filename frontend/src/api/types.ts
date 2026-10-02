@@ -16,23 +16,22 @@
 
 // --- readiness -------------------------------------------------------------------------
 
-/** The six states a video is shown in. `partial` and `failed` sit outside the sequence. */
+/** The five states a video is shown in. `failed` sits outside the sequence. */
 export type ReadinessStage =
   | "downloading"
   | "transcribing"
   | "understanding"
   | "ready"
-  | "partial"
   | "failed";
 
 /** Whether the agent has anything to retrieve. Mirrors `ReadinessStage.allows_chat`. */
 export function allowsChat(stage: ReadinessStage): boolean {
-  return stage === "ready" || stage === "partial";
+  return stage === "ready";
 }
 
 /** Whether the player and transcript exist. Mirrors `ReadinessStage.allows_browsing`. */
 export function allowsBrowsing(stage: ReadinessStage): boolean {
-  return stage === "understanding" || stage === "ready" || stage === "partial";
+  return stage === "understanding" || stage === "ready";
 }
 
 // --- auth ------------------------------------------------------------------------------

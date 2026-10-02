@@ -46,23 +46,15 @@ describe("splitMessageCitations", () => {
 describe("AnswerText", () => {
   it("seeks the video to the cited moment when the citation is clicked", () => {
     const onSeek = vi.fn();
-    render(<AnswerText content="Used last. [12:14]" approximate={false} onSeek={onSeek} />);
+    render(<AnswerText content="Used last. [12:14]" onSeek={onSeek} />);
 
     fireEvent.click(screen.getByRole("button", { name: "[12:14]" }));
 
     expect(onSeek).toHaveBeenCalledWith(734);
   });
 
-  it("says a timestamp is approximate when the video's timing is partial", () => {
-    render(<AnswerText content="Used last. [12:14]" approximate onSeek={vi.fn()} />);
-
-    expect(screen.getByRole("button", { name: "[12:14]" }).getAttribute("title")).toBe(
-      "Seek using this approximate timestamp"
-    );
-  });
-
   it("offers nothing to click when the answer cites nothing", () => {
-    render(<AnswerText content="The video doesn't explain that." approximate={false} onSeek={vi.fn()} />);
+    render(<AnswerText content="The video doesn't explain that." onSeek={vi.fn()} />);
 
     expect(screen.queryByRole("button")).toBeNull();
   });

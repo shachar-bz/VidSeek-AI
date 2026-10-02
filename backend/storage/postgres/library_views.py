@@ -28,7 +28,6 @@ class LibraryViewRow:
     conversation_count: int
     has_video_row: bool
     has_transcript: bool
-    has_timed_transcript: bool
     has_chapters: bool
     has_embeddings: bool
     has_insights: bool
@@ -68,7 +67,6 @@ class LibraryViewRow:
             conversation_count=int(row.get("conversation_count") or 0),
             has_video_row=bool(row.get("has_video_row")),
             has_transcript=bool(row.get("has_transcript")),
-            has_timed_transcript=bool(row.get("has_timed_transcript")),
             has_chapters=bool(row.get("has_chapters")),
             has_embeddings=bool(row.get("has_embeddings")),
             has_insights=bool(row.get("has_insights")),
@@ -89,7 +87,6 @@ class LibraryViewRow:
 ARTIFACT_COLUMNS = """
     (i.video_id is not null) as has_video_row,
     exists(select 1 from public.transcript_segments ts where ts.video_id = i.video_id) as has_transcript,
-    (i.transcript_timing_fidelity is not null) as has_timed_transcript,
     exists(select 1 from public.chapters ch where ch.video_id = i.video_id) as has_chapters,
     exists(select 1 from public.memory_embeddings me where me.video_id = i.video_id)
       and exists(select 1 from public.chapter_embeddings ce where ce.video_id = i.video_id)
@@ -246,7 +243,6 @@ def _stage_sql() -> str:
       when job_status in ('failed','cancelled') and not has_transcript then 'failed'
       when not has_video_row or not has_transcript then 'failed'
       when not (has_chapters and has_embeddings and has_insights) then 'understanding'
-      when error_code = 'untimed_transcript' or not has_timed_transcript then 'partial'
       else 'ready'
     end
     """

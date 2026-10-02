@@ -37,7 +37,6 @@ describe("video chat layout", () => {
         transcript={null}
         outline={null}
         activeLineIndex={-1}
-        approximate={false}
         onSeek={vi.fn()}
       />
     );

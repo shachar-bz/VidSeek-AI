@@ -28,7 +28,6 @@ def test_every_readiness_stage_keeps_the_name_the_website_switches_on() -> None:
         "transcribing",
         "understanding",
         "ready",
-        "partial",
         "failed",
     }
 
