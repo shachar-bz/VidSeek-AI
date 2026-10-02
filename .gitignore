@@ -13,3 +13,4 @@ chrome-extension/dist/
 frontend/node_modules/
 frontend/dist/
 backend/services/video_download/youtube/downloads/
+.DS_Store
