@@ -30,7 +30,7 @@ describe("pinned answer previews", () => {
     ]});
     const video = {video_id: "v1", stage: "ready", insights: null} as VideoDetail;
     render(<MemoryRouter initialEntries={["/videos/v1"]}><Routes>
-      <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} />} />
+      <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} onSeek={vi.fn()} />} />
     </Routes></MemoryRouter>);
     const pin = await screen.findByRole("link", {name: /^Open pinned answer:/});
     expect(pin.textContent?.length).toBeLessThanOrEqual(161);

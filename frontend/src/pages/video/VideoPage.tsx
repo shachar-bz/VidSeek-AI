@@ -16,7 +16,6 @@ function stageLabel(stage: VideoDetail["stage"]): string {
 
 function stageTone(stage: VideoDetail["stage"]): StatusTone {
   if (stage === "ready") return "positive";
-  if (stage === "partial") return "caution";
   if (stage === "failed") return "critical";
   return "active";
 }
@@ -104,7 +103,6 @@ export function VideoPage() {
   if (error || !video) return <ErrorState title="Unable to load video" message={error ?? "This video is unavailable."} actionLabel="Try again" onAction={() => setReloadVersion((current) => current + 1)} />;
 
   const browsing = allowsBrowsing(video.stage);
-  const approximate = video.stage === "partial";
   return (
     <div className="feature-page video-page">
       <header className="feature-page__heading video-page__heading">
@@ -113,15 +111,14 @@ export function VideoPage() {
           <div className="video-page__metadata">{video.stage !== "ready" ? <StatusBadge tone={stageTone(video.stage)}>{stageLabel(video.stage)}</StatusBadge> : null}<span>{sourceLabel(video)}</span>{video.duration_seconds !== null ? <span>{Math.round(video.duration_seconds / 60)} min</span> : null}{video.transcript_language ? <span>{languageName(video.transcript_language)}</span> : null}</div>
         </div>
       </header>
-      {approximate ? <div className="inline-notice" role="status"><strong>Partial transcript:</strong> timestamps, seeking, and timestamp-like references in answers may be unreliable. All video features remain available.</div> : null}
       {video.stage === "failed" ? <div className="inline-notice" role="alert">Processing failed. Chat is unavailable, and video artifacts may be incomplete.</div> : null}
       {artifactError ? <div className="inline-notice" role="status">{artifactError}</div> : null}
       <div className="video-workspace-grid">
         <div className="video-viewer-column">
           <VideoPlayer videoId={videoId} available={browsing} title={video.title} captionLines={transcript?.lines} captionLanguage={video.transcript_language} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
-          <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} approximate={approximate} onSeek={seek} />
+          <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} onSeek={seek} />
         </div>
-        <ConversationWorkspace video={video} approximate={approximate} onSeek={seek} playerPosition={readPlayerPosition} />
+        <ConversationWorkspace video={video} onSeek={seek} playerPosition={readPlayerPosition} />
       </div>
     </div>
   );

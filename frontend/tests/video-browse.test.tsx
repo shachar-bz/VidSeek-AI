@@ -49,12 +49,11 @@ describe("transcript", () => {
     expect(activeTranscriptIndex(transcript.lines, 8.5)).toBe(-1);
   });
 
-  it("qualifies partial timestamps, seeks from a line, and marks the spoken one", () => {
+  it("seeks from a line and marks the spoken one", () => {
     const onSeek = vi.fn();
-    render(<TranscriptPanel transcript={transcript} activeIndex={1} approximate onSeek={onSeek} />);
+    render(<TranscriptPanel transcript={transcript} activeIndex={1} onSeek={onSeek} />);
 
-    expect(screen.getByText(/timestamps are approximate/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "≈0:04 Middle" }));
+    fireEvent.click(screen.getByRole("button", { name: "0:04 Middle" }));
     expect(onSeek).toHaveBeenCalledWith(4);
 
     const active = screen.getByText("Middle").closest("li");
@@ -63,7 +62,7 @@ describe("transcript", () => {
   });
 
   it("offers no per-line selection or copy controls", () => {
-    render(<TranscriptPanel transcript={transcript} activeIndex={-1} approximate={false} onSeek={vi.fn()} />);
+    render(<TranscriptPanel transcript={transcript} activeIndex={-1} onSeek={vi.fn()} />);
 
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();

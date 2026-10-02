@@ -80,7 +80,7 @@ describe("conversation readiness", () => {
   it("names processing stages and explains failed chat", () => {
     expect(chatUnavailableMessage("transcribing")).toMatch(/Transcribing is in progress/);
     expect(chatUnavailableMessage("failed")).toBe("Chat is unavailable because processing failed.");
-    expect(chatUnavailableMessage("partial")).toBeNull();
+    expect(chatUnavailableMessage("ready")).toBeNull();
   });
 
 });
@@ -158,7 +158,7 @@ async function askQuestion(stream: ReturnType<typeof controlledStream>) {
   render(
     <MemoryRouter initialEntries={["/videos/video-1"]}>
       <Routes>
-        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} />} />
+        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} onSeek={vi.fn()} />} />
       </Routes>
     </MemoryRouter>
   );

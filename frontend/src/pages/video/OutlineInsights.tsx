@@ -8,12 +8,10 @@ import { TranscriptPanel } from "./TranscriptPanel";
 export function OutlinePanel({
   outline,
   stageLabel,
-  approximate,
   onSeek
 }: {
   outline: VideoOutlineResponse | null;
   stageLabel: string;
-  approximate: boolean;
   onSeek(seconds: number): void;
 }) {
   const chapters = outline?.chapters ?? [];
@@ -29,10 +27,10 @@ export function OutlinePanel({
               <button
                 className="chapter-list__time"
                 type="button"
-                title={approximate ? "Seek using this approximate chapter time" : "Seek to this chapter"}
+                title="Seek to this chapter"
                 onClick={() => onSeek(chapter.start_seconds)}
               >
-                {approximate ? "≈" : ""}{formatTimestamp(chapter.start_seconds)}–{formatTimestamp(chapter.end_seconds)}
+                {formatTimestamp(chapter.start_seconds)}–{formatTimestamp(chapter.end_seconds)}
               </button>
               <div><h3>{chapter.title}</h3><p>{chapter.summary}</p></div>
             </li>
@@ -72,14 +70,12 @@ export function VideoDetailsTabs({
   transcript,
   outline,
   activeLineIndex,
-  approximate,
   onSeek
 }: {
   video: VideoDetail;
   transcript: VideoTranscript | null;
   outline: VideoOutlineResponse | null;
   activeLineIndex: number;
-  approximate: boolean;
   onSeek(seconds: number): void;
 }) {
   const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
@@ -120,7 +116,6 @@ export function VideoDetailsTabs({
         <TranscriptPanel
           transcript={transcript}
           activeIndex={activeLineIndex}
-          approximate={approximate}
           embedded
           onSeek={onSeek}
         />
@@ -154,7 +149,7 @@ export function VideoDetailsTabs({
                   {chapters.map((chapter) => (
                     <li key={chapter.chapter_id}>
                       <button type="button" onClick={() => onSeek(chapter.start_seconds)}>
-                        {approximate ? "≈" : ""}{formatTimestamp(chapter.start_seconds)}
+                        {formatTimestamp(chapter.start_seconds)}
                       </button>
                       <div><h3>{chapter.title}</h3><p>{chapter.summary}</p></div>
                     </li>

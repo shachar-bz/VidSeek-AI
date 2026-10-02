@@ -2274,10 +2274,6 @@ h3 {
   color: inherit;
 }
 
-.chat-message__timestamp--approximate {
-  text-decoration-style: dashed;
-}
-
 .chat-stream-error {
   color: var(--color-ivory-text);
 }
@@ -2993,11 +2989,6 @@ h3 {
 .library-status--failed {
   color: #8b3f47;
   background: #fbecef;
-}
-
-.library-status--partial {
-  color: #775f29;
-  background: #f9f2df;
 }
 
 .library-progress {

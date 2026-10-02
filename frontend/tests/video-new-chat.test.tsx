@@ -53,7 +53,7 @@ function renderWorkspace(playerPosition?: () => PlayerPosition | null) {
   return render(
     <MemoryRouter initialEntries={["/videos/video-1"]}>
       <Routes>
-        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} approximate={false} onSeek={vi.fn()} playerPosition={playerPosition} />} />
+        <Route path="/videos/:videoId" element={<ConversationWorkspace video={video} onSeek={vi.fn()} playerPosition={playerPosition} />} />
       </Routes>
     </MemoryRouter>
   );
