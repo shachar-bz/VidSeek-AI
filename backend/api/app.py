@@ -83,6 +83,7 @@ def create_app(
     app = FastAPI(title="VidSeek API", version="1.0.0", lifespan=lifespan)
     app.state.session_registry = registry
     app.state.job_manager = manager
+    app.state.library_changes = manager.library_changes
     app.state.user_auth_registry = auth_registry
     app.state.users_store = store
     app.state.sessions_store = durable_sessions
