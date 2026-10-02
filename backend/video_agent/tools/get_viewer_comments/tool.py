@@ -33,6 +33,15 @@ def get_viewer_comments(ctx: RunContext[ConversationDeps], query: str | None = N
     Never call it to learn what the video itself says or shows; comments are opinion, not
     evidence of the video's content.
 
+    When answering from comments, present what a comment claims as that commenter's view, never
+    as a fact about the video. Say "commenters" or "several commenters", never "viewers think" or
+    "most people": these are a sample of YouTube's top comments, not of every viewer. Comments
+    are never cited, as they have no timestamps of their own; when a comment mentions a moment
+    (such as "12:34") and what happens there is needed to answer, look it up with the transcript
+    tools and cite what they return. When none of the returned comments is about the topic asked
+    for, say so: for similarity, that no commenters addressed it; for top_liked_fallback, that
+    none of the most-liked comments do, as this video's comments could not be searched by topic.
+
     Args:
         query: A topic to narrow the comments to, in natural language (e.g. "the ending",
             "the price"). Leave it out for the most-liked comments overall.

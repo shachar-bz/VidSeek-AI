@@ -144,11 +144,22 @@ def test_the_agent_carries_the_comments_tool_with_its_gate() -> None:
     assert viewer_comments_tool.prepare is only_for_a_video_with_comments
 
 
+def test_the_comments_rules_travel_in_the_tool_description() -> None:
+    description = " ".join(viewer_comments_tool.tool_def.description.split())
+
+    assert "Call this only when the user asks about comments" in description
+    assert "never as a fact about the video" in description
+    assert 'Say "commenters" or "several commenters"' in description
+    assert "Comments are never cited" in description
+    assert "for similarity, that no commenters addressed it" in description
+    assert "for top_liked_fallback, that none of the most-liked comments do" in description
+
+
 @pytest.mark.parametrize("has_comments", [True, False])
-def test_the_comments_instructions_appear_only_where_the_tool_is_offered(has_comments) -> None:
+def test_no_system_prompt_describes_the_comments_tool(has_comments) -> None:
     converted = runner._model_history(
         [], deps=ConversationDeps(video_id=VIDEO_ID, has_comments=has_comments)
     )
     prompts = [part.content for message in converted for part in message.parts]
 
-    assert (runner.VIEWER_COMMENTS_PROMPT in prompts) is has_comments
+    assert not any("get_viewer_comments" in prompt for prompt in prompts)
