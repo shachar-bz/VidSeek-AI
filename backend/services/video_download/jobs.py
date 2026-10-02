@@ -82,6 +82,7 @@ from backend.schemas.video_jobs import (
     JobStatus,
     VideoJobResponse,
 )
+from backend.services.library_changes import LibraryChangeNotifier
 from backend.services.ocr import configured_ocr_engine
 from backend.storage.postgres import (
     PostgresUserVideos,
@@ -279,8 +280,15 @@ def _blob_name_for_video(video_id: str | None) -> str | None:
 class JobManager:
     """Runs one resource-heavy download/transcription job at a time."""
 
-    def __init__(self, download_root: Path):
+    def __init__(
+        self, download_root: Path, library_changes: LibraryChangeNotifier | None = None
+    ):
         self.download_root = download_root
+        # Told after every `video_jobs` write, so a user's open library progress streams
+        # wake up instead of polling the database.
+        self.library_changes = (
+            library_changes if library_changes is not None else LibraryChangeNotifier()
+        )
         self.download_root.mkdir(parents=True, exist_ok=True)
         self._job_workspaces = download_root / JOB_WORKSPACES_DIRECTORY_NAME
         self._visual_indexing_queue = download_root / VISUAL_INDEXING_QUEUE_DIRECTORY_NAME
@@ -399,6 +407,8 @@ class JobManager:
                 acquisition_mode=DEDUPLICATED_ACQUISITION_MODE,
             )
         )
+        if user_id is not None:
+            self.library_changes.notify(user_id)
         return _response_from_persisted_job(stored.job)
 
     def get(self, job_id: str) -> VideoJobResponse:
@@ -513,6 +523,9 @@ class JobManager:
         Returns whether the row actually landed, which is what a caller deciding whether a
         terminal job can safely leave `self._jobs` needs to know: without it, or if it
         failed, this dictionary is the only place that job's outcome still exists.
+
+        A write that lands also wakes the owner's open library progress streams, which is
+        how the website hears about a job the extension just started.
         """
         if not is_postgres_configured():
             return False
@@ -532,10 +545,12 @@ class JobManager:
                     error_code=job.error_code,
                 )
             )
-            return True
         except Exception:
             logger.exception("Persisting job %s to the database failed", job.job_id)
             return False
+        if job.user_id is not None:
+            self.library_changes.notify(job.user_id)
+        return True
 
     def _progress(self, job_id: str, phase: JobPhase, value: float, message: str) -> None:
         with self._lock:

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -12,6 +12,7 @@ from backend.api.dependencies import current_user, sessions_store, users_store
 from backend.api.routes import account, library, videos
 from backend.core.auth import hash_password
 from backend.schemas.readiness import ReadinessStage
+from backend.services.library_changes import LibraryChangeNotifier
 from backend.storage.postgres import (
     LibraryViewRow,
     PinnedAnswerForVideo,
@@ -131,42 +132,115 @@ def test_empty_library_page_still_reports_the_filtered_total() -> None:
     assert body["total"] == 7
 
 
-def test_sse_progress_gains_a_video_id_and_reaches_ready(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    processing = _row(
-        video_id=None,
-        job_status="running",
-        job_phase="transcription",
-        has_video_row=False,
-        has_transcript=False,
-        has_chapters=False,
-        has_embeddings=False,
-        has_insights=False,
+PROCESSING_ROW = _row(
+    video_id=None,
+    job_status="running",
+    job_phase="transcription",
+    has_video_row=False,
+    has_transcript=False,
+    has_chapters=False,
+    has_embeddings=False,
+    has_insights=False,
+)
+
+
+class ScriptedProgressViews:
+    """`progress_rows` answers in order, repeating the last answer once they run out."""
+
+    def __init__(self, *answers: list[LibraryViewRow]):
+        self.answers = list(answers)
+        self.reads = 0
+
+    def progress_rows(self, user_id):
+        self.reads += 1
+        return self.answers[min(self.reads, len(self.answers)) - 1]
+
+
+def _progress_stream(views, changes, *, keepalive_seconds=60.0):
+    return library.library_progress_stream(
+        USER_ID, views, changes, keepalive_seconds=keepalive_seconds, coalesce_seconds=0
     )
-    finished = _row()
 
-    class ProgressViews:
-        def __init__(self):
-            self.responses = [[processing], [finished]]
 
-        def progress_rows(self, user_id):
-            return self.responses.pop(0)
+def test_events_route_streams_server_sent_events() -> None:
+    # Called directly: the stream never ends, and TestClient waits for a body to finish.
+    response = asyncio.run(
+        library.library_events(USER, ScriptedProgressViews([]), LibraryChangeNotifier())
+    )
 
-    async def no_wait(_):
-        return None
+    assert response.media_type == "text/event-stream"
+    assert response.headers["cache-control"] == "no-cache"
 
-    monkeypatch.setattr(library.asyncio, "sleep", no_wait)
-    app = _app(library)
-    app.state.library_views_store = ProgressViews()
 
-    response = TestClient(app).get("/v1/library/events")
+def test_progress_stream_sends_a_job_the_extension_starts_while_idle() -> None:
+    new_job = replace(PROCESSING_ROW, job_id="job-2")
+    views = ScriptedProgressViews([_row()], [_row(), new_job])
+    changes = LibraryChangeNotifier()
 
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-    assert '"video_id":null' in response.text
-    assert f'"video_id":"{VIDEO_ID}"' in response.text
-    assert '"stage":"ready"' in response.text
+    async def scenario():
+        stream = _progress_stream(views, changes)
+        snapshot = await anext(stream)
+        changes.notify(USER_ID)
+        pushed = await anext(stream)
+        await stream.aclose()
+        return snapshot, pushed
+
+    snapshot, pushed = asyncio.run(scenario())
+
+    assert '"job_id":"job-1"' in snapshot and '"stage":"ready"' in snapshot
+    # Only the new job: the unchanged finished row is not sent a second time.
+    assert '"job_id":"job-2"' in pushed and '"stage":"transcribing"' in pushed
+    assert views.reads == 2
+
+
+def test_progress_stream_gains_a_video_id_and_reaches_ready_on_notify() -> None:
+    views = ScriptedProgressViews([PROCESSING_ROW], [_row()])
+    changes = LibraryChangeNotifier()
+
+    async def scenario():
+        stream = _progress_stream(views, changes)
+        processing = await anext(stream)
+        changes.notify(USER_ID)
+        finished = await anext(stream)
+        await stream.aclose()
+        return processing, finished
+
+    processing, finished = asyncio.run(scenario())
+
+    assert '"video_id":null' in processing
+    assert f'"video_id":"{VIDEO_ID}"' in finished
+    assert '"stage":"ready"' in finished
+
+
+def test_idle_progress_stream_sends_keepalives_without_reading_again() -> None:
+    views = ScriptedProgressViews([_row()])
+
+    async def scenario():
+        stream = _progress_stream(views, LibraryChangeNotifier(), keepalive_seconds=0.01)
+        sent = [await anext(stream) for _ in range(3)]
+        await stream.aclose()
+        return sent
+
+    sent = asyncio.run(scenario())
+
+    assert sent[1:] == [": keepalive\n\n", ": keepalive\n\n"]
+    assert views.reads == 1
+
+
+def test_active_progress_stream_rereads_on_keepalive_without_a_notify() -> None:
+    views = ScriptedProgressViews([PROCESSING_ROW], [_row()])
+
+    async def scenario():
+        stream = _progress_stream(views, LibraryChangeNotifier(), keepalive_seconds=0.01)
+        sent = [await anext(stream) for _ in range(3)]
+        await stream.aclose()
+        return sent
+
+    processing, keepalive, finished = asyncio.run(scenario())
+
+    assert '"stage":"transcribing"' in processing
+    assert keepalive == ": keepalive\n\n"
+    assert '"stage":"ready"' in finished
 
 
 class StubViews:
