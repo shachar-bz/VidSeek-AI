@@ -114,12 +114,9 @@ class MemoryUserVideos:
 
 
 class MemoryLibraryViews:
-    def __init__(
-        self, *, ready: bool = True, linked: bool = True, timing_fidelity: str | None = "word"
-    ) -> None:
+    def __init__(self, *, ready: bool = True, linked: bool = True) -> None:
         self.ready = ready
         self.linked = linked
-        self.timing_fidelity = timing_fidelity
 
     def get_video(self, user_id, video_id):
         if not self.linked or user_id != USER_ID or video_id != VIDEO_ID:
@@ -127,7 +124,6 @@ class MemoryLibraryViews:
         return SimpleNamespace(
             has_video_row=True,
             has_transcript=True,
-            has_timed_transcript=self.timing_fidelity is not None,
             has_chapters=self.ready,
             has_embeddings=self.ready,
             has_insights=self.ready,
@@ -176,7 +172,7 @@ class FakeRunner:
 
 
 def _app(
-    *, ready=True, linked=True, runner=None, timing_fidelity="word", comment_count=0, visual_state=None
+    *, ready=True, linked=True, runner=None, comment_count=0, visual_state=None
 ):
     app = FastAPI()
     app.include_router(routes.router)
@@ -185,9 +181,7 @@ def _app(
     app.state.messages_store = MemoryMessages()
     app.state.pinned_answers_store = MemoryPins()
     app.state.user_videos_store = MemoryUserVideos(linked)
-    app.state.library_views_store = MemoryLibraryViews(
-        ready=ready, linked=linked, timing_fidelity=timing_fidelity
-    )
+    app.state.library_views_store = MemoryLibraryViews(ready=ready, linked=linked)
     app.state.comments_store = MemoryComments(comment_count)
     app.state.visual_index_store = MemoryVisualIndex(visual_state)
     app.state.conversation_agent_runner = runner or FakeRunner([TextFragment("answer")])
@@ -351,20 +345,6 @@ def test_a_link_removed_during_creation_maps_the_store_error_to_not_found() -> N
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Video is not in this user's library"
-
-
-def test_both_ready_and_partial_completed_videos_are_chat_capable() -> None:
-    for timing_fidelity in ("word", None):
-        runner = FakeRunner([TextFragment("answer")])
-        app = _app(ready=True, runner=runner, timing_fidelity=timing_fidelity)
-        with TestClient(app) as client:
-            conversation_id = _create(client)
-            response = client.post(
-                f"/v1/conversations/{conversation_id}/messages",
-                json={"content": "Where is it discussed?"},
-            )
-
-        assert response.status_code == 200
 
 
 def test_the_agent_is_told_whether_the_video_has_comments() -> None:

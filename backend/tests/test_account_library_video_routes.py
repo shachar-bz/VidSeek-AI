@@ -54,7 +54,6 @@ def _row(**changes) -> LibraryViewRow:
         conversation_count=1,
         has_video_row=True,
         has_transcript=True,
-        has_timed_transcript=True,
         has_chapters=True,
         has_embeddings=True,
         has_insights=True,
@@ -107,7 +106,6 @@ def test_library_lists_a_processing_job_without_a_video_id() -> None:
         job_phase="transcription",
         has_video_row=False,
         has_transcript=False,
-        has_timed_transcript=False,
         has_chapters=False,
         has_embeddings=False,
         has_insights=False,
@@ -133,7 +131,7 @@ def test_empty_library_page_still_reports_the_filtered_total() -> None:
     assert body["total"] == 7
 
 
-def test_sse_progress_gains_a_video_id_and_reaches_partial(
+def test_sse_progress_gains_a_video_id_and_reaches_ready(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     processing = _row(
@@ -142,12 +140,11 @@ def test_sse_progress_gains_a_video_id_and_reaches_partial(
         job_phase="transcription",
         has_video_row=False,
         has_transcript=False,
-        has_timed_transcript=False,
         has_chapters=False,
         has_embeddings=False,
         has_insights=False,
     )
-    finished = _row(job_status="partial_success", error_code="untimed_transcript")
+    finished = _row()
 
     class ProgressViews:
         def __init__(self):
@@ -169,7 +166,7 @@ def test_sse_progress_gains_a_video_id_and_reaches_partial(
     assert response.headers["content-type"].startswith("text/event-stream")
     assert '"video_id":null' in response.text
     assert f'"video_id":"{VIDEO_ID}"' in response.text
-    assert '"stage":"partial"' in response.text
+    assert '"stage":"ready"' in response.text
 
 
 class StubViews:
@@ -345,16 +342,6 @@ def test_video_detail_reports_how_far_the_visual_index_is() -> None:
     assert indexing["stage"] == ReadinessStage.READY.value
     assert indexing["visual_status"] == "indexing"
     assert unknown["visual_status"] is None
-
-
-def test_partial_video_exposes_the_same_insights_as_ready() -> None:
-    app = _app(videos)
-    app.state.library_views_store = StubViews(_row(has_timed_transcript=False))
-
-    body = TestClient(app).get(f"/v1/videos/{VIDEO_ID}").json()
-
-    assert body["stage"] == ReadinessStage.PARTIAL.value
-    assert body["insights"]["summary"] == "Summary"
 
 
 class StubPins:

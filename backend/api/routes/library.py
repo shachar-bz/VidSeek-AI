@@ -80,7 +80,6 @@ def _stage(row: LibraryViewRow):
         VideoArtifacts(
             has_video_row=row.has_video_row,
             has_transcript=row.has_transcript,
-            has_timed_transcript=row.has_timed_transcript,
             has_chapters=row.has_chapters,
             has_embeddings=row.has_embeddings,
             has_insights=row.has_insights,
