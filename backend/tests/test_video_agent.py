@@ -1,6 +1,8 @@
 """Tests the agent's fixed model, tool set, streamed citation check, and persisted-history conversion."""
 
 import asyncio
+import warnings
+from pathlib import Path
 
 import pytest
 from pydantic_ai import (
@@ -15,7 +17,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from backend.services.visual_search import VISUAL_PROCESSING, VISUAL_READY, VISUAL_UNAVAILABLE
 from backend.storage.postgres import StoredMessage
-from backend.video_agent import prompt, runner
+from backend.video_agent import image_analysis, prompt, runner
 from backend.video_agent.activity import tool_activity
 from backend.video_agent.tools.deps import ConversationDeps
 
@@ -206,6 +208,34 @@ def test_the_viewer_s_position_says_where_the_player_was_and_whether_it_was_paus
 def test_system_prompt_does_not_embed_a_transcript() -> None:
     assert "The video data is only available through your tools" in runner.SYSTEM_PROMPT
     assert "full transcript" not in runner.SYSTEM_PROMPT.lower()
+
+
+PROMPT_SOURCES = [Path(prompt.__file__), Path(image_analysis.__file__)]
+ALL_PROMPTS = [
+    prompt.SYSTEM_PROMPT,
+    prompt.VISUAL_PROMPT,
+    prompt.VISUAL_PROCESSING_PROMPT,
+    prompt.VISUAL_UNAVAILABLE_PROMPT,
+    image_analysis.SEQUENCE_ANALYSIS_PROMPT,
+    image_analysis.CANDIDATES_ANALYSIS_PROMPT,
+]
+
+
+@pytest.mark.parametrize("source", PROMPT_SOURCES, ids=lambda path: path.name)
+def test_the_prompt_files_compile_without_warnings_or_line_joins(source: Path) -> None:
+    # An invalid escape such as `1\.` is only a SyntaxWarning, so it would pass a plain import.
+    text = source.read_text(encoding="utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        compile(text, str(source), "exec")
+    # Inside a prompt string, a backslash at a line's end joins two lines with no space between.
+    assert [number for number, line in enumerate(text.splitlines(), start=1) if line.endswith("\\")] == []
+
+
+@pytest.mark.parametrize("artifact", ["&#", "&nbsp;", "״", "\\:", "\\.", "\\-", "\\*"])
+def test_no_prompt_carries_a_rich_text_editor_artifact(artifact: str) -> None:
+    for text in ALL_PROMPTS:
+        assert artifact not in text
 
 
 def _text_of(events) -> str:
