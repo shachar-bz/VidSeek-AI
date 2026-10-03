@@ -70,12 +70,14 @@ export function VideoDetailsTabs({
   transcript,
   outline,
   activeLineIndex,
+  syncTarget,
   onSeek
 }: {
   video: VideoDetail;
   transcript: VideoTranscript | null;
   outline: VideoOutlineResponse | null;
   activeLineIndex: number;
+  syncTarget?: { index: number } | null;
   onSeek(seconds: number): void;
 }) {
   const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
@@ -113,12 +115,16 @@ export function VideoDetailsTabs({
         aria-labelledby="video-transcript-tab"
         hidden={activeTab !== "transcript"}
       >
-        <TranscriptPanel
-          transcript={transcript}
-          activeIndex={activeLineIndex}
-          embedded
-          onSeek={onSeek}
-        />
+        {/* Mounted only while visible, so coming back to the tab scrolls to the spoken line. */}
+        {activeTab === "transcript" ? (
+          <TranscriptPanel
+            transcript={transcript}
+            activeIndex={activeLineIndex}
+            syncTarget={syncTarget}
+            embedded
+            onSeek={onSeek}
+          />
+        ) : null}
       </div>
 
       <div

@@ -40,6 +40,7 @@ export interface VideoPlayerProps {
   captionLines?: TranscriptLine[];
   captionLanguage?: string | null;
   onTimeChange(seconds: number): void;
+  onSeeked?(seconds: number): void;
   onReady?(element: HTMLVideoElement | null): void;
 }
 
@@ -50,6 +51,7 @@ export function VideoPlayer({
   captionLines = NO_CAPTIONS,
   captionLanguage,
   onTimeChange,
+  onSeeked,
   onReady
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -227,6 +229,7 @@ export function VideoPlayer({
           onPause={() => setPaused(true)}
           onEnded={() => setPaused(true)}
           onDoubleClick={onVideoDoubleClick}
+          onSeeked={(event) => onSeeked?.(event.currentTarget.currentTime)}
           onTimeUpdate={(event) => onTimeChange(event.currentTarget.currentTime)}
         >
           {captionsUrl ? (

@@ -8,7 +8,7 @@ import { featureFailureMessage, sourceLabel } from "../shared";
 import { ConversationWorkspace, type PlayerPosition } from "./ConversationWorkspace";
 import { VideoDetailsTabs } from "./OutlineInsights";
 import { VideoPlayer } from "./VideoPlayer";
-import { activeTranscriptIndex } from "./format";
+import { activeTranscriptIndex, startedLineIndex } from "./format";
 
 function stageLabel(stage: VideoDetail["stage"]): string {
   return stage.charAt(0).toUpperCase() + stage.slice(1);
@@ -40,6 +40,8 @@ export function VideoPage() {
   const [reloadVersion, setReloadVersion] = useState(0);
   const [activeLineIndex, setActiveLineIndex] = useState(-1);
   const activeLineIndexRef = useRef(-1);
+  // A new object per jump, so the transcript re-syncs even when the line did not change.
+  const [syncTarget, setSyncTarget] = useState<{ index: number } | null>(null);
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const rememberPlayer = useCallback((player: HTMLVideoElement | null) => { playerRef.current = player; }, []);
   const readPlayerPosition = useCallback((): PlayerPosition | null => {
@@ -57,6 +59,7 @@ export function VideoPage() {
     setOutline(null);
     activeLineIndexRef.current = -1;
     setActiveLineIndex(-1);
+    setSyncTarget(null);
 
     void (async () => {
       try {
@@ -92,6 +95,12 @@ export function VideoPage() {
     updateActiveLine(seconds);
   }
 
+  // Every jump (citation, chapter, transcript line, or the native scrubber) ends in `seeked`.
+  function syncTranscriptToPlayer(seconds: number) {
+    updateActiveLine(seconds);
+    setSyncTarget({ index: startedLineIndex(transcript?.lines ?? [], seconds) });
+  }
+
   function updateActiveLine(seconds: number) {
     const next = activeTranscriptIndex(transcript?.lines ?? [], seconds);
     if (next === activeLineIndexRef.current) return;
@@ -115,8 +124,8 @@ export function VideoPage() {
       {artifactError ? <div className="inline-notice" role="status">{artifactError}</div> : null}
       <div className="video-workspace-grid">
         <div className="video-viewer-column">
-          <VideoPlayer videoId={videoId} available={browsing} title={video.title} captionLines={transcript?.lines} captionLanguage={video.transcript_language} onTimeChange={updateActiveLine} onReady={rememberPlayer} />
-          <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} onSeek={seek} />
+          <VideoPlayer videoId={videoId} available={browsing} title={video.title} captionLines={transcript?.lines} captionLanguage={video.transcript_language} onTimeChange={updateActiveLine} onSeeked={syncTranscriptToPlayer} onReady={rememberPlayer} />
+          <VideoDetailsTabs video={video} transcript={transcript} outline={outline} activeLineIndex={activeLineIndex} syncTarget={syncTarget} onSeek={seek} />
         </div>
         <ConversationWorkspace video={video} onSeek={seek} playerPosition={readPlayerPosition} />
       </div>

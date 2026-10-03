@@ -40,7 +40,8 @@ export function formatTimestamp(seconds: number): string {
     : `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function activeTranscriptIndex(lines: TranscriptLine[], seconds: number): number {
+/** The last line that has begun by `seconds`, even if it already ended (a gap before the next). */
+export function startedLineIndex(lines: TranscriptLine[], seconds: number): number {
   let low = 0;
   let high = lines.length - 1;
   let candidate = -1;
@@ -57,7 +58,11 @@ export function activeTranscriptIndex(lines: TranscriptLine[], seconds: number):
     }
   }
 
-  if (candidate === -1) return -1;
+  return candidate;
+}
+
+export function activeTranscriptIndex(lines: TranscriptLine[], seconds: number): number {
+  const candidate = startedLineIndex(lines, seconds);
   const line = lines[candidate];
   return line && seconds <= line.end_seconds ? candidate : -1;
 }
