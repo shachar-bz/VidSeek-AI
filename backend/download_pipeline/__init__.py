@@ -22,6 +22,8 @@ A sixth stage branches off after `video_storage` rather than following `insights
 
 `hand_over_for_visual_indexing` is called by the pipeline; `index_video_visually` is the
 background task the job manager runs, and the one stage that needs the local video file.
+`reindex_video_visually` is the same task for an index a shutdown interrupted, run from the
+stored video once the job manager starts again.
 """
 
 from .acquisition import AcquisitionRoute, acquire_video
@@ -42,8 +44,11 @@ from .video_storage import StorageOutcome, store_video
 from .visual_indexing import (
     ScheduleVisualIndexing,
     VisualIndexingOutcome,
+    claim_interrupted_visual_indexing,
     hand_over_for_visual_indexing,
     index_video_visually,
+    mark_visual_indexing_never_run,
+    reindex_video_visually,
 )
 
 __all__ = [
@@ -62,10 +67,13 @@ __all__ = [
     "VideoStorageError",
     "VisualIndexingOutcome",
     "acquire_video",
+    "claim_interrupted_visual_indexing",
     "embed_video",
     "generate_and_store_insights",
     "hand_over_for_visual_indexing",
     "index_video_visually",
+    "mark_visual_indexing_never_run",
+    "reindex_video_visually",
     "run_download_pipeline",
     "segment_and_store",
     "store_video",

@@ -20,14 +20,24 @@ the keyframe rows as it is read. This comes last because it is the slow part: th
 searchable by its frames the whole time. OCR cannot fail the index either. A keyframe it did
 not reach keeps no engine on its row, which is how an unread keyframe is told apart from one
 that shows no text; with no engine configured, every keyframe is left that way.
+
+An index the job manager's shutdown stopped part-way, or never got to start, is marked
+`failed` as interrupted rather than left looking queued. A process killed outright cannot
+mark anything, and leaves its video saying `indexing` or `pending`; once that has not changed
+for `ABANDONED_AFTER`, the video counts as interrupted too. The local file is gone either way,
+so `reindex_video_visually` fetches the stored video back from Blob Storage and builds the
+index again from the start; the job manager claims those videos with
+`claim_interrupted_visual_indexing` each time it starts.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from backend.core.security import probe_media_duration_seconds
@@ -40,13 +50,16 @@ from backend.services.visual_indexing import (
 )
 from backend.services.ocr import OcrEngine
 from backend.services.visual_indexing.keyframe_text import KEYFRAMES_PER_BATCH
+from backend.storage.blob import BlobVideoStorage
 from backend.storage.postgres import (
     KeyframeText,
     NewFrameEmbedding,
     NewVisualSegment,
+    PostgresVideoRecords,
     PostgresVisualIndex,
+    VisualIndexState,
 )
-from backend.storage.postgres.visual_index import FAILED, INDEXING, READY, SKIPPED
+from backend.storage.postgres.visual_index import FAILED, INDEXING, PENDING, READY, SKIPPED
 
 # Why a video has no visual index, as `videos.visual_error` records it.
 VISUAL_INDEXING_FAILED = "visual_indexing_failed"
@@ -60,6 +73,14 @@ NO_VIDEO_FRAMES = "no_video_frames"
 # and the log only: the index itself is fine, and `visual_error` is for an index that is not.
 OCR_FAILED = "ocr_failed"
 OCR_INTERRUPTED = "ocr_interrupted"
+
+# How long a video may say `indexing` or `pending` before it is taken for one a killed process
+# left behind. `indexing` lasts only while frames are decoded and embedded, which takes minutes
+# on a GPU and about an hour for an hour of video on a CPU; `pending` lasts while it waits
+# behind other videos, whose on-screen text can take hours to read. Far longer than both, so
+# a live index is not built twice: being wrong late costs a wait, being wrong early costs a
+# second index of the same video.
+ABANDONED_AFTER = timedelta(hours=12)
 
 # What the job manager passes in to run a task on its visual executor. It returns at once.
 ScheduleVisualIndexing = Callable[[str, Path], None]
@@ -199,6 +220,69 @@ def index_video_visually(
         return VisualIndexingOutcome(status=FAILED, problem=VISUAL_INDEXING_FAILED)
     finally:
         _delete_local_copy(local_path)
+
+
+def claim_interrupted_visual_indexing(*, pool=None) -> list[str]:
+    """Take every video whose index was interrupted or abandoned, to index again; each is now `pending`."""
+    return PostgresVisualIndex(pool=pool).claim_for_reindexing(
+        failed_with=VISUAL_INDEXING_INTERRUPTED, unchanged_for=ABANDONED_AFTER
+    )
+
+
+def is_abandoned(state: VisualIndexState, *, now: datetime) -> bool:
+    """Whether a video says `indexing` or `pending` only because the process building it died."""
+    return (
+        state.status in (PENDING, INDEXING)
+        and state.status_changed_at is not None
+        and now - state.status_changed_at > ABANDONED_AFTER
+    )
+
+
+def reindex_video_visually(
+    video_id: str,
+    work_directory: Path,
+    *,
+    stop_event: threading.Event | None = None,
+    pool=None,
+    ocr_engine: OcrEngine | None = None,
+    blob_storage: BlobVideoStorage | None = None,
+) -> VisualIndexingOutcome:
+    """Fetch a stored video back from Blob Storage into `work_directory`, and index it from the start.
+
+    Once the file is here, indexing it, its outcome and deleting the file are all
+    `index_video_visually`'s. A video that cannot be fetched is marked interrupted again, so
+    the next start tries it once more: a network failure is usually passing, and one more
+    download attempt per start is all a video that is really gone costs.
+    """
+    store = PostgresVisualIndex(pool=pool)
+    if stop_event is not None and stop_event.is_set():
+        _mark(store, video_id, FAILED, error=VISUAL_INDEXING_INTERRUPTED)
+        return VisualIndexingOutcome(status=FAILED, problem=VISUAL_INDEXING_INTERRUPTED)
+    local_path: Path | None = None
+    try:
+        record = PostgresVideoRecords(pool=pool).get_by_id(video_id)
+        if record is None:
+            raise LookupError(f"There is no video {video_id}")
+        blob_name = record.video.blob_name
+        local_path = work_directory / f"{uuid.uuid4().hex}{Path(blob_name).suffix}"
+        (blob_storage or BlobVideoStorage()).download_video(blob_name, local_path)
+    except Exception:
+        logger.exception("Fetching video %s back from Blob Storage to index it again failed", video_id)
+        if local_path is not None:
+            _delete_local_copy(local_path)
+        _mark(store, video_id, FAILED, error=VISUAL_INDEXING_INTERRUPTED)
+        return VisualIndexingOutcome(status=FAILED, problem=VISUAL_INDEXING_INTERRUPTED)
+    return index_video_visually(
+        video_id, local_path, stop_event=stop_event, pool=pool, ocr_engine=ocr_engine
+    )
+
+
+def mark_visual_indexing_never_run(video_id: str, *, pool=None) -> None:
+    """Record that a queued index never started because the job manager shut down first.
+
+    It is marked interrupted, the same as an index stopped part-way, so the next start builds it.
+    """
+    _mark(PostgresVisualIndex(pool=pool), video_id, FAILED, error=VISUAL_INDEXING_INTERRUPTED)
 
 
 def read_on_screen_text(
