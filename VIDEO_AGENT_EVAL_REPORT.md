@@ -90,28 +90,28 @@ What to fix (details in §6–§8):
 
 ## 3. Results at a glance
 
-Tools separated by `+` ran in the same round, in parallel. Tools separated by `→` ran in sequence. "sheet" is `view_candidates`, "seq" is `view_sequence`, and "close" is `view_frames_closeup`.
+Tools separated by `+` ran in the same round, in parallel. Tools separated by `→` ran in sequence. "sheet" is `view_candidates`, "seq" is `view_sequence`, and "close" is `view_frames_closeup`. The last three columns are each test's total time: today's run A, today's run B, and the 2026-10-02 report. For T2, T3, T14, T15 and T17 the 10-02 column gives the two re-runs after that day's prompt fixes.
 
-| Test | Behavior | Tools called (run A; run B if different) | Grade A / B | Latency A / B (10-02) |
-|---|---|---|---|---|
-| T1 | Basic info | `get_video_info` | Pass / Pass | 4.9 / 4.7 s (5.5) |
-| T2 | Ambiguous ("the term") | search + outline → chapter; B: → chapter + search → chapter → memory | Pass / Pass | 9.8 / 13.3 s (11.8 / 22.5 after fix) |
-| T3 | Outline | outline | Pass / Pass | 9.4 / 7.2 s (7.4 / 7.1 after fix) |
-| T4 | Viewer position, speech | outline → chapter → memory | Pass / Pass | 10.0 / 9.4 s (9.7) |
-| T5 | Specific fact | search + outline | Pass / Pass | 4.4 / 4.9 s (4.9) |
-| T6 | On-screen text | screen text + search | Pass / Pass | 4.9 / 5.5 s (6.1) |
-| T7 | Basic info, misleading title | info + outline + search; B: info → outline + search | Pass / Pass | 7.4 / 8.4 s (8.3) |
-| T8 | Context within a chapter | search + outline → memory | Pass / Pass | 7.9 / 9.5 s (8.6) |
-| T9 | Viewer position, visual (paused) | close | Pass / Pass | 6.3 / 6.1 s (6.9) |
-| T10 | Context across a chapter boundary | search + outline → chapter; B: → memory | Pass / Pass | 9.1 / 11.6 s (10.1) |
-| T11 | Larger section (3 chapters) | search + outline → 3 × chapter | Pass / Pass | 14.4 / 15.5 s (16.0) |
-| T12 | Not in the video | search + outline → search + chapter | Pass / Pass | 9.1 / 9.7 s (11.4) |
-| T13 | Slide text, index now ready | screen text + search → chapter → close → sheet → picture search → seq; B: → chapter → close → close | Pass / Pass | 42.3 / 16.3 s (2.9, declined) |
-| T14 | Finding when | search + outline; B: → 2 × chapter | Pass / Pass | 9.2 / 11.2 s (11.5 / 12.9 after fix) |
-| T15 | Ambiguous (several candidates) | search + outline → 3–4 × chapter (+ memory) → 3 × memory (+ search) | Pass / Pass | 15.5 / 14.4 s (16.0 / 16.1 after fix) |
-| T16 | Action or sequence (visual) | picture search + search → sheet → 2 × seq → close; B: → seq | Pass / Pass | 37.5 / 41.2 s (39.0) |
-| T17 | Where and how long (visual) | picture search + search → sheet → 2 × seq → seq; B: 2 × seq + search → memory → seq | Partial / Partial | 50.7 / 47.5 s (44.2 / 48.6 after fix) |
-| T18 | Where on screen, index now ready | search + outline → 2 × chapter + picture search → sheet; B: search + picture search + outline → chapter + sheet | Fail / Fail | 19.1 / 16.1 s (6.6, declined) |
+| Test | Behavior | Tools called (run A; run B if different) | Grade A / B | Run A | Run B | 10-02 |
+|---|---|---|---|---|---|---|
+| T1 | Basic info | `get_video_info` | Pass / Pass | 4.9 s | 4.7 s | 5.5 s |
+| T2 | Ambiguous ("the term") | search + outline → chapter; B: → chapter + search → chapter → memory | Pass / Pass | 9.8 s | 13.3 s | 11.8 / 22.5 s (after fix) |
+| T3 | Outline | outline | Pass / Pass | 9.4 s | 7.2 s | 7.4 / 7.1 s (after fix) |
+| T4 | Viewer position, speech | outline → chapter → memory | Pass / Pass | 10.0 s | 9.4 s | 9.7 s |
+| T5 | Specific fact | search + outline | Pass / Pass | 4.4 s | 4.9 s | 4.9 s |
+| T6 | On-screen text | screen text + search | Pass / Pass | 4.9 s | 5.5 s | 6.1 s |
+| T7 | Basic info, misleading title | info + outline + search; B: info → outline + search | Pass / Pass | 7.4 s | 8.4 s | 8.3 s |
+| T8 | Context within a chapter | search + outline → memory | Pass / Pass | 7.9 s | 9.5 s | 8.6 s |
+| T9 | Viewer position, visual (paused) | close | Pass / Pass | 6.3 s | 6.1 s | 6.9 s |
+| T10 | Context across a chapter boundary | search + outline → chapter; B: → memory | Pass / Pass | 9.1 s | 11.6 s | 10.1 s |
+| T11 | Larger section (3 chapters) | search + outline → 3 × chapter | Pass / Pass | 14.4 s | 15.5 s | 16.0 s |
+| T12 | Not in the video | search + outline → search + chapter | Pass / Pass | 9.1 s | 9.7 s | 11.4 s |
+| T13 | Slide text, index now ready | screen text + search → chapter → close → sheet → picture search → seq; B: → chapter → close → close | Pass / Pass | 42.3 s | 16.3 s | 2.9 s, declined |
+| T14 | Finding when | search + outline; B: → 2 × chapter | Pass / Pass | 9.2 s | 11.2 s | 11.5 / 12.9 s (after fix) |
+| T15 | Ambiguous (several candidates) | search + outline → 3–4 × chapter (+ memory) → 3 × memory (+ search) | Pass / Pass | 15.5 s | 14.4 s | 16.0 / 16.1 s (after fix) |
+| T16 | Action or sequence (visual) | picture search + search → sheet → 2 × seq → close; B: → seq | Pass / Pass | 37.5 s | 41.2 s | 39.0 s |
+| T17 | Where and how long (visual) | picture search + search → sheet → 2 × seq → seq; B: 2 × seq + search → memory → seq | Partial / Partial | 50.7 s | 47.5 s | 44.2 / 48.6 s (after fix) |
+| T18 | Where on screen, index now ready | search + outline → 2 × chapter + picture search → sheet; B: search + picture search + outline → chapter + sheet | Fail / Fail | 19.1 s | 16.1 s | 6.6 s, declined |
 
 ## 4. Per-test detail
 
