@@ -90,13 +90,13 @@ What to fix (details in §6–§8):
 
 ## 3. Results at a glance
 
-Tools separated by `+` ran in the same round, in parallel. Tools separated by `→` ran in sequence. "sheet" is `view_candidates`, "seq" is `view_sequence`, and "close" is `view_frames_closeup`. The last three columns are each test's total time: today's run A, today's run B, and the 2026-10-02 report. For T2, T3, T14, T15 and T17 the 10-02 column gives the two re-runs after that day's prompt fixes.
+Tools separated by `+` ran in the same round, in parallel. Tools separated by `→` ran in sequence. "sheet" is `view_candidates`, "seq" is `view_sequence`, and "close" is `view_frames_closeup`. The last three columns are each test's total time: today's run A, today's run B, and the 2026-10-02 report.
 
 | Test | Behavior | Tools called (run A; run B if different) | Grade A / B | Run A | Run B | 10-02 |
 |---|---|---|---|---|---|---|
 | T1 | Basic info | `get_video_info` | Pass / Pass | 4.9 s | 4.7 s | 5.5 s |
-| T2 | Ambiguous ("the term") | search + outline → chapter; B: → chapter + search → chapter → memory | Pass / Pass | 9.8 s | 13.3 s | 11.8 / 22.5 s (after fix) |
-| T3 | Outline | outline | Pass / Pass | 9.4 s | 7.2 s | 7.4 / 7.1 s (after fix) |
+| T2 | Ambiguous ("the term") | search + outline → chapter; B: → chapter + search → chapter → memory | Pass / Pass | 9.8 s | 13.3 s | 17.1 s * |
+| T3 | Outline | outline | Pass / Pass | 9.4 s | 7.2 s | 7.3 s * |
 | T4 | Viewer position, speech | outline → chapter → memory | Pass / Pass | 10.0 s | 9.4 s | 9.7 s |
 | T5 | Specific fact | search + outline | Pass / Pass | 4.4 s | 4.9 s | 4.9 s |
 | T6 | On-screen text | screen text + search | Pass / Pass | 4.9 s | 5.5 s | 6.1 s |
@@ -107,11 +107,13 @@ Tools separated by `+` ran in the same round, in parallel. Tools separated by `�
 | T11 | Larger section (3 chapters) | search + outline → 3 × chapter | Pass / Pass | 14.4 s | 15.5 s | 16.0 s |
 | T12 | Not in the video | search + outline → search + chapter | Pass / Pass | 9.1 s | 9.7 s | 11.4 s |
 | T13 | Slide text, index now ready | screen text + search → chapter → close → sheet → picture search → seq; B: → chapter → close → close | Pass / Pass | 42.3 s | 16.3 s | 2.9 s, declined |
-| T14 | Finding when | search + outline; B: → 2 × chapter | Pass / Pass | 9.2 s | 11.2 s | 11.5 / 12.9 s (after fix) |
-| T15 | Ambiguous (several candidates) | search + outline → 3–4 × chapter (+ memory) → 3 × memory (+ search) | Pass / Pass | 15.5 s | 14.4 s | 16.0 / 16.1 s (after fix) |
+| T14 | Finding when | search + outline; B: → 2 × chapter | Pass / Pass | 9.2 s | 11.2 s | 12.2 s * |
+| T15 | Ambiguous (several candidates) | search + outline → 3–4 × chapter (+ memory) → 3 × memory (+ search) | Pass / Pass | 15.5 s | 14.4 s | 16.1 s * |
 | T16 | Action or sequence (visual) | picture search + search → sheet → 2 × seq → close; B: → seq | Pass / Pass | 37.5 s | 41.2 s | 39.0 s |
-| T17 | Where and how long (visual) | picture search + search → sheet → 2 × seq → seq; B: 2 × seq + search → memory → seq | Partial / Partial | 50.7 s | 47.5 s | 44.2 / 48.6 s (after fix) |
+| T17 | Where and how long (visual) | picture search + search → sheet → 2 × seq → seq; B: 2 × seq + search → memory → seq | Partial / Partial | 50.7 s | 47.5 s | 46.4 s * |
 | T18 | Where on screen, index now ready | search + outline → 2 × chapter + picture search → sheet; B: search + picture search + outline → chapter + sheet | Fail / Fail | 19.1 s | 16.1 s | 6.6 s, declined |
+
+\* The prompt was fixed after the main 10-02 run, and these five tests were re-run twice with the fix. Today's code includes that fix, so the 10-02 number here is the average of those two re-runs: T2 11.8 and 22.5 s, T3 7.4 and 7.1 s, T14 11.5 and 12.9 s, T15 16.0 and 16.1 s, T17 44.2 and 48.6 s. Before the fix, the main 10-02 run took 8.1 s (T2), 14.8 s (T3), 25.3 s (T14), 12.5 s (T15) and 49.6 s (T17).
 
 ## 4. Per-test detail
 
