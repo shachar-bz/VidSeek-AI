@@ -371,3 +371,38 @@ Ordered by expected impact.
 - **Variance beyond two runs.** T2, T13 and T17 took different paths in A and B.
 - **The HTTP/SSE layer, the web client and the extension.**
 - **Dropped-citation counts:** the harness saw the answer after the citation filter.
+
+## 10. After-fix re-run
+
+- **Branch:** `fix/video-agent-prompt-repair-and-durations`. It applies recommendations 1 and 6, and part of the duration work from T17:
+  - **Prompt repair:** no line joins, no invalid escape, no editor artifacts. Citations are `[MM:SS–MM:SS]` again. "Video navigation → Workflow" is the one procedure, and the other sections point to it.
+  - **Restored rules:** "saying what you searched", citing moments from earlier turns, reading every chapter of a topic, "two searches are enough", and the resting-time example.
+  - **New rules:**
+    - Open with a count of parts only when the list keeps it.
+    - The image model ends a sequence answer with "Still showing at the first/last frame (MM:SS)" when a start, end or duration question's action reaches the window's edge.
+    - A duration sequence covers the whole supporting moment.
+- **Method:** one run each of T2, T12, T14, T15 and T17, with the same harness as §2. Answers were checked against the ground truth in §4. Raw tool results were not kept, so it is not known whether the image model wrote the new edge phrase.
+
+| Test | Grade | Tools called | Total | Against runs A / B |
+|---|---|---|---|---|
+| T2 | Pass | search + outline → 3 × chapter + search | 10.8 s | 9.8 / 13.3 s |
+| T12 | Pass, **fixed** | search + outline → search + chapter | 13.9 s | 9.1 / 9.7 s |
+| T14 | Pass, **fixed** | search + outline → 3 × chapter | 39.5 s | 9.2 / 11.2 s |
+| T15 | Pass | search + outline → 5 × chapter → 3 × memory | 37.2 s | 15.5 / 14.4 s |
+| T17 | Partial | picture search + search → sheet → chapter → 2 × seq → seq | 56.3 s | 50.7 / 47.5 s |
+
+- **T12:** "I couldn't find an explanation of ray tracing in this lecture, searching both for the term and for tracing light rays through a 3D scene." It now names what it searched.
+- **T14:** it opens with "Here are the relevant moments", with no count, then lists the same 5 correct places.
+- **T2 and T15:** these still pass after the restructure. T2 gives one line for each term, and T15 covers all 4 desserts.
+- **T17:**
+  - **Pumpkin, better:** "roughly a minute", intermittent, from 14:48 to 15:53, against about 45–55 s of active whisking from 14:48 to about 16:00. Its first sequence spanned the whole filling moment, 14:42–16:52, and its narrower pass spanned 14:42–16:04. Runs A and B stopped at 15:14–15:24 and reported 21–30 s.
+  - **Custard, worse:** "approximately 20–34 seconds" [08:31–09:05], against about 12 s from 08:37 to 08:49, plus 08:54–08:58. The location, 08:38–08:58, is right.
+  - **Why the custard got worse:** its whole-moment sequence ran 08:18–09:12, with 9 frames 6.75 s apart. The only narrowing look went to the pumpkin, which had the widest range. So the range follows the duration rule, but at a spacing too coarse for a 12 s action. Runs A and B used 08:18–08:56 and gave 10–19 s.
+  - **No whisking was invented at 17:13 this time.** That was one run, and recommendation 2 is not applied, so this is not a fix.
+- **Latency:** T14's first tool call came at 27.6 s, against 2.7 s in runs A and B. T15's last tool finished at 11.0 s, and its answer text started at 34.7 s. Both waits were model time, and their cause is not known from one run. The other three tests are within about 1–4 s of runs A and B.
+
+What it leaves open:
+
+1. **Duration windows are now wider, but the looks did not increase.** For a short action inside a long moment, either give one more look to narrowing, or start the sequence with more frames when the moment is long against the action.
+2. **Recommendations 2–5 still apply:** hedged observations, small on-screen labels (T18), the contact-sheet close-up, and weak screen-text hits.
+3. **Re-run T14 and T15** to see whether their slow model requests repeat.
