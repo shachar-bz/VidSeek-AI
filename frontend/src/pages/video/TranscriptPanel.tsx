@@ -4,6 +4,9 @@ import type { VideoTranscript } from "../../api/types";
 import { Button, EmptyState, Panel } from "../../components/ui";
 import { formatTimestamp } from "./format";
 
+// After the reader stops scrolling, the transcript goes back to following playback.
+const FOLLOW_RESUME_MS = 6_000;
+
 /** Keeps the spoken line in view without scrolling the page around the transcript. */
 function scrollLineIntoView(list: HTMLOListElement, line: HTMLLIElement) {
   const target = line.offsetTop - (list.clientHeight - line.clientHeight) / 2;
@@ -15,6 +18,8 @@ function scrollLineIntoView(list: HTMLOListElement, line: HTMLLIElement) {
 export interface TranscriptPanelProps {
   transcript: VideoTranscript | null;
   activeIndex: number;
+  /** A jump in playback; the panel re-follows and scrolls to `index` (-1: before the first line). */
+  syncTarget?: { index: number } | null;
   embedded?: boolean;
   onSeek(seconds: number): void;
 }
@@ -22,6 +27,7 @@ export interface TranscriptPanelProps {
 export function TranscriptPanel({
   transcript,
   activeIndex,
+  syncTarget = null,
   embedded = false,
   onSeek
 }: TranscriptPanelProps) {
@@ -29,6 +35,15 @@ export function TranscriptPanel({
   const [following, setFollowing] = useState(true);
   const listRef = useRef<HTMLOListElement | null>(null);
   const lineRefs = useRef(new Map<number, HTMLLIElement>());
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => () => clearTimeout(resumeTimerRef.current), []);
+
+  function stopFollowing() {
+    setFollowing(false);
+    clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => setFollowing(true), FOLLOW_RESUME_MS);
+  }
 
   useEffect(() => {
     if (!following || activeIndex < 0) return;
@@ -36,6 +51,15 @@ export function TranscriptPanel({
     const line = lineRefs.current.get(activeIndex);
     if (list && line) scrollLineIntoView(list, line);
   }, [activeIndex, following]);
+
+  useEffect(() => {
+    if (!syncTarget) return;
+    clearTimeout(resumeTimerRef.current);
+    setFollowing(true);
+    const list = listRef.current;
+    const line = lineRefs.current.get(syncTarget.index);
+    if (list && line) scrollLineIntoView(list, line);
+  }, [syncTarget]);
 
   useEffect(() => {
     setFollowing(true);
@@ -74,8 +98,8 @@ export function TranscriptPanel({
       <ol
         className="transcript-lines"
         ref={listRef}
-        onWheel={() => setFollowing(false)}
-        onTouchMove={() => setFollowing(false)}
+        onWheel={stopFollowing}
+        onTouchMove={stopFollowing}
       >
         {lines.map((line, index) => {
           const active = index === activeIndex;
