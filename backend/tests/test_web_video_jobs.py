@@ -437,8 +437,19 @@ def _job_store() -> tuple[dict[str, StoredVideoJob], object]:
     return store, FakeVideoJobs()
 
 
+class RecordingLibraryChanges:
+    """Records which users' library progress streams were woken."""
+
+    def __init__(self):
+        self.notified: list[str] = []
+
+    def notify(self, user_id: str) -> None:
+        self.notified.append(user_id)
+
+
 def test_a_page_already_recorded_is_deduplicated_without_downloading(tmp_path: Path) -> None:
-    manager = JobManager(tmp_path)
+    changes = RecordingLibraryChanges()
+    manager = JobManager(tmp_path, library_changes=changes)
     _, fake_video_jobs = _job_store()
     linked: list[tuple[str, str]] = []
 
@@ -483,8 +494,77 @@ def test_a_page_already_recorded_is_deduplicated_without_downloading(tmp_path: P
     # The extension opens its chat against this id the moment the job reports it.
     assert job.video_id == EXISTING_VIDEO.id
     assert linked == [("user-1", EXISTING_VIDEO.id)]
+    assert changes.notified == ["user-1"]
     executor.submit.assert_not_called()
     assert job.job_id not in manager._jobs
+
+
+def test_a_new_job_wakes_its_owners_library_progress_streams(tmp_path: Path) -> None:
+    changes = RecordingLibraryChanges()
+    manager = JobManager(tmp_path, library_changes=changes)
+    store, fake_video_jobs = _job_store()
+
+    class NoRecordedVideo:
+        def find_by_normalized_source_url(self, source_url: str) -> None:
+            return None
+
+    try:
+        with (
+            patch("backend.services.video_download.jobs.validate_remote_url"),
+            patch(
+                "backend.services.video_download.jobs.is_postgres_configured",
+                return_value=True,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoRecords",
+                return_value=NoRecordedVideo(),
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoJobs",
+                return_value=fake_video_jobs,
+            ),
+        ):
+            job = manager.create(direct_request(), user_id="user-1")
+    finally:
+        manager.shutdown()
+
+    assert job.job_id in store
+    assert changes.notified == ["user-1"]
+
+
+def test_a_failed_job_write_wakes_no_library_progress_stream(tmp_path: Path) -> None:
+    changes = RecordingLibraryChanges()
+    manager = JobManager(tmp_path, library_changes=changes)
+
+    class NoRecordedVideo:
+        def find_by_normalized_source_url(self, source_url: str) -> None:
+            return None
+
+    class FailingVideoJobs:
+        def upsert(self, job: VideoJob) -> StoredVideoJob:
+            raise RuntimeError("database unavailable")
+
+    try:
+        with (
+            patch("backend.services.video_download.jobs.validate_remote_url"),
+            patch(
+                "backend.services.video_download.jobs.is_postgres_configured",
+                return_value=True,
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoRecords",
+                return_value=NoRecordedVideo(),
+            ),
+            patch(
+                "backend.services.video_download.jobs.PostgresVideoJobs",
+                return_value=FailingVideoJobs(),
+            ),
+        ):
+            manager.create(direct_request(), user_id="user-1")
+    finally:
+        manager.shutdown()
+
+    assert changes.notified == []
 
 
 def test_without_a_database_deduplication_is_skipped_and_the_job_downloads_as_usual(

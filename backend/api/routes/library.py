@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import current_user
@@ -23,6 +25,7 @@ from backend.schemas.library import (
 )
 from backend.schemas.readiness import ReadinessStage, VideoArtifacts, derive_readiness_stage
 from backend.schemas.video_jobs import JobPhase, JobStatus
+from backend.services.library_changes import LibraryChangeNotifier
 from backend.storage.postgres import (
     LibraryViewRow,
     PostgresLibraryViews,
@@ -32,6 +35,14 @@ from backend.storage.postgres import (
 )
 
 router = APIRouter(prefix="/v1/library")
+
+# How long an idle progress stream stays silent before it sends an SSE comment, so a proxy
+# does not close a connection that is only waiting for the next job.
+PROGRESS_KEEPALIVE_SECONDS = 15.0
+# How long a woken stream waits before reading, so a burst of download-progress writes
+# becomes one read and one event instead of one per write.
+PROGRESS_COALESCE_SECONDS = 0.3
+ACTIVE_JOB_STATUSES = {"queued", "running", "awaiting_browser_download"}
 
 
 def library_views(request: Request) -> PostgresLibraryViews:
@@ -44,6 +55,10 @@ def user_videos(request: Request) -> PostgresUserVideos:
 
 def video_jobs(request: Request) -> PostgresVideoJobs:
     return request.app.state.video_jobs_store
+
+
+def library_changes(request: Request) -> LibraryChangeNotifier:
+    return request.app.state.library_changes
 
 
 def library_query(
@@ -158,36 +173,69 @@ def list_tags(
 async def library_events(
     user: StoredUser = Depends(current_user),
     store: PostgresLibraryViews = Depends(library_views),
+    changes: LibraryChangeNotifier = Depends(library_changes),
 ) -> StreamingResponse:
-    async def events():
-        previous: dict[str, str] = {}
-        while True:
-            rows = store.progress_rows(user.id)
-            active = False
-            for row in rows:
-                event = LibraryProgressEvent(
-                    job_id=row.job_id or "",
-                    video_id=row.video_id,
-                    stage=_stage(row),
-                    progress=row.progress,
-                    status_message=row.status_message,
-                    error_code=row.error_code,
-                )
-                serialized = event.model_dump_json()
-                if previous.get(event.job_id) != serialized:
-                    previous[event.job_id] = serialized
-                    yield f"data: {serialized}\n\n"
-                if row.job_status in {"queued", "running", "awaiting_browser_download"}:
-                    active = True
-            if not active:
-                break
-            await asyncio.sleep(1)
-
     return StreamingResponse(
-        events(),
+        library_progress_stream(user.id, store, changes),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+async def library_progress_stream(
+    user_id: str,
+    store: PostgresLibraryViews,
+    changes: LibraryChangeNotifier,
+    *,
+    keepalive_seconds: float = PROGRESS_KEEPALIVE_SECONDS,
+    coalesce_seconds: float = PROGRESS_COALESCE_SECONDS,
+) -> AsyncIterator[str]:
+    """Every job row's state once, then each row again whenever it changes, until closed.
+
+    The stream stays open while nothing is processing, which is what lets the website
+    see a job the extension starts later. It does not poll: it reads the database when
+    the job manager reports a write for this user, and otherwise only sends a keepalive.
+    While a job is active it also re-reads on each keepalive, as a safety net for a
+    change made somewhere that does not notify.
+    """
+    previous: dict[str, str] = {}
+    with changes.subscribe(user_id) as wake:
+        while True:
+            # Cleared before the read, so a write landing during it wakes the next wait.
+            wake.clear()
+            rows = await run_in_threadpool(store.progress_rows, user_id)
+            for serialized in _changed_progress_events(rows, previous):
+                yield f"data: {serialized}\n\n"
+            active = any(row.job_status in ACTIVE_JOB_STATUSES for row in rows)
+            while True:
+                try:
+                    await asyncio.wait_for(wake.wait(), timeout=keepalive_seconds)
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                    if active:
+                        break
+                    continue
+                await asyncio.sleep(coalesce_seconds)
+                break
+
+
+def _changed_progress_events(rows: list[LibraryViewRow], previous: dict[str, str]) -> list[str]:
+    """The serialized event of each row that differs from what this stream last sent."""
+    changed = []
+    for row in rows:
+        event = LibraryProgressEvent(
+            job_id=row.job_id or "",
+            video_id=row.video_id,
+            stage=_stage(row),
+            progress=row.progress,
+            status_message=row.status_message,
+            error_code=row.error_code,
+        )
+        serialized = event.model_dump_json()
+        if previous.get(event.job_id) != serialized:
+            previous[event.job_id] = serialized
+            changed.append(serialized)
+    return changed
 
 
 @router.patch("/{video_id}", response_model=LibraryVideo)

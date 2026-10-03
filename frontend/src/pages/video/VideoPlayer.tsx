@@ -12,6 +12,8 @@ import { buildCaptionsVtt } from "./captions";
 
 const MINIMUM_REFRESH_DELAY_MS = 1_000;
 const NO_CAPTIONS: TranscriptLine[] = [];
+// Chrome hides its control bar this long after the last pointer activity while playing.
+const CONTROLS_IDLE_MS = 3_000;
 
 export function playbackRefreshDelay(playback: PlaybackUrl, now = Date.now()): number {
   const expiresAt = Date.parse(playback.expires_at);
@@ -38,6 +40,7 @@ export interface VideoPlayerProps {
   captionLines?: TranscriptLine[];
   captionLanguage?: string | null;
   onTimeChange(seconds: number): void;
+  onSeeked?(seconds: number): void;
   onReady?(element: HTMLVideoElement | null): void;
 }
 
@@ -48,6 +51,7 @@ export function VideoPlayer({
   captionLines = NO_CAPTIONS,
   captionLanguage,
   onTimeChange,
+  onSeeked,
   onReady
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -55,6 +59,10 @@ export function VideoPlayer({
   const intentRef = useRef<PlaybackIntent | null>(null);
   const captionsOnRef = useRef(false);
   const [captionsOn, setCaptionsOn] = useState(false);
+  // Mirrors the native control bar: shown while paused, or while the pointer was recently active.
+  const [paused, setPaused] = useState(true);
+  const [pointerActive, setPointerActive] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [playback, setPlayback] = useState<PlaybackUrl | null>(null);
   const [loading, setLoading] = useState(available);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +77,19 @@ export function VideoPlayer({
   }, [captionLines]);
 
   useEffect(() => () => { if (captionsUrl) URL.revokeObjectURL(captionsUrl); }, [captionsUrl]);
+
+  useEffect(() => () => clearTimeout(idleTimerRef.current), []);
+
+  function showControls() {
+    setPointerActive(true);
+    clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => setPointerActive(false), CONTROLS_IDLE_MS);
+  }
+
+  function hideControls() {
+    clearTimeout(idleTimerRef.current);
+    setPointerActive(false);
+  }
 
   // The video element is never the fullscreen element: the frame around it is, so the CC
   // control stays on screen there. Chrome only offers its own captions entry through an
@@ -191,6 +212,10 @@ export function VideoPlayer({
       <div
         className={captionsUrl ? "video-player__frame video-player__frame--with-captions" : "video-player__frame"}
         ref={frameRef}
+        onPointerMove={showControls}
+        onPointerDown={showControls}
+        onPointerLeave={hideControls}
+        onKeyDown={showControls}
       >
         <video
           ref={connectVideo}
@@ -200,7 +225,11 @@ export function VideoPlayer({
           preload="metadata"
           aria-label={title}
           onLoadedMetadata={onLoadedMetadata}
+          onPlay={() => setPaused(false)}
+          onPause={() => setPaused(true)}
+          onEnded={() => setPaused(true)}
           onDoubleClick={onVideoDoubleClick}
+          onSeeked={(event) => onSeeked?.(event.currentTarget.currentTime)}
           onTimeUpdate={(event) => onTimeChange(event.currentTarget.currentTime)}
         >
           {captionsUrl ? (
@@ -212,7 +241,7 @@ export function VideoPlayer({
             />
           ) : null}
         </video>
-        <div className="video-player__controls">
+        <div className={paused || pointerActive ? "video-player__controls video-player__controls--visible" : "video-player__controls"}>
           {captionsUrl ? (
             <button
               className={captionsOn ? "video-player__control video-player__control--on" : "video-player__control"}
