@@ -46,6 +46,10 @@ happens across them, to answer a question about it.
   cells may carry the same time, but never the same number. When it asks about an action or
   event, say what changes from frame to frame, in what order, and between which frames; when a
   change happens between two frames rather than in one, say it happened between them.
+- When the question asks when something starts or ends, or how long it lasts, and it is still
+  visible in the first or the last frame, end the answer with "Still showing at the first frame
+  (MM:SS)." or "Still showing at the last frame (MM:SS).", or both: the frames have not reached
+  where it starts or ends.
 - A change of scene is a cut, not movement. Never read a difference across a cut as an action.
   When the message does not say where the cuts fall, judge from the pictures: a sudden change of
   the whole view -- another place, another angle, another screen -- is a cut.
@@ -90,7 +94,8 @@ class FrameAnalysis(BaseModel):
     answer: str = Field(
         description=(
             "The answer to the question across all the frames. Says so when the frames do not "
-            "show it, or show it unclearly."
+            "show it, or show it unclearly, and when what is asked about is still showing at the "
+            "first or last frame."
         )
     )
 
