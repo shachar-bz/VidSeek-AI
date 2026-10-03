@@ -1703,7 +1703,8 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.35;
+  opacity: 0;
+  pointer-events: none;
   transition: opacity 150ms ease;
 }
 
@@ -1743,9 +1744,11 @@ h3 {
   }
 }
 
-.video-player__frame:hover .video-player__controls,
+/* Visible exactly when the native control bar is (see VideoPlayer); focus keeps it reachable. */
+.video-player__controls--visible,
 .video-player__controls:focus-within {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .video-player__control {
