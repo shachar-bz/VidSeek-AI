@@ -20,6 +20,16 @@ const sceneBoundaries = [
 
 const moment = (scene: SceneId, local: number) => scenes[scene].start + local / (visualPlaybackRates[scene] ?? 1);
 
+// One UI sound per interaction: a click also covers its immediate UI result.
+// Answer arrivals keep their pop; trim a tail if the next interaction starts soon.
+const uiMoments = [...uiSoundMoments, ...uiSoundMomentsLibrary].sort((a, b) => a.at - b.at);
+const uiSoundCues: SoundEffectCue[] = uiMoments.map(({ at, kind }, index) => ({
+  id: kind === "click" ? "ui_click" : "ui_pop",
+  at,
+  volume: kind === "click" ? 0.42 : 0.32,
+  duration: Math.min(0.48, (uiMoments[index + 1]?.at ?? at + 0.52) - at - 0.04),
+}));
+
 export const soundEffectCues: SoundEffectCue[] = [
   { id: "page_flip", at: 3.15, volume: 0.3, duration: 1.2 },
   { id: "keyboard_typing", at: 5.3, volume: 0.2, duration: 1.6 },
@@ -32,9 +42,7 @@ export const soundEffectCues: SoundEffectCue[] = [
   { id: "ui_pop", at: moment("comments", 3), volume: 0.45 },
   { id: "ui_pop", at: moment("itWatches", 3.7), volume: 0.45 },
   { id: "soft_transition", at: moment("itWatches", 5.9), volume: 0.15, duration: 0.7 },
-  ...[...uiSoundMoments, ...uiSoundMomentsLibrary].map(({ at, kind }) => ({
-    id: kind === "click" ? "ui_click" : "ui_pop", at, volume: kind === "click" ? 0.42 : 0.32,
-  })),
+  ...uiSoundCues,
   { id: "shimmer", at: scenes.itReads.start + 5.3, volume: 0.35 },
   { id: "impact", at: scenes.endCard.start + 0.2, volume: 0.28 },
 ];

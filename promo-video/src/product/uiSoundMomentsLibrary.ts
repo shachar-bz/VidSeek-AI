@@ -3,7 +3,7 @@ import { chatPinsSceneSource, librarySceneSource, libraryTakeEvents } from "./li
 import type { Recording } from "./recordings";
 import { outputSecondsAtSourceTime } from "./recordingTiming";
 
-// Absolute composition seconds of the visible clicks (and the pin landing) in the library and chatPins
+// Absolute composition seconds of the visible clicks in the library and chatPins
 // scenes, derived from the take's event log through each scene's segments, so they follow any re-cut.
 // Both scenes play at 1x scene time (no visualPlaybackRates entry).
 const absoluteSeconds = (sceneStart: number, recording: Recording, sourceSeconds: number) => {
@@ -19,6 +19,5 @@ export const uiSoundMomentsLibrary: { at: number; kind: "click" | "pop"; scene: 
   { at: library(libraryTakeEvents.clickVideoRow), kind: "click", scene: "library" },
   { at: chatPins(libraryTakeEvents.clickChat), kind: "click", scene: "chatPins" },
   { at: chatPins(libraryTakeEvents.clickPin), kind: "click", scene: "chatPins" },
-  { at: chatPins(libraryTakeEvents.pinListed), kind: "pop", scene: "chatPins" },
   { at: chatPins(libraryTakeEvents.clickPinnedEntry), kind: "click", scene: "chatPins" },
 ];
