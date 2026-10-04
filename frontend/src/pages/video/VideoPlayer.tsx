@@ -156,6 +156,7 @@ export function VideoPlayer({
           key={playback?.url}
           src={playback?.url}
           controls
+          controlsList="nodownload"
           preload="metadata"
           aria-label={title}
           onLoadedMetadata={onLoadedMetadata}
