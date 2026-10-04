@@ -80,10 +80,12 @@ export const productSceneSources = {
       sourceSize: { width: 1912, height: 1150 },
       pageRect: framedChromePage(1910),
       // The question lands in the side panel at 2.0 s and the answer at 3.45 s: ease onto the panel.
+      // The final crop starts right of the player (x≥990), so its dark edge never reads as a bar, and
+      // its top (y=137) sits in the blank row under YouTube's header buttons.
       camera: [
         { at: 0, centerX: 959, centerY: 615, width: 1879 },
         { at: 1.7, centerX: 959, centerY: 615, width: 1879 },
-        { at: 3.1, centerX: 1360, centerY: 396, width: 1100 },
+        { at: 3.1, centerX: 1450, centerY: 396, width: 920 },
       ],
     },
   },
@@ -103,11 +105,12 @@ export const productSceneSources = {
       },
       sourceSize: { width: 1916, height: 1146 },
       pageRect: websitePage({ width: 1916, height: 1146 }),
-      // Page header to panel bottom, then the player + answer for the timestamp click.
+      // Page header to panel bottom, then the player + answer for the timestamp click. The final crop
+      // (y 192–839) keeps the video title above its metadata line and ends under the answer's "Pin" line.
       camera: [
         { at: 0, centerX: 958, centerY: 555, width: 1662 },
         { at: 2.0, centerX: 958, centerY: 555, width: 1662 },
-        { at: 3.3, centerX: 842, centerY: 565, width: 1110 },
+        { at: 3.3, centerX: 822, centerY: 515, width: 1150 },
       ],
     },
     clicks: [{ sourceTime: 14.2, sourceX: 1191, sourceY: 699 }],
@@ -129,11 +132,12 @@ export const productSceneSources = {
       },
       sourceSize: { width: 1916, height: 1152 },
       pageRect: framedChromePage(1911),
-      // The comment summary arrives at ~3.4 s in the lower half of the side panel.
+      // The comment summary arrives at ~3.4 s in the lower half of the side panel. The final crop starts
+      // right of the player (x≥990) and its top (y=440) falls between text lines in both columns.
       camera: [
         { at: 0, centerX: 959, centerY: 615, width: 1879 },
         { at: 2.0, centerX: 959, centerY: 615, width: 1879 },
-        { at: 3.4, centerX: 1360, centerY: 560, width: 1100 },
+        { at: 3.4, centerX: 1450, centerY: 699, width: 920 },
       ],
     },
   },
@@ -187,10 +191,12 @@ export const productSceneSources = {
       },
       sourceSize: { width: 1918, height: 1148 },
       pageRect: framedChromePage(1911),
+      // The cook at the table and the answer side by side; the left edge (x=419) falls between the
+      // site's menu items.
       camera: [
         { at: 0, centerX: 959, centerY: 615, width: 1879 },
         { at: 2.2, centerX: 959, centerY: 615, width: 1879 },
-        { at: 3.6, centerX: 1360, centerY: 420, width: 1150 },
+        { at: 3.6, centerX: 1165, centerY: 507, width: 1492 },
       ],
     },
   },
@@ -212,10 +218,11 @@ export const productSceneSources = {
       },
       sourceSize: { width: 1920, height: 1148 },
       pageRect: websitePage({ width: 1920, height: 1148 }),
+      // Final crop y 196–843: the video title stays above its metadata line, the answer's "Pin" line is in.
       camera: [
         { at: 0, centerX: 960, centerY: 555, width: 1662 },
         { at: 2.6, centerX: 960, centerY: 555, width: 1662 },
-        { at: 3.9, centerX: 842, centerY: 560, width: 1110 },
+        { at: 3.9, centerX: 822, centerY: 520, width: 1150 },
       ],
     },
     clicks: [{ sourceTime: 21.8, sourceX: 1161, sourceY: 699 }],
@@ -228,10 +235,12 @@ export const productSceneSources = {
       media: { kind: "stills", frames: [{ from: 0, src: "stills/library_rows_v2.png" }] },
       sourceSize: { width: 2370, height: 1314 },
       pageRect: { x: 0, y: 0, width: 2133, height: 1184 },
+      // A top-anchored push (the crop's top stays at the page top, so the header and the "Library"
+      // heading are never sliced) that ends between the table's bottom edge and its footer.
       camera: [
         { at: 0, centerX: 1066, centerY: 592, width: 2105 },
         { at: 0.6, centerX: 1066, centerY: 592, width: 2105 },
-        { at: 5.6, centerX: 1066, centerY: 640, width: 1660 },
+        { at: 5.6, centerX: 1066, centerY: 525, width: 1866 },
       ],
     },
   },
@@ -249,12 +258,14 @@ export const productSceneSources = {
       },
       sourceSize: { width: 2370, height: 1314 },
       pageRect: { x: 0, y: 0, width: 2133, height: 1184 },
+      // The whole page for the chat list, then the chat panel and the Chats / Pinned column for the
+      // pin (x 1013–2133, y 318–948: right of the TED logo, under the "Chats" label, below the "Pin" line).
       camera: [
         { at: 0, centerX: 1066, centerY: 592, width: 2105 },
         { at: 0.2, centerX: 1066, centerY: 592, width: 2105 },
-        { at: 1.3, centerX: 1130, centerY: 545, width: 1560 },
-        { at: 2.2, centerX: 1130, centerY: 545, width: 1560 },
-        { at: 3.4, centerX: 1330, centerY: 600, width: 1300 },
+        { at: 1.3, centerX: 1090, centerY: 545, width: 1560 },
+        { at: 2.2, centerX: 1090, centerY: 545, width: 1560 },
+        { at: 3.4, centerX: 1573, centerY: 633, width: 1120 },
       ],
     },
     clicks: [
@@ -290,7 +301,10 @@ export const whiskReveal = {
 export const formulaLift = {
   liftAt: 8.2, // scene seconds
   holdSourceTime: 25.0, // the source frame the lifted formula is cut from
-  rect: { x: 452, y: 358, width: 340, height: 86 }, // the formula on the slide, source px
+  // The formula on the slide, source px: 15–22 px of slide at the sides; above and below it only the
+  // clean rows between the title's descenders (y≤357) and the grids (y≥446), 1 px in from each so
+  // scaling doesn't bleed them in. The card pads the rest.
+  rect: { x: 440, y: 359, width: 364, height: 85 },
   citation: "READ FROM THE SLIDE · 37:27",
   answer: "The minimum seam cost to each pixel is its energy plus the cheapest of the three pixels above it.",
 };

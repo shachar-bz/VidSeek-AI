@@ -26,7 +26,11 @@ const montageTranslateY = MONTAGE_WINDOW.top - (WINDOW_CENTER.y - (WINDOW_HEIGHT
 
 export const SECTION_START = scenes.findVideo.start;
 export const SECTION_END = scenes.chatPins.end;
-const EXIT = { start: SECTION_END - 0.1, end: SECTION_END + 0.3 };
+// The window shrinks toward the center and is gone before the end card's logo starts (0.2 s after
+// SECTION_END), so the two never double-expose. It stays opaque until its last few frames.
+const EXIT = { start: SECTION_END - 0.2, end: SECTION_END + 0.17 };
+const EXIT_SHRINK = 0.3;
+const EXIT_FADE_FRAMES = 4;
 export const SECTION_RENDER_END = EXIT.end;
 
 // Strong ease-in-out for every push, so the move reads as one decisive swipe.
@@ -52,7 +56,10 @@ const pushBump = (push: Push, frame: number) => {
   return (1 - Math.cos(2 * Math.PI * linear)) / 2;
 };
 
-const ENTRANCE_RISE = 960; // px: the pulled-back window starts with its top edge below the frame
+// The window enters once the reveal logo has fully left: a short rise from slightly below with a
+// quick fade-in over an empty background.
+const ENTRANCE_RISE = 120; // px
+const ENTRANCE_FADE_FRAMES = 4;
 
 export type WindowTransform = { scale: number; translateX: number; translateY: number; opacity: number };
 
@@ -79,13 +86,21 @@ export const windowTransformAt = (
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const sectionStartFrame = toFrames(SECTION_START);
+  const exitEndFrame = toFrames(EXIT.end);
+  const fadeIn = interpolate(frame, [sectionStartFrame - 1, sectionStartFrame - 1 + ENTRANCE_FADE_FRAMES], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const fadeOut = interpolate(frame, [exitEndFrame - EXIT_FADE_FRAMES, exitEndFrame], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
   return {
-    scale: baseScale * interpolate(entrance, [0, 1], [0.92, 1]) * (1 - montageDip - productDip) * (1 - exit * 0.14),
+    scale: baseScale * interpolate(entrance, [0, 1], [0.92, 1]) * (1 - montageDip - productDip) * (1 - exit * EXIT_SHRINK),
     translateX: 0,
-    // Rises from just below the frame, fully opaque, so it covers the outgoing logo instead of
-    // double-exposing it.
     translateY: baseTranslateY + (1 - entrance) * ENTRANCE_RISE,
-    opacity: 1 - exit,
+    opacity: fadeIn * fadeOut,
   };
 };
 

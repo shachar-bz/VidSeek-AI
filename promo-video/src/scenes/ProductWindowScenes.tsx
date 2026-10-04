@@ -136,8 +136,8 @@ const WhiskMomentReveal: React.FC = () => {
           position: "absolute",
           left: chipX,
           top: chipY,
-          // Gone as soon as the circle starts opening, so it never ghosts over the footage.
-          opacity: Math.max(0, 1 - open * 5),
+          // Gone the moment the circle opens past the chip's own size, so it never ghosts over the footage.
+          opacity: open > 0.04 ? 0 : 1,
           transform: `translate(-50%, -50%) scale(${1 + lift * 0.6})`,
         }}
       >
@@ -154,6 +154,10 @@ export const ItWatchesContent: React.FC = () => (
 );
 
 // "It reads": the formula lifts off the real slide and becomes a card above the cited answer.
+const FORMULA_CARD_WIDTH = 946; // content px (2.6x a 1x recording: any larger and the slide text goes soft)
+// White space the card adds above and below the cut-out (the slide has only a few px between the formula,
+// the slide title and the grids), grown in during the lift so the card leaves the slide exactly in place.
+const FORMULA_CARD_PADDING_Y = 16;
 const FormulaLiftOff: React.FC = () => {
   const frame = useCurrentFrame();
   const seconds = frame / FPS;
@@ -163,13 +167,19 @@ const FormulaLiftOff: React.FC = () => {
   if (recording.media.kind !== "video") return null;
   const lift = spring({ frame: frame - liftAt * FPS, fps: FPS, config: { damping: 15, stiffness: 90 } });
   const start = sourcePointInBox(recordingFramingAt(recording, liftAt, W, H), W, H, rect.x, rect.y);
-  const endScale = 3.2;
+  // The card's final width is fixed in content px, so a sharper (larger) recording needs less upscaling.
+  const endScale = FORMULA_CARD_WIDTH / rect.width;
   const scale = interpolate(lift, [0, 1], [start.scale, endScale]);
   const width = rect.width * scale;
-  const height = rect.height * scale;
+  const regionHeight = rect.height * scale;
+  const paddingY = FORMULA_CARD_PADDING_Y * lift;
+  // The slide's off-white melts into the card's white padding instead of leaving a seam.
+  const fadePx = 6 * lift;
+  const edgeFade = `linear-gradient(to bottom, transparent 0, #000 ${fadePx}px, #000 calc(100% - ${fadePx}px), transparent 100%)`;
+  const height = regionHeight + paddingY * 2;
   const endLeft = (W - rect.width * endScale) / 2;
   const endTop = 112;
-  const endCenterY = endTop + (rect.height * endScale) / 2;
+  const endCenterY = endTop + (rect.height * endScale) / 2 + FORMULA_CARD_PADDING_Y;
   const sparkle = interpolate(seconds, [liftAt, liftAt + 1.2], [0, 1], clamp);
   const caption = spring({ frame: frame - (liftAt + 0.7) * FPS, fps: FPS, config: { damping: 16 } });
   return (
@@ -189,13 +199,15 @@ const FormulaLiftOff: React.FC = () => {
           background: "#fff",
         }}
       >
-        <FrozenSourceRegion
-          src={recording.media.src}
-          sourceSize={recording.sourceSize}
-          sourceSeconds={formulaLift.holdSourceTime}
-          rect={rect}
-          width={width}
-        />
+        <div style={{ position: "absolute", left: 0, top: paddingY, width, height: regionHeight, maskImage: edgeFade, WebkitMaskImage: edgeFade }}>
+          <FrozenSourceRegion
+            src={recording.media.src}
+            sourceSize={recording.sourceSize}
+            sourceSeconds={formulaLift.holdSourceTime}
+            rect={rect}
+            width={width}
+          />
+        </div>
       </div>
       {Array.from({ length: 14 }, (_, index) => {
         const angle = (index / 14) * Math.PI * 2;

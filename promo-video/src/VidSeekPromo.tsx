@@ -18,7 +18,7 @@ const HOOK_SCENES: { id: SceneId; component: React.FC; enter: boolean }[] = [
   { id: "hookQuestion", component: HookQuestion, enter: true },
 ];
 
-// The logo leaves cleanly (no blur) while the product window rises over it.
+// The logo leaves cleanly (no blur) in the reveal's last 0.3 s, before the product window rises in.
 const REVEAL_EXIT_SECONDS = 0.3;
 const CleanExit: React.FC<{ durationInFrames: number; exitFrames: number; children: React.ReactNode }> = ({
   durationInFrames,
@@ -31,7 +31,7 @@ const CleanExit: React.FC<{ durationInFrames: number; exitFrames: number; childr
 };
 
 export const VidSeekPromo: React.FC = () => {
-  const revealFrames = toFrames(scenes.reveal.end - scenes.reveal.start + REVEAL_EXIT_SECONDS);
+  const revealFrames = toFrames(scenes.reveal.end - scenes.reveal.start);
   return (
     <AbsoluteFill>
       <Background />
