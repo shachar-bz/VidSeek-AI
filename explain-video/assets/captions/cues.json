@@ -37,10 +37,10 @@
   {
     "start": 16.1,
     "end": 20.799999999999997,
-    "text": "knowledge: what was said, what was shown, and when it happened — all",
+    "text": "knowledge: what was said, what was shown, and when it happened - all",
     "lines": [
       "knowledge: what was said, what was",
-      "shown, and when it happened — all"
+      "shown, and when it happened - all"
     ]
   },
   {
@@ -193,18 +193,18 @@
   {
     "start": 86.53333333333333,
     "end": 90.33333333333333,
-    "text": "An LLM divides the transcript into memories — short passages,",
+    "text": "An LLM divides the transcript into memories - short passages,",
     "lines": [
       "An LLM divides the transcript",
-      "into memories — short passages,"
+      "into memories - short passages,"
     ]
   },
   {
     "start": 90.36666666666666,
     "end": 94.93333333333334,
-    "text": "each focused on one idea — and groups them into chapters with titles",
+    "text": "each focused on one idea - and groups them into chapters with titles",
     "lines": [
-      "each focused on one idea — and",
+      "each focused on one idea - and",
       "groups them into chapters with titles"
     ]
   },

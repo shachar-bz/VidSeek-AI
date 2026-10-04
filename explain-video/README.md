@@ -6,7 +6,7 @@ A 3:54.47 technical explanation using the original narration and the supplied th
 
 `out/vidseek-architecture-captioned.mp4` adds readable English captions to the complete 3:54.47 edit, including the supplied closing line. The original export remains available without captions. `out/vidseek-architecture.srt` and `.vtt` provide separate caption tracks for editors, uploads and browser players.
 
-Caption wording comes from the written transcript, with stage directions removed. Local word timestamps supply timing; corrected name and brand spellings come from the transcript. White Arial text appears in up to two balanced lines on a navy footer box below the architecture rail. The captioned version replaces the repeated bottom credits with this caption area. No karaoke effects or word-by-word animation.
+Caption wording comes from the written transcript, with stage directions removed. Local word timestamps supply timing; corrected name and brand spellings come from the transcript. Dark Inter Medium 28px text appears in up to two balanced lines on a translucent white rounded box with a soft shadow, matching the promo v3 compact product-window caption design. Long dashes are displayed as ASCII hyphens. The captioned version replaces the repeated bottom credits with this caption area. No karaoke effects or word-by-word animation.
 
 ## Deliverables
 
@@ -66,3 +66,15 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 $PROJECT_PYTHON scripts/analyze_audio_lo
 ```
 
 The PNG builder uses macOS Avenir Next, Menlo and Arial Unicode fonts. SVGs declare system font fallbacks. Videos, source stills and PNG renders are ignored by Git; scene SVGs, timeline, narration timing and build scripts are retained for reproducibility.
+
+## Combined final delivery
+
+`vidseek-promo-and-explanation.mp4` in the project root plays `promo-video/out/vidseek-promo-v3.mp4` first, immediately followed by the captioned walkthrough. Video packets are copied without re-encoding or transitions. The walkthrough mono audio is duplicated to both stereo channels for compatibility with the promo.
+
+Rebuild from the project root:
+
+```sh
+.venv/bin/python explain-video/scripts/combine_final_videos.py --media-root "$PWD"
+```
+
+When rendering captions from a worktree, set `VIDSEEK_EXPLAIN_OUT` to the main checkout's `explain-video/out` folder to reuse the original video sources and publish the updated deliverables there.

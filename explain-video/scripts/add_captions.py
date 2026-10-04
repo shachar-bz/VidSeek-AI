@@ -3,13 +3,13 @@
 Uses cached local word timings. FFmpeg does not need libass: transparent caption
 cards form a timed PNG stream, composited over the existing final video.
 """
-import difflib, json, re, subprocess
+import difflib, json, re, subprocess, os
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'out'; CAPTIONS=ROOT/'assets/captions'; CAPTIONS.mkdir(exist_ok=True)
-FONT_PATH='/System/Library/Fonts/Supplemental/Arial.ttf'
+OUT=Path(os.environ.get('VIDSEEK_EXPLAIN_OUT', str(ROOT/'out'))); CAPTIONS=ROOT/'assets/captions'; CAPTIONS.mkdir(exist_ok=True)
+FONT_PATH=str(ROOT/'assets/fonts/Inter-Medium.ttf')
 FPS=30
 
 def normalized(text):
@@ -17,7 +17,7 @@ def normalized(text):
 
 def transcript_words():
     transcript=re.sub(r'\[[^]]+\]', '', (ROOT/'text-for-audio.txt').read_text()).strip()
-    words=transcript.split()
+    words=transcript.replace('—', '-').replace('–', '-').split()
     recognized=json.loads((ROOT/'assets/narration-recognition.json').read_text())['chunks']
     recognized=[w for w in recognized if normalized(w['text'])]
     matches=difflib.SequenceMatcher(None,[normalized(w) for w in words],[normalized(w['text']) for w in recognized],autojunk=False)
@@ -91,16 +91,19 @@ def timecode(t,separator=','):
 def card(lines,path):
     image=Image.new('RGBA',(1920,1080),(0,0,0,0));draw=ImageDraw.Draw(image)
     if lines:
-        font=ImageFont.truetype(FONT_PATH,34)
+        font=ImageFont.truetype(FONT_PATH,28)
         width=max(draw.textlength(line,font=font) for line in lines)
-        assert width<=1320,width
-        # This occupies only the footer, below the architecture rail and product image.
-        box_width=round(max(640,width+70));x=(1920-box_width)//2
-        draw.rounded_rectangle((x,977,x+box_width,1073),radius=12,fill=(15,25,43,244))
-        y=996 if len(lines)==2 else 1015
+        assert width<=1348,width
+        box_width=round(width+44);x=(1920-box_width)//2
+        height=round(len(lines)*28*1.3+18);bottom=1064;top=bottom-height
+        shadow=Image.new('RGBA',image.size,(0,0,0,0))
+        ImageDraw.Draw(shadow).rounded_rectangle((x,top+8,x+box_width,bottom+8),radius=14,fill=(30,36,90,31))
+        image=Image.alpha_composite(image,shadow.filter(ImageFilter.GaussianBlur(15)))
+        draw=ImageDraw.Draw(image)
+        draw.rounded_rectangle((x,top,x+box_width,bottom),radius=14,fill=(255,255,255,224))
         for i,line in enumerate(lines):
             tx=(1920-draw.textlength(line,font=font))/2
-            draw.text((tx,y+i*39),line,font=font,fill='white',anchor='lt')
+            draw.text((tx,top+9+4+i*36.4),line,font=font,fill=(23,23,33),anchor='lt')
     image.save(path)
 
 def normalize_source():
@@ -144,7 +147,7 @@ def create():
     manifest=frames_dir/'captions.ffconcat'
     manifest.write_text('ffconcat version 1.0\n'+''.join(f"file '{p.as_posix()}'\noption framerate 30\nduration {n/FPS:.9f}\n" for p,n in segments)+f"file '{blank.as_posix()}'\noption framerate 30\n")
     subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-i',str(source_video),'-f','concat','-safe','0','-i',str(manifest),'-filter_complex','[0:v]format=rgb24,drawbox=x=0:y=991:w=iw:h=89:color=0xF7F9FC:t=fill[base];[1:v]fps=30,format=rgba[captions];[base][captions]overlay=0:0:eof_action=pass:repeatlast=0:format=rgb,scale=in_range=pc:out_range=tv:out_color_matrix=bt709,format=yuv420p[v]','-map','[v]','-map','0:a:0','-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-color_range','tv','-colorspace','bt709','-color_primaries','bt709','-color_trc','bt709','-r','30','-frames:v',str(total_frames),'-c:a','copy','-movflags','+faststart',str(OUT/'vidseek-architecture-captioned.mp4')],check=True)
-    report={'cue_count':len(cues),'wording':'Supplied transcript; stage directions removed; closing line appended.','timing':'Cached local Whisper word timings; replacement blocks interpolated locally.','layout':'Up to two balanced lines; white Arial 34px on navy box below the diagram rail.','corrections':len(corrections),'frames':total_frames,'duration_seconds':total_frames/FPS}
+    report={'cue_count':len(cues),'wording':'Supplied transcript; stage directions removed; closing line appended.','timing':'Cached local Whisper word timings; replacement blocks interpolated locally.','layout':'Up to two balanced lines; Inter Medium 28px, dark ink, translucent white rounded box and soft shadow matching promo v3.','corrections':len(corrections),'frames':total_frames,'duration_seconds':total_frames/FPS}
     (OUT/'caption-verification.json').write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
 if __name__=='__main__':create()
