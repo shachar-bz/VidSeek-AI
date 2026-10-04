@@ -8,6 +8,7 @@ __pycache__/
 .env
 \docs
 .claude/worktrees/
+.remotion/
 chrome-extension/node_modules/
 chrome-extension/dist/
 frontend/node_modules/
