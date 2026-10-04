@@ -40,7 +40,7 @@ import { beginGeneration, applyStreamEvent, endIncompleteStream, type LiveGenera
 const CHAT_NAME = /^Chat (\d+)$/;
 
 /** The most characters of a pinned answer the sidebar shows; the stored answer is untouched. */
-export const PINNED_PREVIEW_MAX_CHARS = 120;
+export const PINNED_PREVIEW_MAX_CHARS = 60;
 
 export function pinnedAnswerPreview(content: string, maxChars = PINNED_PREVIEW_MAX_CHARS): string {
   const text = content.replace(/\s+/g, " ").trim();
