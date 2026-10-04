@@ -19,7 +19,7 @@ mixes an ElevenLabs opening film with real recordings of the product.
    * follow-up questions (TED)
    * the visual agent finding the whisking at 08:39 (Internet Archive)
    * a formula lifting off a lecture slide (Panopto)
-   * Alex's tagged library in the current six-row view
+   * search Alex's library and open a matching video
    * reopen a previous chat, pin an answer, and open its exact source message
 4. **Close (73–79 s):** the end card: "Ask any video anything.", built
    by Shachar Ben Zur.
@@ -96,11 +96,17 @@ extension clips also show an 8 px window frame on the left, the page bottom at y
 panel's edge at x≈1910. Window geometry and the push/dip/entrance/exit timing live in
 `src/product/stage.ts`.
 
-`library_rows_v2.png` and the `chat_*.png` captures are real 2370×1314 browser
-screenshots from the local demo account; the page fills their top-left 2133×1184 and the camera
-stays inside it. The chat sequence shows actual UI states, with click
-rings marking the corresponding actions. Pin links show at most 160 characters
-plus an ellipsis and focus the original message inside its scrollable chat.
+The v3.1 edit uses the fresh recordings in `public/clips/v3/` for the Coursera Scan
+press, timestamp jump, TED follow-ups, lecture slide, and library/chat/pin sequence.
+Each take has a matching JSON event log. Website takes are 2880×1620 without
+browser chrome; the Coursera extension take is 2882×1620. Their cursor and click
+rings are baked in, so the edit adds no duplicate ripples. Library and chat cuts
+live in `src/product/libraryChatsRecording.ts`; UI sound moments derive from the
+source event times and the edited segments.
+
+The lecture answer contains raw LaTeX in the actual product. The edit frames around
+that answer and shows the real timestamp click and formula slide instead. The
+opening visuals through 17 seconds remain unchanged.
 
 Generate the quiet replacement transition sound with
 `node scripts/generate_transition.mjs` (add `--force` to regenerate). It uses
@@ -115,3 +121,17 @@ npm run studio                                         # interactive preview
 node scripts/render_stills.mjs <dir> 2 31.5 74.5       # quick stills at given seconds
 npm run render                                         # out/vidseek-promo-v2.mp4, CRF 14, 1080p30
 ```
+
+Render a new version explicitly to preserve earlier exports:
+
+```bash
+npx remotion render src/index.ts VidSeekPromo out/vidseek-promo-v3.1-raw.mp4 \
+  --browser-executable="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --chrome-mode=chrome-for-testing --image-format jpeg --jpeg-quality 95 \
+  --concurrency 8 --x264-preset veryfast --crf 14
+node scripts/finalize_audio.mjs out/vidseek-promo-v3.1-raw.mp4 out/vidseek-promo-v3.1.mp4
+```
+
+The finalizer measures the mix and targets −16 LUFS integrated with a −1.5 dBTP
+ceiling, encodes audio as AAC at 320 kbps, and copies the video stream. Narration
+ducking follows the cue starts and durations in `src/timeline.ts`.

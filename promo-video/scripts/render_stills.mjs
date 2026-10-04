@@ -13,11 +13,15 @@ if (!outputDir || secondsArgs.length === 0) {
 }
 
 const serveUrl = await bundle({ entryPoint: path.join(projectDir, "src/index.ts"), publicDir: path.join(projectDir, "public") });
-const composition = await selectComposition({ serveUrl, id: "VidSeekPromo" });
+const browserOptions = {
+  browserExecutable: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  chromeMode: "chrome-for-testing",
+};
+const composition = await selectComposition({ serveUrl, id: "VidSeekPromo", ...browserOptions });
 for (const secondsArg of secondsArgs) {
   const seconds = Number(secondsArg);
   const frame = Math.round(seconds * composition.fps);
   const output = path.join(outputDir, `still_${seconds.toFixed(2).padStart(6, "0")}.jpg`);
-  await renderStill({ composition, serveUrl, frame, output, imageFormat: "jpeg", jpegQuality: 80, scale: 0.5 });
+  await renderStill({ composition, serveUrl, frame, output, imageFormat: "jpeg", jpegQuality: 80, scale: 0.5, ...browserOptions });
   console.log(`rendered ${output}`);
 }
