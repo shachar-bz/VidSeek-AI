@@ -1,3 +1,4 @@
+import { chatPinsSceneSource, librarySceneSource } from "./libraryChatsRecording";
 import type { CameraKeyframe, ClipSegment } from "./recordingTiming";
 
 // Every product scene's source material, as data. Swapping a recording is an edit here:
@@ -227,53 +228,8 @@ export const productSceneSources = {
     },
     clicks: [{ sourceTime: 21.8, sourceX: 1161, sourceY: 699 }],
   },
-  // Still captures until the new website recordings arrive. 2370×1314 @2x; the page fills the top-left
-  // 2133×1184 and the rest of the capture is unused browser area.
-  library: {
-    address: VIDSEEK,
-    recording: {
-      media: { kind: "stills", frames: [{ from: 0, src: "stills/library_rows_v2.png" }] },
-      sourceSize: { width: 2370, height: 1314 },
-      pageRect: { x: 0, y: 0, width: 2133, height: 1184 },
-      // A top-anchored push (the crop's top stays at the page top, so the header and the "Library"
-      // heading are never sliced) that ends between the table's bottom edge and its footer.
-      camera: [
-        { at: 0, centerX: 1066, centerY: 592, width: 2105 },
-        { at: 0.6, centerX: 1066, centerY: 592, width: 2105 },
-        { at: 5.6, centerX: 1066, centerY: 525, width: 1866 },
-      ],
-    },
-  },
-  chatPins: {
-    address: VIDSEEK,
-    recording: {
-      media: {
-        kind: "stills",
-        frames: [
-          { from: 0, src: "stills/chat_history.png" },
-          { from: 1.65, src: "stills/chat_before_pin.png" },
-          { from: 4.1, src: "stills/chat_pinned.png" },
-          { from: 6.45, src: "stills/chat_pin_open.png" },
-        ],
-      },
-      sourceSize: { width: 2370, height: 1314 },
-      pageRect: { x: 0, y: 0, width: 2133, height: 1184 },
-      // The whole page for the chat list, then the chat panel and the Chats / Pinned column for the
-      // pin (x 1013–2133, y 318–948: right of the TED logo, under the "Chats" label, below the "Pin" line).
-      camera: [
-        { at: 0, centerX: 1066, centerY: 592, width: 2105 },
-        { at: 0.2, centerX: 1066, centerY: 592, width: 2105 },
-        { at: 1.3, centerX: 1090, centerY: 545, width: 1560 },
-        { at: 2.2, centerX: 1090, centerY: 545, width: 1560 },
-        { at: 3.4, centerX: 1573, centerY: 633, width: 1120 },
-      ],
-    },
-    clicks: [
-      { sceneTime: 1.55, sourceX: 1625, sourceY: 350 }, // open "Chat 1"
-      { sceneTime: 4.0, sourceX: 1225, sourceY: 912 }, // "Pin"
-      { sceneTime: 6.35, sourceX: 1640, sourceY: 495 }, // the pinned answer's link
-    ],
-  },
+  library: librarySceneSource,
+  chatPins: chatPinsSceneSource,
 } satisfies Record<string, ProductSceneSource>;
 
 // "It watches": the answer's 08:39–08:44 chip lifts off and opens into the real moment.
