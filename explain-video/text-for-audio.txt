@@ -1,0 +1,55 @@
+[confident] Hi everyone, I’m Shachar Ben Zur, and this is VidSeek AI.
+
+In my first video, I introduced the features. Today, I’ll walk through the architecture and the decisions behind it.
+
+The goal of VidSeek AI is to turn videos into searchable, interactive knowledge: what was said, what was shown, and when it happened — all through one conversation.
+
+[short pause]
+
+The system combines a web app, a Chrome extension, and a FastAPI backend. Azure stores the structured data, embeddings, and video files.
+
+The first challenge is acquiring the right media.
+
+The extension identifies the video through page elements, embedded players, and network activity in the user’s browser session. When needed, playback reveals the stream and helps distinguish the main content from ads or other videos.
+
+Known structures are parsed deterministically. Unfamiliar structured data goes through an LLM fallback, with its selections validated against the captured data.
+
+The system uses existing timestamped captions or transcribes the audio with ElevenLabs.
+
+Videos and their analysis are saved. Before downloading, the system checks for a matching source and reuses existing results to save time and resources.
+
+[short pause]
+
+Now, let’s talk about how the video is processed.
+
+Processing follows two parallel paths: text and visuals.
+
+An LLM divides the transcript into memories — short passages, each focused on one idea — and groups them into chapters with titles and summaries. We then create embeddings for these passages, enabling search based on semantic similarity.
+
+The visual pipeline samples a frame every two seconds and creates visual embeddings for natural-language search.
+
+It detects lasting changes in scenes or on-screen content, filtering out brief movement. Selected keyframes then pass through local OCR to make on-screen text searchable.
+
+Because this takes time, capabilities become available progressively. Users can start chatting about the transcript while visual processing continues. Visual search becomes available next, and OCR coverage expands as more keyframes are processed.
+
+[short pause]
+
+[curious] So, how does the agent use all this information?
+
+It calls tools to search the video and inspect specific moments, retrieving focused evidence without loading the entire transcript and every image into its context.
+
+For questions about spoken content, the agent can explore chapter titles and summaries to identify relevant sections, or use semantic search to find specific passages. It can then retrieve a full chapter or a memory with its surrounding passages for context.
+
+For visual questions, a search tool finds candidate moments. The agent then uses inspection tools. One combines frames from different moments into a single image for comparison. Another presents frames in chronological order to examine how an action unfolds.
+
+A separate vision model analyzes these images and returns focused observations, which the main agent combines with transcript evidence to answer.
+
+[short pause]
+
+A fixed visual budget limits searches and inspections per answer. Once exhausted, the agent must use the evidence collected and acknowledge what it could not confirm.
+
+Finally, a streaming filter removes timestamp citations outside the ranges returned by tools. This validates timestamp support.
+
+[short pause]
+
+The website brings the video, conversations, transcript, and chapters into one workspace. A personal library keeps saved videos accessible, so users can return to a video and continue exploring without starting over.
