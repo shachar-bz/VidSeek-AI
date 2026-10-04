@@ -9,8 +9,10 @@ mixes an ElevenLabs opening film with real recordings of the product.
    textbook, gets a confident but wrong or overly long chatbot answer, and searches a long video.
    It ends on "What if Alex could just… ask the video?"
 2. **Reveal (17 s):** the music drops and the logo lands.
-3. **Product (19.5–73 s):**
-   * fast supported-site carousel with complete browser framing
+3. **Product (19.5–73 s):** one continuous browser window stays on screen; on each beat the
+   page inside it pushes sideways (sharp, no blur, no cross-fade) while the window dips ~5% and
+   the headline above it swaps with a mask wipe.
+   * fast supported-site carousel inside the pulled-back window
    * ask anything (YouTube)
    * click a timestamp to jump (Coursera)
    * the comments (YouTube)
@@ -79,14 +81,24 @@ in `src/timeline.ts` for captions and music ducking. The textbook line starts at
 speech, and page-turn/typing effects follow the new shots. Source media, generated
 speech and rendered MP4s remain local and gitignored.
 
-Product recordings now keep the complete browser page visible. Timestamp clicks,
-the chip-jump transitions, and the formula lift remain in place.
-The demonstrations have a larger frame, lossless intermediate frames, and a CRF 14
-final encode. Existing recordings retain their original source resolution.
+## Product window and swapping recordings
+
+The product section (`src/scenes/ProductSection.tsx`) renders one `ProductWindow`: a macOS-style
+window whose 1600×900 content area always shows a web page edge to edge. Every product scene's
+source is data in `src/product/recordings.ts`: the file, its size, the page rectangle (the part
+of the source without Chrome's tab strip/toolbar/window frame), the segments, the camera keyframes,
+the click times and the address-pill label. Swapping a recording is an edit there; the camera is
+clamped to the page rectangle, so a new recording can never show bars. The whisk reveal
+(`whiskReveal`) and the formula lift (`formulaLift`) keep their source coordinates there too.
+
+The old Chrome recordings have 87 px of browser UI at the top (the page starts at y=87); the
+extension clips also show an 8 px window frame on the left, the page bottom at y=1144 and the side
+panel's edge at x≈1910. Window geometry and the push/dip/entrance/exit timing live in
+`src/product/stage.ts`.
 
 `library_rows_v2.png` and the `chat_*.png` captures are real 2370×1314 browser
-screenshots from the local demo account. Camera framing excludes the browser's
-unused right/bottom area. The chat sequence shows actual UI states, with click
+screenshots from the local demo account; the page fills their top-left 2133×1184 and the camera
+stays inside it. The chat sequence shows actual UI states, with click
 rings marking the corresponding actions. Pin links show at most 160 characters
 plus an ellipsis and focus the original message inside its scrollable chat.
 

@@ -4,6 +4,9 @@ import { colors, fonts } from "../theme";
 import { FPS, scenes, voiceoverCues, voiceoverDurations } from "../timeline";
 
 const HIDDEN_DURING: { start: number; end: number }[] = [scenes.reveal, scenes.endCard];
+// While the product window is on screen, captions sit a little lower and smaller so they
+// only graze the window's bottom edge.
+const PRODUCT_WINDOW_RANGE = { start: scenes.findVideo.start, end: scenes.chatPins.end };
 
 // Burned-in narration captions so the ad works muted (LinkedIn autoplay).
 export const Captions: React.FC = () => {
@@ -19,18 +22,19 @@ export const Captions: React.FC = () => {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const compact = seconds >= PRODUCT_WINDOW_RANGE.start && seconds < PRODUCT_WINDOW_RANGE.end;
   return (
-    <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 34 }}>
+    <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: compact ? 16 : 34 }}>
       <div
         style={{
           opacity,
           maxWidth: 1400,
-          padding: "12px 26px",
-          borderRadius: 16,
+          padding: compact ? "9px 22px" : "12px 26px",
+          borderRadius: compact ? 14 : 16,
           background: "rgba(255,255,255,0.88)",
           boxShadow: "0 8px 30px rgba(30,36,90,0.12)",
           fontFamily: fonts.sans,
-          fontSize: 32,
+          fontSize: compact ? 28 : 32,
           fontWeight: 500,
           color: colors.ink,
           textAlign: "center",

@@ -1,72 +1,61 @@
 import React from "react";
-import { AbsoluteFill, Sequence } from "remotion";
+import { AbsoluteFill, interpolate, Sequence, useCurrentFrame } from "remotion";
 import { Background } from "./components/Background";
 import { Captions } from "./components/Captions";
-import { ChipJumpTransition } from "./components/ChipJumpTransition";
 import { SceneTransition } from "./components/SceneTransition";
 import { EndCard, Reveal } from "./scenes/BrandScenes";
-import { FindVideoMontage } from "./scenes/FindVideoMontage";
-import { HookQuestion } from "./scenes/HookScenes";
-import { ChatPinsScene } from "./scenes/ChatPinsScene";
 import { ElevenLabsHook } from "./scenes/ElevenLabsHook";
-import {
-  AskAnythingScene,
-  CommentsScene,
-  FollowUpsScene,
-  ItReadsScene,
-  ItWatchesScene,
-  JumpToMomentScene,
-  LibraryScene,
-} from "./scenes/ProductScenes";
-import { SceneId, scenes, toFrames, visualPlaybackRates } from "./timeline";
+import { HookQuestion } from "./scenes/HookScenes";
+import { ProductSection } from "./scenes/ProductSection";
+import { SceneId, scenes, toFrames } from "./timeline";
 import { Soundtrack } from "./Soundtrack";
 
-const SCENE_OVERLAP_SECONDS = 0.3;
+const HOOK_OVERLAP_SECONDS = 0.3;
 
-const SCENE_COMPONENTS: { id: SceneId; component: React.FC; enter?: boolean }[] = [
+// The opening (0–17 s) keeps its original slide-and-blur hand-offs.
+const HOOK_SCENES: { id: SceneId; component: React.FC; enter: boolean }[] = [
   { id: "hookFilm", component: ElevenLabsHook, enter: false },
-  { id: "hookQuestion", component: HookQuestion },
-  { id: "reveal", component: Reveal, enter: false },
-  { id: "findVideo", component: FindVideoMontage },
-  { id: "askAnything", component: AskAnythingScene },
-  { id: "jumpToMoment", component: JumpToMomentScene },
-  { id: "comments", component: CommentsScene },
-  { id: "followUps", component: FollowUpsScene },
-  { id: "itWatches", component: ItWatchesScene },
-  { id: "itReads", component: ItReadsScene },
-  { id: "library", component: LibraryScene },
-  { id: "chatPins", component: ChatPinsScene },
-  { id: "endCard", component: EndCard },
+  { id: "hookQuestion", component: HookQuestion, enter: true },
 ];
 
-const formatAdTimestamp = (seconds: number) =>
-  `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+// The logo leaves cleanly (no blur) while the product window rises over it.
+const REVEAL_EXIT_SECONDS = 0.3;
+const CleanExit: React.FC<{ durationInFrames: number; exitFrames: number; children: React.ReactNode }> = ({
+  durationInFrames,
+  exitFrames,
+  children,
+}) => {
+  const frame = useCurrentFrame();
+  const exit = interpolate(frame, [durationInFrames - exitFrames, durationInFrames], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return <AbsoluteFill style={{ opacity: 1 - exit, transform: `scale(${1 - exit * 0.06})` }}>{children}</AbsoluteFill>;
+};
 
-const CHIP_JUMP_SCENES: SceneId[] = ["askAnything", "jumpToMoment", "comments", "followUps", "itWatches", "itReads", "library"];
-
-export const VidSeekPromo: React.FC = () => (
-  <AbsoluteFill>
-    <Background />
-    {SCENE_COMPONENTS.map(({ id, component: SceneComponent, enter }) => {
-      const { start, end } = scenes[id];
-      const isLast = id === "endCard";
-      const durationInFrames = toFrames(end - start + (isLast ? 0 : SCENE_OVERLAP_SECONDS));
-      return (
-        <Sequence key={id} from={toFrames(start)} durationInFrames={durationInFrames} name={id}>
-          <SceneTransition durationInFrames={isLast ? durationInFrames + 30 : durationInFrames} enter={enter}>
-            <Sequence layout="none" playbackRate={visualPlaybackRates[id] ?? 1}>
+export const VidSeekPromo: React.FC = () => {
+  const revealFrames = toFrames(scenes.reveal.end - scenes.reveal.start + REVEAL_EXIT_SECONDS);
+  return (
+    <AbsoluteFill>
+      <Background />
+      {HOOK_SCENES.map(({ id, component: SceneComponent, enter }) => {
+        const durationInFrames = toFrames(scenes[id].end - scenes[id].start + HOOK_OVERLAP_SECONDS);
+        return (
+          <Sequence key={id} from={toFrames(scenes[id].start)} durationInFrames={durationInFrames} name={id}>
+            <SceneTransition durationInFrames={durationInFrames} enter={enter}>
               <SceneComponent />
-            </Sequence>
-          </SceneTransition>
-        </Sequence>
-      );
-    })}
-    {CHIP_JUMP_SCENES.map((id) => (
-      <Sequence key={`jump-${id}`} from={toFrames(scenes[id].start - 0.2)} durationInFrames={toFrames(0.6)} name={`jump-${id}`}>
-        <ChipJumpTransition label={formatAdTimestamp(scenes[id].start)} />
+            </SceneTransition>
+          </Sequence>
+        );
+      })}
+      <Sequence from={toFrames(scenes.reveal.start)} durationInFrames={revealFrames} name="reveal">
+        <CleanExit durationInFrames={revealFrames} exitFrames={toFrames(REVEAL_EXIT_SECONDS)}>
+          <Reveal />
+        </CleanExit>
       </Sequence>
-    ))}
-    <Captions />
-    <Soundtrack />
-  </AbsoluteFill>
-);
+      <ProductSection />
+      <Sequence from={toFrames(scenes.endCard.start)} durationInFrames={toFrames(scenes.endCard.end - scenes.endCard.start)} name="endCard">
+        <EndCard />
+      </Sequence>
+      <Captions />
+      <Soundtrack />
+    </AbsoluteFill>
+  );
+};

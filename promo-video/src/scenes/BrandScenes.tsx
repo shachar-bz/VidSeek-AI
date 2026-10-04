@@ -7,7 +7,7 @@ const Logo: React.FC<{ size: number }> = ({ size }) => (
   <Img src={staticFile("brand/vidseek-icon.png")} style={{ width: size, height: size, mixBlendMode: "multiply" }} />
 );
 
-// The drop: the logo punches in with a cobalt shockwave.
+// The drop: the logo punches in with a cobalt shockwave. The wordmark is all ink, like the website's logo.
 export const Reveal: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -41,7 +41,7 @@ export const Reveal: React.FC = () => {
             clipPath: `inset(0 ${(1 - wordmark) * 100}% 0 0)`,
           }}
         >
-          VidSeek <span style={{ color: colors.cobalt }}>AI</span>
+          VidSeek AI
         </div>
       </div>
     </AbsoluteFill>
@@ -80,7 +80,7 @@ export const EndCard: React.FC = () => {
         <div style={{ display: "flex", alignItems: "center", gap: 28, opacity: logo, transform: `scale(${interpolate(logo, [0, 1], [0.8, 1])})` }}>
           <Logo size={150} />
           <div style={{ fontSize: 112, fontWeight: 800, letterSpacing: -4, color: colors.ink }}>
-            VidSeek <span style={{ color: colors.cobalt }}>AI</span>
+            VidSeek AI
           </div>
         </div>
         <div
