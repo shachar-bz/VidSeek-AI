@@ -135,3 +135,16 @@ node scripts/finalize_audio.mjs out/vidseek-promo-v3.1-raw.mp4 out/vidseek-promo
 The finalizer measures the mix and targets −16 LUFS integrated with a −1.5 dBTP
 ceiling, encodes audio as AAC at 320 kbps, and copies the video stream. Narration
 ducking follows the cue starts and durations in `src/timeline.ts`.
+
+The verified v3.1 export is 1920×1080 at 30 fps, with 2,370 video frames (79 s).
+AAC/container padding extends the file duration to 79.1 s. Final audio measures
+−16.0 LUFS integrated and −1.5 dBTP with ffmpeg `ebur128` (the finalizer's
+`loudnorm` measurement is −16.12 LUFS / −1.53 dBTP). Per-line stem analysis finds
+at least 15.2 dB narration/music separation in the main section and 13 dB in the
+hook. The longest between-line interval below −32 LUFS is 0.45 s.
+
+Review included half-second scene stills, click and lift-off frames, motion
+previews, an independent picture review, and a 16-frame contact sheet of the
+final export. Opening source and timing are unchanged; the encoded opening
+compares to v2 at 0.993 SSIM through 17 s. The export is also copied to the main
+checkout's `promo-video/out/vidseek-promo-v3.1.mp4`; v2 and v3 were preserved.
