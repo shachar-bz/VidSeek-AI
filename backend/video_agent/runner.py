@@ -32,6 +32,7 @@ from backend.storage.postgres import StoredMessage
 
 from . import citations
 from .activity import tool_activity
+from .plain_text import BoldMarkerFilter
 from .prompt import (
     SYSTEM_PROMPT,
     VISUAL_PROCESSING_PROMPT,
@@ -154,6 +155,7 @@ class PydanticConversationAgentRunner:
         # it is written. A citation no tool backs is dropped instead of sending the whole answer
         # back to be rewritten, which would leave the reader with text they would have to unread.
         citation_filter = citations.CitationFilter(deps.retrieved.spans)
+        bold_filter = BoldMarkerFilter()
         shown_any = False
 
         async with agent.run_stream_events(
@@ -165,10 +167,10 @@ class PydanticConversationAgentRunner:
                     # Text a model writes before calling a tool, and again once the tool has
                     # answered, would run together as one sentence without this break.
                     written = (PARAGRAPH_BREAK if shown_any else "") + citation_filter.feed(
-                        event.part.content or ""
+                        bold_filter.feed(event.part.content or "")
                     )
                 elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                    written = citation_filter.feed(event.delta.content_delta or "")
+                    written = citation_filter.feed(bold_filter.feed(event.delta.content_delta or ""))
                 elif isinstance(event, FunctionToolCallEvent):
                     yield ToolStarted(
                         call_id=event.part.tool_call_id,
@@ -189,7 +191,7 @@ class PydanticConversationAgentRunner:
                 if written:
                     shown_any = True
                     yield TextFragment(written)
-        tail = citation_filter.finish()
+        tail = citation_filter.feed(bold_filter.finish()) + citation_filter.finish()
         if tail:
             yield TextFragment(tail)
 
