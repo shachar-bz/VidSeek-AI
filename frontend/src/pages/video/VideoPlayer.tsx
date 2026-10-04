@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getPlaybackUrl } from "../../api/video";
 import {
@@ -12,8 +12,6 @@ import { buildCaptionsVtt } from "./captions";
 
 const MINIMUM_REFRESH_DELAY_MS = 1_000;
 const NO_CAPTIONS: TranscriptLine[] = [];
-// Chrome hides its control bar this long after the last pointer activity while playing.
-const CONTROLS_IDLE_MS = 3_000;
 
 export function playbackRefreshDelay(playback: PlaybackUrl, now = Date.now()): number {
   const expiresAt = Date.parse(playback.expires_at);
@@ -27,10 +25,6 @@ export function playbackRefreshDelay(playback: PlaybackUrl, now = Date.now()): n
 interface PlaybackIntent {
   position: number;
   playing: boolean;
-}
-
-function captionTrack(video: HTMLVideoElement): TextTrack | null {
-  return video.textTracks?.[0] ?? null;
 }
 
 export interface VideoPlayerProps {
@@ -55,14 +49,7 @@ export function VideoPlayer({
   onReady
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const frameRef = useRef<HTMLDivElement | null>(null);
   const intentRef = useRef<PlaybackIntent | null>(null);
-  const captionsOnRef = useRef(false);
-  const [captionsOn, setCaptionsOn] = useState(false);
-  // Mirrors the native control bar: shown while paused, or while the pointer was recently active.
-  const [paused, setPaused] = useState(true);
-  const [pointerActive, setPointerActive] = useState(false);
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [playback, setPlayback] = useState<PlaybackUrl | null>(null);
   const [loading, setLoading] = useState(available);
   const [error, setError] = useState<string | null>(null);
@@ -77,51 +64,6 @@ export function VideoPlayer({
   }, [captionLines]);
 
   useEffect(() => () => { if (captionsUrl) URL.revokeObjectURL(captionsUrl); }, [captionsUrl]);
-
-  useEffect(() => () => clearTimeout(idleTimerRef.current), []);
-
-  function showControls() {
-    setPointerActive(true);
-    clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = setTimeout(() => setPointerActive(false), CONTROLS_IDLE_MS);
-  }
-
-  function hideControls() {
-    clearTimeout(idleTimerRef.current);
-    setPointerActive(false);
-  }
-
-  // The video element is never the fullscreen element: the frame around it is, so the CC
-  // control stays on screen there. Chrome only offers its own captions entry through an
-  // overflow menu, which is why the player carries a button of its own. The frame has to
-  // be requested from the click itself: a request made after the video went fullscreen no
-  // longer has the user activation the browser requires, and is refused.
-  function toggleFullscreen() {
-    const frame = frameRef.current;
-    if (!frame) return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-    } else {
-      void frame.requestFullscreen().catch(() => undefined);
-    }
-  }
-
-  function onVideoDoubleClick(event: MouseEvent<HTMLVideoElement>) {
-    // Chrome's double-click default makes the video element fullscreen; take the frame instead.
-    event.preventDefault();
-    toggleFullscreen();
-  }
-
-  function applyCaptionMode() {
-    const track = videoRef.current ? captionTrack(videoRef.current) : null;
-    if (track) track.mode = captionsOnRef.current ? "showing" : "disabled";
-  }
-
-  function toggleCaptions() {
-    captionsOnRef.current = !captionsOnRef.current;
-    setCaptionsOn(captionsOnRef.current);
-    applyCaptionMode();
-  }
 
   const rememberIntent = useCallback(() => {
     const video = videoRef.current;
@@ -174,7 +116,6 @@ export function VideoPlayer({
   }, [available, reloadVersion, rememberIntent, videoId]);
 
   function onLoadedMetadata() {
-    applyCaptionMode();
     restoreIntent();
   }
 
@@ -209,14 +150,7 @@ export function VideoPlayer({
 
   return (
     <div className="video-player">
-      <div
-        className={captionsUrl ? "video-player__frame video-player__frame--with-captions" : "video-player__frame"}
-        ref={frameRef}
-        onPointerMove={showControls}
-        onPointerDown={showControls}
-        onPointerLeave={hideControls}
-        onKeyDown={showControls}
-      >
+      <div className="video-player__frame">
         <video
           ref={connectVideo}
           key={playback?.url}
@@ -225,10 +159,6 @@ export function VideoPlayer({
           preload="metadata"
           aria-label={title}
           onLoadedMetadata={onLoadedMetadata}
-          onPlay={() => setPaused(false)}
-          onPause={() => setPaused(true)}
-          onEnded={() => setPaused(true)}
-          onDoubleClick={onVideoDoubleClick}
           onSeeked={(event) => onSeeked?.(event.currentTarget.currentTime)}
           onTimeUpdate={(event) => onTimeChange(event.currentTarget.currentTime)}
         >
@@ -241,29 +171,6 @@ export function VideoPlayer({
             />
           ) : null}
         </video>
-        <div className={paused || pointerActive ? "video-player__controls video-player__controls--visible" : "video-player__controls"}>
-          {captionsUrl ? (
-            <button
-              className={captionsOn ? "video-player__control video-player__control--on" : "video-player__control"}
-              type="button"
-              aria-pressed={captionsOn}
-              title={captionsOn ? "Turn subtitles off" : "Turn subtitles on"}
-              onClick={toggleCaptions}
-            >
-              <span aria-hidden="true">CC</span>
-              <span className="visually-hidden">{captionsOn ? "Turn subtitles off" : "Turn subtitles on"}</span>
-            </button>
-          ) : null}
-        </div>
-        {/* Sits over the browser's own fullscreen button, whose icon shows through, so its
-            click reaches the frame's fullscreen instead of the video's. */}
-        <button
-          className="video-player__fullscreen-hitbox"
-          type="button"
-          title="Full screen"
-          aria-label="Full screen"
-          onClick={toggleFullscreen}
-        />
       </div>
       {error ? <p className="video-player__notice" role="status">Playback refresh failed. The current link may continue working.</p> : null}
     </div>
