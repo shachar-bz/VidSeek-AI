@@ -1,0 +1,80 @@
+[
+  {
+    "transcript": "Shachar Ben Zur,",
+    "recognized": "Shahal Benzo,",
+    "start": 1.14,
+    "end": 2.08
+  },
+  {
+    "transcript": "—",
+    "recognized": "",
+    "start": 20.78,
+    "end": 20.78
+  },
+  {
+    "transcript": "FastAPI",
+    "recognized": "fast API",
+    "start": 26.5,
+    "end": 27.12
+  },
+  {
+    "transcript": "timestamped",
+    "recognized": "time -stamped",
+    "start": 63.0,
+    "end": 63.7
+  },
+  {
+    "transcript": "ElevenLabs.",
+    "recognized": "11 labs.",
+    "start": 66.02,
+    "end": 67.5
+  },
+  {
+    "transcript": "—",
+    "recognized": "",
+    "start": 89.62,
+    "end": 89.62
+  },
+  {
+    "transcript": "—",
+    "recognized": "",
+    "start": 93.14,
+    "end": 93.14
+  },
+  {
+    "transcript": "natural-language",
+    "recognized": "natural language",
+    "start": 108.16,
+    "end": 108.46
+  },
+  {
+    "transcript": "on-screen",
+    "recognized": "on -screen",
+    "start": 112.1,
+    "end": 112.58
+  },
+  {
+    "transcript": "on-screen",
+    "recognized": "on -screen",
+    "start": 119.4,
+    "end": 120.02
+  },
+  {
+    "transcript": "timestamp",
+    "recognized": "time stamp",
+    "start": 210.48,
+    "end": 211.08
+  },
+  {
+    "transcript": "returned",
+    "recognized": "return",
+    "start": 212.9,
+    "end": 213.22
+  },
+  {
+    "transcript": "timestamp",
+    "recognized": "time stamp",
+    "start": 215.3,
+    "end": 215.86
+  }
+]

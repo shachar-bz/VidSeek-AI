@@ -1,0 +1,499 @@
+[
+  {
+    "start": 0,
+    "end": 4.7,
+    "text": "Hi everyone, I’m Shachar Ben Zur, and this is VidSeek AI.",
+    "lines": [
+      "Hi everyone, I’m Shachar Ben Zur,",
+      "and this is VidSeek AI."
+    ]
+  },
+  {
+    "start": 4.866666666666666,
+    "end": 7.766666666666667,
+    "text": "In my first video, I introduced the features.",
+    "lines": [
+      "In my first video, I introduced the features."
+    ]
+  },
+  {
+    "start": 7.933333333333334,
+    "end": 12.133333333333333,
+    "text": "Today, I’ll walk through the architecture and the decisions behind it.",
+    "lines": [
+      "Today, I’ll walk through the",
+      "architecture and the decisions behind it."
+    ]
+  },
+  {
+    "start": 12.2,
+    "end": 16.066666666666666,
+    "text": "The goal of VidSeek AI is to turn videos into searchable, interactive",
+    "lines": [
+      "The goal of VidSeek AI is to turn",
+      "videos into searchable, interactive"
+    ]
+  },
+  {
+    "start": 16.1,
+    "end": 20.799999999999997,
+    "text": "knowledge: what was said, what was shown, and when it happened — all",
+    "lines": [
+      "knowledge: what was said, what was",
+      "shown, and when it happened — all"
+    ]
+  },
+  {
+    "start": 20.833333333333332,
+    "end": 22.833333333333332,
+    "text": "through one conversation.",
+    "lines": [
+      "through one conversation."
+    ]
+  },
+  {
+    "start": 23.366666666666667,
+    "end": 28.4,
+    "text": "The system combines a web app, a Chrome extension, and a FastAPI backend.",
+    "lines": [
+      "The system combines a web app,",
+      "a Chrome extension, and a FastAPI backend."
+    ]
+  },
+  {
+    "start": 28.933333333333334,
+    "end": 33.06666666666667,
+    "text": "Azure stores the structured data, embeddings, and video files.",
+    "lines": [
+      "Azure stores the structured data,",
+      "embeddings, and video files."
+    ]
+  },
+  {
+    "start": 33.4,
+    "end": 36.300000000000004,
+    "text": "The first challenge is acquiring the right media.",
+    "lines": [
+      "The first challenge is",
+      "acquiring the right media."
+    ]
+  },
+  {
+    "start": 36.333333333333336,
+    "end": 40.6,
+    "text": "The extension identifies the video through page elements, embedded players,",
+    "lines": [
+      "The extension identifies the video",
+      "through page elements, embedded players,"
+    ]
+  },
+  {
+    "start": 40.63333333333333,
+    "end": 44.06666666666667,
+    "text": "and network activity in the user’s browser session.",
+    "lines": [
+      "and network activity in",
+      "the user’s browser session."
+    ]
+  },
+  {
+    "start": 44.2,
+    "end": 48.96666666666667,
+    "text": "When needed, playback reveals the stream and helps distinguish the main content from",
+    "lines": [
+      "When needed, playback reveals the stream",
+      "and helps distinguish the main content from"
+    ]
+  },
+  {
+    "start": 49.0,
+    "end": 51.6,
+    "text": "ads or other videos.",
+    "lines": [
+      "ads or other videos."
+    ]
+  },
+  {
+    "start": 51.63333333333333,
+    "end": 54.53333333333333,
+    "text": "Known structures are parsed deterministically.",
+    "lines": [
+      "Known structures are parsed deterministically."
+    ]
+  },
+  {
+    "start": 54.666666666666664,
+    "end": 59.333333333333336,
+    "text": "Unfamiliar structured data goes through an LLM fallback, with its selections validated",
+    "lines": [
+      "Unfamiliar structured data goes through an",
+      "LLM fallback, with its selections validated"
+    ]
+  },
+  {
+    "start": 59.36666666666667,
+    "end": 61.63333333333333,
+    "text": "against the captured data.",
+    "lines": [
+      "against the captured data."
+    ]
+  },
+  {
+    "start": 61.666666666666664,
+    "end": 67.66666666666667,
+    "text": "The system uses existing timestamped captions or transcribes the audio with ElevenLabs.",
+    "lines": [
+      "The system uses existing timestamped captions",
+      "or transcribes the audio with ElevenLabs."
+    ]
+  },
+  {
+    "start": 67.96666666666667,
+    "end": 70.4,
+    "text": "Videos and their analysis are saved.",
+    "lines": [
+      "Videos and their analysis are saved."
+    ]
+  },
+  {
+    "start": 70.46666666666667,
+    "end": 74.96666666666667,
+    "text": "Before downloading, the system checks for a matching source and reuses existing results",
+    "lines": [
+      "Before downloading, the system checks for a",
+      "matching source and reuses existing results"
+    ]
+  },
+  {
+    "start": 75.0,
+    "end": 77.36666666666667,
+    "text": "to save time and resources.",
+    "lines": [
+      "to save time and resources."
+    ]
+  },
+  {
+    "start": 77.4,
+    "end": 81.63333333333334,
+    "text": "Now, let’s talk about how the video is processed.",
+    "lines": [
+      "Now, let’s talk about how",
+      "the video is processed."
+    ]
+  },
+  {
+    "start": 81.7,
+    "end": 86.5,
+    "text": "Processing follows two parallel paths: text and visuals.",
+    "lines": [
+      "Processing follows two parallel",
+      "paths: text and visuals."
+    ]
+  },
+  {
+    "start": 86.53333333333333,
+    "end": 90.33333333333333,
+    "text": "An LLM divides the transcript into memories — short passages,",
+    "lines": [
+      "An LLM divides the transcript",
+      "into memories — short passages,"
+    ]
+  },
+  {
+    "start": 90.36666666666666,
+    "end": 94.93333333333334,
+    "text": "each focused on one idea — and groups them into chapters with titles",
+    "lines": [
+      "each focused on one idea — and",
+      "groups them into chapters with titles"
+    ]
+  },
+  {
+    "start": 94.96666666666667,
+    "end": 96.33333333333333,
+    "text": "and summaries.",
+    "lines": [
+      "and summaries."
+    ]
+  },
+  {
+    "start": 96.36666666666666,
+    "end": 102.0,
+    "text": "We then create embeddings for these passages, enabling search based on semantic similarity.",
+    "lines": [
+      "We then create embeddings for these passages,",
+      "enabling search based on semantic similarity."
+    ]
+  },
+  {
+    "start": 102.03333333333333,
+    "end": 106.8,
+    "text": "The visual pipeline samples a frame every two seconds and creates visual",
+    "lines": [
+      "The visual pipeline samples a frame",
+      "every two seconds and creates visual"
+    ]
+  },
+  {
+    "start": 106.83333333333333,
+    "end": 109.66666666666667,
+    "text": "embeddings for natural-language search.",
+    "lines": [
+      "embeddings for natural-language search."
+    ]
+  },
+  {
+    "start": 109.7,
+    "end": 113.5,
+    "text": "It detects lasting changes in scenes or on-screen content,",
+    "lines": [
+      "It detects lasting changes in",
+      "scenes or on-screen content,"
+    ]
+  },
+  {
+    "start": 113.53333333333333,
+    "end": 115.9,
+    "text": "filtering out brief movement.",
+    "lines": [
+      "filtering out brief movement."
+    ]
+  },
+  {
+    "start": 115.93333333333334,
+    "end": 121.9,
+    "text": "Selected keyframes then pass through local OCR to make on-screen text searchable.",
+    "lines": [
+      "Selected keyframes then pass through local",
+      "OCR to make on-screen text searchable."
+    ]
+  },
+  {
+    "start": 121.93333333333334,
+    "end": 126.26666666666667,
+    "text": "Because this takes time, capabilities become available progressively.",
+    "lines": [
+      "Because this takes time, capabilities",
+      "become available progressively."
+    ]
+  },
+  {
+    "start": 126.5,
+    "end": 131.33333333333334,
+    "text": "Users can start chatting about the transcript while visual processing continues.",
+    "lines": [
+      "Users can start chatting about the",
+      "transcript while visual processing continues."
+    ]
+  },
+  {
+    "start": 131.36666666666667,
+    "end": 136.13333333333333,
+    "text": "Visual search becomes available next, and OCR coverage expands as more",
+    "lines": [
+      "Visual search becomes available next,",
+      "and OCR coverage expands as more"
+    ]
+  },
+  {
+    "start": 136.16666666666666,
+    "end": 138.63333333333333,
+    "text": "keyframes are processed.",
+    "lines": [
+      "keyframes are processed."
+    ]
+  },
+  {
+    "start": 138.83333333333334,
+    "end": 142.3,
+    "text": "So, how does the agent use all this information?",
+    "lines": [
+      "So, how does the agent",
+      "use all this information?"
+    ]
+  },
+  {
+    "start": 142.33333333333334,
+    "end": 146.23333333333335,
+    "text": "It calls tools to search the video and inspect specific moments,",
+    "lines": [
+      "It calls tools to search the video",
+      "and inspect specific moments,"
+    ]
+  },
+  {
+    "start": 146.26666666666668,
+    "end": 151.03333333333333,
+    "text": "retrieving focused evidence without loading the entire transcript and every image",
+    "lines": [
+      "retrieving focused evidence without loading",
+      "the entire transcript and every image"
+    ]
+  },
+  {
+    "start": 151.23333333333332,
+    "end": 152.83333333333334,
+    "text": "into its context.",
+    "lines": [
+      "into its context."
+    ]
+  },
+  {
+    "start": 152.86666666666667,
+    "end": 157.6,
+    "text": "For questions about spoken content, the agent can explore chapter titles and summaries",
+    "lines": [
+      "For questions about spoken content, the agent",
+      "can explore chapter titles and summaries"
+    ]
+  },
+  {
+    "start": 157.63333333333333,
+    "end": 163.2,
+    "text": "to identify relevant sections, or use semantic search to find specific passages.",
+    "lines": [
+      "to identify relevant sections, or use",
+      "semantic search to find specific passages."
+    ]
+  },
+  {
+    "start": 163.23333333333332,
+    "end": 169.1,
+    "text": "It can then retrieve a full chapter or a memory with its surrounding passages for context.",
+    "lines": [
+      "It can then retrieve a full chapter or a memory",
+      "with its surrounding passages for context."
+    ]
+  },
+  {
+    "start": 169.13333333333333,
+    "end": 173.4,
+    "text": "For visual questions, a search tool finds candidate moments.",
+    "lines": [
+      "For visual questions, a search",
+      "tool finds candidate moments."
+    ]
+  },
+  {
+    "start": 173.43333333333334,
+    "end": 176.5,
+    "text": "The agent then uses inspection tools.",
+    "lines": [
+      "The agent then uses inspection tools."
+    ]
+  },
+  {
+    "start": 176.53333333333333,
+    "end": 181.26666666666668,
+    "text": "One combines frames from different moments into a single image for comparison.",
+    "lines": [
+      "One combines frames from different moments",
+      "into a single image for comparison."
+    ]
+  },
+  {
+    "start": 181.3,
+    "end": 187.06666666666666,
+    "text": "Another presents frames in chronological order to examine how an action unfolds.",
+    "lines": [
+      "Another presents frames in chronological",
+      "order to examine how an action unfolds."
+    ]
+  },
+  {
+    "start": 187.26666666666668,
+    "end": 191.76666666666668,
+    "text": "A separate vision model analyzes these images and returns focused observations,",
+    "lines": [
+      "A separate vision model analyzes these",
+      "images and returns focused observations,"
+    ]
+  },
+  {
+    "start": 191.8,
+    "end": 197.23333333333332,
+    "text": "which the main agent combines with transcript evidence to answer.",
+    "lines": [
+      "which the main agent combines with",
+      "transcript evidence to answer."
+    ]
+  },
+  {
+    "start": 197.43333333333334,
+    "end": 201.93333333333334,
+    "text": "A fixed visual budget limits searches and inspections per answer.",
+    "lines": [
+      "A fixed visual budget limits",
+      "searches and inspections per answer."
+    ]
+  },
+  {
+    "start": 202.0,
+    "end": 207.73333333333335,
+    "text": "Once exhausted, the agent must use the evidence collected and acknowledge what it could not confirm.",
+    "lines": [
+      "Once exhausted, the agent must use the evidence",
+      "collected and acknowledge what it could not confirm."
+    ]
+  },
+  {
+    "start": 207.76666666666668,
+    "end": 212.46666666666667,
+    "text": "Finally, a streaming filter removes timestamp citations outside the",
+    "lines": [
+      "Finally, a streaming filter removes",
+      "timestamp citations outside the"
+    ]
+  },
+  {
+    "start": 212.5,
+    "end": 214.3,
+    "text": "ranges returned by tools.",
+    "lines": [
+      "ranges returned by tools."
+    ]
+  },
+  {
+    "start": 214.33333333333334,
+    "end": 217.73333333333332,
+    "text": "This validates timestamp support.",
+    "lines": [
+      "This validates timestamp support."
+    ]
+  },
+  {
+    "start": 218.36666666666667,
+    "end": 223.7,
+    "text": "The website brings the video, conversations, transcript, and chapters into one workspace.",
+    "lines": [
+      "The website brings the video, conversations,",
+      "transcript, and chapters into one workspace."
+    ]
+  },
+  {
+    "start": 223.73333333333332,
+    "end": 228.33333333333334,
+    "text": "A personal library keeps saved videos accessible, so users can",
+    "lines": [
+      "A personal library keeps saved",
+      "videos accessible, so users can"
+    ]
+  },
+  {
+    "start": 228.36666666666667,
+    "end": 232.1,
+    "text": "return to a video and continue exploring without starting over.",
+    "lines": [
+      "return to a video and continue",
+      "exploring without starting over."
+    ]
+  },
+  {
+    "start": 232.33333333333334,
+    "end": 233.63333333333333,
+    "text": "Thanks for watching.",
+    "lines": [
+      "Thanks for watching."
+    ]
+  }
+]

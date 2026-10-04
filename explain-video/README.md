@@ -2,6 +2,12 @@
 
 A 3:54.47 technical explanation using the original narration and the supplied thanks-for-watching audio. The visual design uses quiet static diagrams, a persistent architecture rail, plain-language implementation diagrams, and two authentic product recordings. No code excerpts or function identifiers appear in the diagrams. The capability timeline progressively highlights transcript chat, visual search and OCR availability.
 
+## Captions
+
+`out/vidseek-architecture-captioned.mp4` adds readable English captions to the complete 3:54.47 edit, including the supplied closing line. The original export remains available without captions. `out/vidseek-architecture.srt` and `.vtt` provide separate caption tracks for editors, uploads and browser players.
+
+Caption wording comes from the written transcript, with stage directions removed. Local word timestamps supply timing; corrected name and brand spellings come from the transcript. White Arial text appears in up to two balanced lines on a navy footer box below the architecture rail. The captioned version replaces the repeated bottom credits with this caption area. No karaoke effects or word-by-word animation.
+
 ## Deliverables
 
 - `VISUAL_PLAN.md`: 21 sections with narration, exact cue times, screen content, visual type, transition instructions and implementation references.
@@ -50,6 +56,7 @@ $PROJECT_PYTHON scripts/plan_scenes.py
 $PROJECT_PYTHON scripts/build_assets.py
 $PROJECT_PYTHON scripts/render_video.py --media-root "$MEDIA_ROOT"
 $PROJECT_PYTHON scripts/verify_export.py
+$PROJECT_PYTHON scripts/add_captions.py
 ```
 
 To redo local recognition before planning:
