@@ -93,30 +93,19 @@ export const productSceneSources = {
   jumpToMoment: {
     address: VIDSEEK,
     recording: {
-      media: {
-        kind: "video",
-        src: "clips/coursera_questions_a.mp4",
-        segments: [
-          { start: 1.6, end: 2.8, speed: 1 },
-          { start: 2.8, end: 11.5, speed: 8 },
-          { start: 11.5, end: 12.8, speed: 1 },
-          { start: 13.6, end: 15.8, speed: 1 },
-          { start: 15.8, holdSeconds: 0.6 },
-        ],
-      },
-      sourceSize: { width: 1916, height: 1146 },
-      pageRect: websitePage({ width: 1916, height: 1146 }),
-      // Page header to panel bottom, then the player + answer for the timestamp click. The final crop
-      // (y 192–839) keeps the video title above its metadata line and ends under the answer's "Pin" line.
+      media: { kind: "video", src: "clips/v3/jump_coursera.mp4", segments: [
+        { start: 18.2, end: 23.2, speed: 5 },
+        { start: 24.34, end: 27.84, speed: 1 },
+      ] },
+      sourceSize: { width: 2880, height: 1620 },
+      pageRect: { x: 0, y: 0, width: 2880, height: 1620 },
       camera: [
-        { at: 0, centerX: 958, centerY: 555, width: 1662 },
-        { at: 2.0, centerX: 958, centerY: 555, width: 1662 },
-        { at: 3.3, centerX: 822, centerY: 515, width: 1150 },
+        { at: 0, centerX: 1990, centerY: 850, width: 1520 },
+        { at: 2.25, centerX: 1990, centerY: 850, width: 1520 },
+        { at: 3.45, centerX: 1440, centerY: 910, width: 2300 },
       ],
     },
-    clicks: [{ sourceTime: 14.2, sourceX: 1191, sourceY: 699 }],
-  },
-  comments: {
+  },  comments: {
     address: YOUTUBE,
     recording: {
       media: {
@@ -145,37 +134,25 @@ export const productSceneSources = {
   followUps: {
     address: VIDSEEK,
     recording: {
-      media: {
-        kind: "video",
-        src: "clips/ted_questions_a_b.mp4",
-        segments: [
-          // Question a: "what does Sam think about agents? are they advancing too fast?"
-          { start: 7.0, end: 11.0, speed: 8 },
-          { start: 11.0, end: 12.0, speed: 1 },
-          { start: 12.2, end: 21.5, speed: 8 },
-          { start: 21.5, end: 23.5, speed: 1 },
-          // Follow-up b: "how can we limit the agents?" (the long wait and the layout reflow are cut)
-          { start: 33.5, end: 37, speed: 8 },
-          { start: 37, end: 37.8, speed: 1 },
-          { start: 47, end: 48.6, speed: 8 },
-          { start: 48.6, end: 49.8, speed: 1 },
-          { start: 50, end: 53.6, speed: 6 },
-          { start: 53.6, end: 55.7, speed: 1 },
-          { start: 55.7, holdSeconds: 0.4 },
-        ],
-      },
-      sourceSize: { width: 1916, height: 1148 },
-      // A dark page scrollbar runs down the right edge from x=1905.
-      pageRect: websitePage({ width: 1916, height: 1148 }, 1904),
+      media: { kind: "video", src: "clips/v3/followup_ted.mp4", segments: [
+        { start: 2.9, end: 5.9, speed: 4 },
+        { start: 18.48, end: 24.48, speed: 6 },
+        { start: 26.1, end: 29.6, speed: 2 },
+        { start: 42.11, end: 48.84, speed: 4 },
+        { start: 48.84, holdSeconds: 0.82 },
+      ] },
+      sourceSize: { width: 2880, height: 1620 },
+      pageRect: { x: 0, y: 0, width: 2880, height: 1620 },
       camera: [
-        { at: 0, centerX: 952, centerY: 555, width: 1662 },
-        { at: 2.4, centerX: 952, centerY: 555, width: 1662 },
-        { at: 3.6, centerX: 955, centerY: 575, width: 1330 },
+        { at: 0, centerX: 1995, centerY: 1180, width: 1520 },
+        { at: 0.75, centerX: 1995, centerY: 1180, width: 1520 },
+        { at: 1.4, centerX: 1995, centerY: 990, width: 1520 },
+        { at: 1.75, centerX: 1995, centerY: 1180, width: 1520 },
+        { at: 3.5, centerX: 1995, centerY: 1180, width: 1520 },
+        { at: 4.2, centerX: 1995, centerY: 990, width: 1520 },
       ],
     },
-    clicks: [{ sourceTime: 53.9, sourceX: 1382, sourceY: 874 }],
-  },
-  itWatches: {
+  },  itWatches: {
     address: { kind: "site", domain: "archive.org" },
     recording: {
       media: {
@@ -204,31 +181,20 @@ export const productSceneSources = {
   itReads: {
     address: VIDSEEK,
     recording: {
-      media: {
-        kind: "video",
-        src: "clips/moodle_question_a.mp4",
-        segments: [
-          { start: 2.0, end: 4.6, speed: 4 },
-          { start: 4.6, end: 5.6, speed: 1 },
-          { start: 5.8, end: 15.8, speed: 8 },
-          { start: 15.8, end: 17.3, speed: 1 },
-          { start: 21.0, end: 23.4, speed: 1 },
-          { start: 23.4, end: 25.0, speed: 1 },
-          { start: 25.0, holdSeconds: 3.0 },
-        ],
-      },
-      sourceSize: { width: 1920, height: 1148 },
-      pageRect: websitePage({ width: 1920, height: 1148 }),
-      // Final crop y 196–843: the video title stays above its metadata line, the answer's "Pin" line is in.
+      media: { kind: "video", src: "clips/v3/reads_moodle.mp4", segments: [
+        { start: 2.8, end: 6.4, speed: 3 },
+        { start: 32.275, end: 34.275, speed: 1 },
+        { start: 35.667, holdSeconds: 3.8 },
+      ] },
+      sourceSize: { width: 2880, height: 1620 },
+      pageRect: { x: 0, y: 0, width: 2880, height: 1620 },
       camera: [
-        { at: 0, centerX: 960, centerY: 555, width: 1662 },
-        { at: 2.6, centerX: 960, centerY: 555, width: 1662 },
-        { at: 3.9, centerX: 822, centerY: 520, width: 1150 },
+        { at: 0, centerX: 1990, centerY: 1160, width: 1520 },
+        { at: 1.2, centerX: 1990, centerY: 1000, width: 1520 },
+        { at: 3.2, centerX: 915, centerY: 646, width: 1106 },
       ],
     },
-    clicks: [{ sourceTime: 21.8, sourceX: 1161, sourceY: 699 }],
-  },
-  library: librarySceneSource,
+  },  library: librarySceneSource,
   chatPins: chatPinsSceneSource,
 } satisfies Record<string, ProductSceneSource>;
 
@@ -255,14 +221,14 @@ export const whiskReveal = {
 
 // "It reads": the formula lifts off the real slide. Retarget `rect` and `holdSourceTime` for a new recording.
 export const formulaLift = {
-  liftAt: 8.2, // scene seconds
-  holdSourceTime: 25.0, // the source frame the lifted formula is cut from
+  liftAt: 4.0, // scene seconds
+  holdSourceTime: 35.667, // the source frame the lifted formula is cut from
   // The formula on the slide, source px: 15–22 px of slide at the sides; above and below it only the
   // clean rows between the title's descenders (y≤357) and the grids (y≥446), 1 px in from each so
   // scaling doesn't bleed them in. The card pads the rest.
-  rect: { x: 440, y: 359, width: 364, height: 85 },
-  citation: "READ FROM THE SLIDE · 37:27",
-  answer: "The minimum seam cost to each pixel is its energy plus the cheapest of the three pixels above it.",
+  rect: { x: 637, y: 487, width: 512, height: 107 },
+  citation: "READ FROM THE SLIDE · 40:26",
+  answer: "The pixel’s energy plus the minimum cost of reaching it from one of the three pixels in the row above.",
 };
 
 // The supported-site carousel inside the window. Coursera gets a new clip of the extension's
@@ -288,7 +254,16 @@ export const findVideoTiles: FindVideoTile[] = [
   {
     chipLabel: "Coursera",
     address: { kind: "site", domain: "coursera.org" },
-    recording: siteLogin("clips/coursera-login.mp4", { width: 1916, height: 1148 }, 0, 1909),
+    recording: {
+      media: { kind: "video", src: "clips/v3/coursera_scan.mp4", segments: [
+        { start: 0.94, end: 2.57, speed: 4 },
+        { start: 2.57, end: 4.6, speed: 3 },
+        { start: 5.6, end: 6.515, speed: 1 },
+      ] },
+      sourceSize: { width: 2882, height: 1620 },
+      pageRect: { x: 0, y: 0, width: 2882, height: 1620 },
+      camera: [{ at: 0, centerX: 2282, centerY: 500, width: 1200 }],
+    },
   },
   {
     chipLabel: "Moodle / Panopto",
@@ -297,4 +272,4 @@ export const findVideoTiles: FindVideoTile[] = [
   },
 ];
 // Global seconds each tile takes over (on the 0.5 s beat grid); the last runs until askAnything.
-export const findVideoTileStarts = [19.5, 21.0, 22.0, 23.0, 24.0];
+export const findVideoTileStarts = [19.5, 20.5, 21.5, 22.5, 24.5];

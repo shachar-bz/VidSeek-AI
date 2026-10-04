@@ -42,8 +42,8 @@ export const scenes: Record<SceneId, { start: number; end: number }> = {
 // Retimes the existing edited demonstrations, including their click/answer overlays.
 // Narration is scheduled separately and remains at its natural speaking speed.
 export const visualPlaybackRates: Partial<Record<SceneId, number>> = {
-  askAnything: 6.5 / 5, jumpToMoment: 6 / 4.5, comments: 6.5 / 4.5,
-  followUps: 10 / 6, itWatches: 8.5 / 6, itReads: 11 / 7,
+  askAnything: 6.5 / 5, comments: 6.5 / 4.5,
+  itWatches: 8.5 / 6,
 };
 
 // Narration cues: file name in public/audio/vo and the second it starts.

@@ -45,9 +45,16 @@ export const FollowUpsContent: React.FC = () => <RecordingScene source={productS
 export const LibraryContent: React.FC = () => <RecordingScene source={productSceneSources.library} />;
 export const ChatPinsContent: React.FC = () => <RecordingScene source={productSceneSources.chatPins} />;
 
-export const FindVideoTileContent: React.FC<{ tile: FindVideoTile }> = ({ tile }) => (
-  <RecordingView recording={tile.recording} boxWidth={W} boxHeight={H} />
-);
+export const FindVideoTileContent: React.FC<{ tile: FindVideoTile }> = ({ tile }) => {
+  if (tile.chipLabel !== "Coursera") return <RecordingView recording={tile.recording} boxWidth={W} boxHeight={H} />;
+  // Pair the lecture with its extension, excluding Coursera's unrelated audio popup.
+  const lecture = { ...tile.recording, pageRect: { x: 0, y: 370, width: 2340, height: 1250 }, camera: [{ at: 0, centerX: 1700, centerY: 1040, width: 1280 }] };
+  const panel = { ...tile.recording, pageRect: { x: 2342, y: 0, width: 540, height: 1620 }, camera: [{ at: 0, centerX: 2612, centerY: 660, width: 540 }] };
+  return <AbsoluteFill>
+    <div style={{ position: "absolute", left: 0, width: 1040, height: H, overflow: "hidden" }}><RecordingView recording={lecture} boxWidth={1040} boxHeight={H} /></div>
+    <div style={{ position: "absolute", right: 0, width: 560, height: H, overflow: "hidden", borderLeft: "2px solid #e5e7eb" }}><RecordingView recording={panel} boxWidth={560} boxHeight={H} /></div>
+  </AbsoluteFill>;
+};
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 
@@ -163,7 +170,7 @@ const FormulaLiftOff: React.FC = () => {
   const seconds = frame / FPS;
   const { liftAt, rect } = formulaLift;
   if (seconds < liftAt - 0.05) return null;
-  const recording = productSceneSources.itReads.recording;
+  const recording = { ...productSceneSources.itReads.recording, pageRect: { x: 362, y: 335, width: 1106, height: 622 }, camera: undefined };
   if (recording.media.kind !== "video") return null;
   const lift = spring({ frame: frame - liftAt * FPS, fps: FPS, config: { damping: 15, stiffness: 90 } });
   const start = sourcePointInBox(recordingFramingAt(recording, liftAt, W, H), W, H, rect.x, rect.y);
@@ -199,7 +206,7 @@ const FormulaLiftOff: React.FC = () => {
           background: "#fff",
         }}
       >
-        <div style={{ position: "absolute", left: 0, top: paddingY, width, height: regionHeight, maskImage: edgeFade, WebkitMaskImage: edgeFade }}>
+        <div style={{ position: "absolute", left: 0, top: paddingY, width, height: regionHeight, maskImage: edgeFade, WebkitMaskImage: edgeFade, clipPath: "polygon(0 25%, 61% 25%, 61% 0, 100% 0, 100% 100%, 0 100%)" }}>
           <FrozenSourceRegion
             src={recording.media.src}
             sourceSize={recording.sourceSize}
@@ -261,8 +268,29 @@ const FormulaLiftOff: React.FC = () => {
   );
 };
 
-export const ItReadsContent: React.FC = () => (
-  <RecordingScene source={productSceneSources.itReads}>
+// The answer contains unrendered math. Cut past it and isolate the real timestamp
+// as an editorial card, then show only the player; the answer is never readable.
+export const ItReadsContent: React.FC = () => {
+  const seconds = useCurrentFrame() / FPS;
+  const recording = productSceneSources.itReads.recording;
+  if (seconds >= 1.2 && seconds < 3.2) {
+    const chipRecording = {
+      ...recording,
+      pageRect: { x: 1595, y: 939, width: 170, height: 42 },
+      camera: undefined,
+    };
+    return <AbsoluteFill style={{ background: colors.canvas, alignItems: "center", justifyContent: "center" }}>
+      <div style={{ position: "relative", width: 680, height: 168, borderRadius: 24, overflow: "hidden", boxShadow: shadows.card }}>
+        <RecordingView recording={chipRecording} boxWidth={680} boxHeight={168} />
+      </div>
+      <div style={{ marginTop: 28, fontFamily: fonts.sans, color: colors.cobalt, fontSize: 26, fontWeight: 700, letterSpacing: 3 }}>THE EXACT MOMENT</div>
+    </AbsoluteFill>;
+  }
+  const framedRecording = seconds >= 3.2
+    ? { ...recording, pageRect: { x: 362, y: 335, width: 1106, height: 622 }, camera: undefined }
+    : recording;
+  return <AbsoluteFill>
+    <RecordingView recording={framedRecording} boxWidth={W} boxHeight={H} />
     <FormulaLiftOff />
-  </RecordingScene>
-);
+  </AbsoluteFill>;
+};
