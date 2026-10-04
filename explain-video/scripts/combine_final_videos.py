@@ -1,4 +1,4 @@
-"""Join the untouched promo v3 and captioned walkthrough without re-encoding video."""
+"""Join the untouched promo v3.3 and captioned walkthrough without re-encoding video."""
 import argparse
 import json
 import subprocess
@@ -10,7 +10,7 @@ def run(*args):
 
 
 def combine(root):
-    promo = root / 'promo-video/out/vidseek-promo-v3.mp4'
+    promo = root / 'promo-video/out/vidseek-promo-v3.3.mp4'
     explanation = root / 'explain-video/out/vidseek-architecture-captioned.mp4'
     staging = root / 'explain-video/out/combined-staging'
     staging.mkdir(exist_ok=True)

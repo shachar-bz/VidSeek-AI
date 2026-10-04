@@ -69,7 +69,7 @@ The PNG builder uses macOS Avenir Next, Menlo and Arial Unicode fonts. SVGs decl
 
 ## Combined final delivery
 
-`vidseek-promo-and-explanation.mp4` in the project root plays `promo-video/out/vidseek-promo-v3.mp4` first, immediately followed by the captioned walkthrough. Video packets are copied without re-encoding or transitions. The walkthrough mono audio is duplicated to both stereo channels for compatibility with the promo.
+`vidseek-promo-and-explanation.mp4` in the project root plays `promo-video/out/vidseek-promo-v3.3.mp4` first, immediately followed by the captioned walkthrough. Video packets are copied without re-encoding or transitions. The walkthrough mono audio is duplicated to both stereo channels for compatibility with the promo.
 
 Rebuild from the project root:
 
