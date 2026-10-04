@@ -25,6 +25,7 @@ select
     p.message_id as message_id,
     m.conversation_id as conversation_id,
     m.content as content,
+    m.created_at as message_created_at,
     p.created_at as pinned_at
 from public.{TABLE_NAME} p
 join public.messages m on m.id = p.message_id
@@ -61,6 +62,7 @@ class PinnedAnswerForVideo:
     message_id: str
     conversation_id: str
     content: str
+    message_created_at: str
     pinned_at: str
 
     @classmethod
@@ -70,6 +72,7 @@ class PinnedAnswerForVideo:
             message_id=str(row["message_id"]),
             conversation_id=str(row["conversation_id"]),
             content=row["content"],
+            message_created_at=iso_text(row["message_created_at"]),
             pinned_at=iso_text(row["pinned_at"]),
         )
 
@@ -119,7 +122,7 @@ class PostgresPinnedAnswers:
             row = open_connection.execute(
                 f"""
                 with eligible as (
-                    select m.id, m.conversation_id, m.content
+                    select m.id, m.conversation_id, m.content, m.created_at as message_created_at
                     from public.messages m
                     join public.conversations c on c.id = m.conversation_id
                     where m.id = %s::uuid and m.role = 'assistant'
@@ -135,7 +138,7 @@ class PostgresPinnedAnswers:
                     returning id, message_id, created_at
                 )
                 select p.id, p.message_id, e.conversation_id, e.content,
-                       p.created_at as pinned_at
+                       e.message_created_at, p.created_at as pinned_at
                 from eligible e
                 join inserted p on p.message_id = e.id
                 """,

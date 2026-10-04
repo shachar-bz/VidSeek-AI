@@ -23,6 +23,7 @@ VIDEO_ROW = {
     "message_id": MESSAGE_ID,
     "conversation_id": CONVERSATION_ID,
     "content": "It covers X.",
+    "message_created_at": "2026-09-14T09:55:00+00:00",
     "pinned_at": "2026-09-14T10:00:00+00:00",
 }
 
@@ -74,6 +75,7 @@ def test_a_videos_pins_come_back_with_their_way_back_to_the_conversation() -> No
             message_id=MESSAGE_ID,
             conversation_id=CONVERSATION_ID,
             content="It covers X.",
+            message_created_at=VIDEO_ROW["message_created_at"],
             pinned_at=VIDEO_ROW["pinned_at"],
         )
     ]

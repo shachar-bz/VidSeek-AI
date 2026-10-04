@@ -39,10 +39,29 @@ import { beginGeneration, applyStreamEvent, endIncompleteStream, type LiveGenera
 
 const CHAT_NAME = /^Chat (\d+)$/;
 
-export function pinnedAnswerPreview(content: string): string {
+/** The most characters of a pinned answer the sidebar shows; the stored answer is untouched. */
+export const PINNED_PREVIEW_MAX_CHARS = 120;
+
+export function pinnedAnswerPreview(content: string, maxChars = PINNED_PREVIEW_MAX_CHARS): string {
   const text = content.replace(/\s+/g, " ").trim();
   const characters = Array.from(text);
-  return characters.length > 160 ? `${characters.slice(0, 160).join("").trimEnd()}…` : text;
+  return characters.length > maxChars ? `${characters.slice(0, maxChars).join("").trimEnd()}...` : text;
+}
+
+export interface PinnedAnswerGroup {
+  conversation_id: string;
+  pins: PinnedAnswer[];
+}
+
+/** Groups pins by the chat they came from, keeping the order pins arrive in (newest pin first). */
+export function groupPinsByConversation(pins: PinnedAnswer[]): PinnedAnswerGroup[] {
+  const groups = new Map<string, PinnedAnswerGroup>();
+  for (const pin of pins) {
+    const group = groups.get(pin.conversation_id);
+    if (group) group.pins.push(pin);
+    else groups.set(pin.conversation_id, { conversation_id: pin.conversation_id, pins: [pin] });
+  }
+  return [...groups.values()];
 }
 
 function summaryFromDetail(detail: ConversationDetail): ConversationSummary {
@@ -494,6 +513,13 @@ export function ConversationWorkspace({
     }
   }
 
+  const pinGroups = useMemo(() => groupPinsByConversation(pins), [pins]);
+  // Titles come from the same list the Chats section renders, so a rename shows up here too.
+  const chatTitles = useMemo(
+    () => new Map(conversations.map((conversation) => [conversation.conversation_id, conversation.title ?? "New chat"])),
+    [conversations]
+  );
+
   const renderedMessages = useMemo(() => [
     ...(detail?.messages ?? []),
     ...(live ? [live.userMessage, live.assistantMessage] : [])
@@ -600,7 +626,27 @@ export function ConversationWorkspace({
               </section>
               <section className="pins-panel" aria-labelledby="pinned-answers-heading">
                 <div className="chat-sidebar__heading"><h2 id="pinned-answers-heading">Pinned answers</h2></div>
-                {pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : <ol>{pins.map((pin) => <li key={pin.pin_id}><Link className="pinned-answer-preview" to={videoPath(video.video_id, pin.conversation_id, pin.message_id)} aria-label={`Open pinned answer: ${pinnedAnswerPreview(pin.content)}`}>{pinnedAnswerPreview(pin.content)}</Link><Button variant="ghost" onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.pinned_at, pinned: true })}>Unpin</Button></li>)}</ol>}
+                {pins.length === 0 ? <p className="muted-text">Pin an answer to keep it close.</p> : (
+                  <div className="pins-panel__scroll">
+                    {pinGroups.map((group) => (
+                      <section className="pinned-group" key={group.conversation_id} aria-label={chatTitles.get(group.conversation_id) ?? "New chat"}>
+                        <h3 className="pinned-group__title">{chatTitles.get(group.conversation_id) ?? "New chat"}</h3>
+                        <ol className="pinned-group__list">
+                          {group.pins.map((pin) => {
+                            const preview = pinnedAnswerPreview(pin.content);
+                            return (
+                              <li className="pinned-card" key={pin.pin_id}>
+                                <Link className="pinned-answer-preview" to={videoPath(video.video_id, pin.conversation_id, pin.message_id)} aria-label={`Open pinned answer: ${preview}`}>{preview}</Link>
+                                <time className="pinned-card__time" dateTime={pin.message_created_at}>{formatLastUsed(pin.message_created_at)}</time>
+                                <button className="pinned-card__unpin" type="button" aria-label={`Unpin answer: ${preview}`} title="Unpin" disabled={pinPending === pin.message_id} onClick={() => void togglePin({ message_id: pin.message_id, role: "assistant", content: pin.content, tool_trace: null, created_at: pin.message_created_at, pinned: true })}>×</button>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </section>
+                    ))}
+                  </div>
+                )}
               </section>
             </Panel>
           </div>

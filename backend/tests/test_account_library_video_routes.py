@@ -429,6 +429,7 @@ class StubPins:
             message_id=message_id,
             conversation_id="conversation-1",
             content="Answer",
+            message_created_at="2026-09-19T09:55:00+00:00",
             pinned_at="2026-09-19T10:00:00+00:00",
         )
 
