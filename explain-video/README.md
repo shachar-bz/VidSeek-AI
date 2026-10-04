@@ -42,11 +42,11 @@ The citation panel reflects the code's endpoint checks with one-second tolerance
 
 ## Rebuild
 
-Source work is on branch `explain-video-architecture`, in the dedicated `.claude/worktrees/explain-video-architecture` worktree. Generated deliverables are also copied into the main checkout's `explain-video` folder for easy access.
+The video sources are merged into `main`. Source files and local generated deliverables live in the main checkout's `explain-video` folder. Generated media is ignored by Git.
 
 Requires FFmpeg, FFprobe, Pillow, and the project Python environment. Narration analysis additionally uses Torch and Transformers and expects the downloaded Whisper model at `/private/tmp/vidseek-explain-whisper`; the cached word timing JSON already allows rebuilding without recognition or any network access.
 
-From the explanation folder in the worktree:
+From the `explain-video` folder in the main checkout:
 
 ```sh
 PROJECT_PYTHON=/Users/shachar/Documents/VidSeek-AI/.venv/bin/python
