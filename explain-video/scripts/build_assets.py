@@ -40,9 +40,6 @@ class Canvas:
         self.rect(x,y,6,h,fill=color,stroke=color,r=2)
         self.text(x+24,y+20,title,32,color,bold=True,mono=mono)
         for i,t in enumerate(lines): self.text(x+24,y+72+i*39,t,26,MUTED)
-    def code(self,x,y,w,lines):
-        self.rect(x,y,w,len(lines)*40+48,fill='#EAF0F8',stroke=LINE,r=12)
-        for i,t in enumerate(lines): self.text(x+24,y+22+i*40,t,24,INK,mono=True)
     def save(self,name):
         self.img.save(OUT/f'{name}.png'); (OUT/f'{name}.svg').write_text('\n'.join(self.svg+['</svg>']))
 
@@ -90,13 +87,18 @@ def architecture(c):
     c.text(690,760,'Clients request work; backend orchestrates it; storage persists results.',26,MUTED)
 
 def discovery(c):
-    # Recording overlays this source still in the assembled edit.
-    c.rect(96,270,1130,635,stroke=LINE,r=8)
-    c.image(ROOT/'assets/source-frames/extension-detail.png',98,272,1126,633)
+    # Live recording fades away to reveal this acquisition diagram.
+    c.text(116,310,'From browser evidence to usable media',38,INK)
+    c.card(116,450,310,205,'Browser session',['DOM + player','Network capture'],INK)
+    c.arrow(426,550,491,550,TEAL)
+    c.card(500,450,310,205,'Candidates',['Observed streams','Playback context'],TEAL)
+    c.arrow(810,550,881,550,TEAL)
+    c.card(890,450,310,205,'Main video',['Select content','Exclude ads'],TEAL)
+    c.text(116,745,'Captured evidence drives media selection.',28,MUTED)
     c.card(1290,285,534,215,'Browser evidence',['Page elements / DOM','Embedded players','Network activity'],INK)
     c.arrow(1557,500,1557,544,TEAL)
     c.card(1290,550,534,175,'Select the main video',['Playback reveals streams','Separate content from ads'],TEAL)
-    c.text(1290,756,'Actual extension recording',24,MUTED)
+    c.text(1290,756,'Browser-session discovery',24,MUTED)
 
 def parsing(c):
     c.card(96,425,340,170,'Captured payload',['Only observed data','URLs + metadata'],INK)
@@ -138,7 +140,7 @@ def memories(c):
         c.card(x,290,410,190,title,lines,BLUE)
         if x<1410:c.arrow(x+410,385,x+432,385,BLUE)
     c.text(96,545,'LLM segmentation preserves links to the source timeline.',31,MUTED)
-    c.code(96,615,1000,['MODEL_NAME = "intfloat/multilingual-e5-small"','QUERY_PREFIX = "query: "','PASSAGE_PREFIX = "passage: "'])
+    c.card(96,600,1000,190,'Comparable vectors',['Embed passages and questions','Rank matches by semantic similarity'],BLUE)
     c.card(1160,600,660,190,'Search by meaning',['Question vector ↔ passage vectors','Retrieve relevant timestamped passages'],BLUE)
 
 def frames(c):
@@ -148,7 +150,7 @@ def frames(c):
     c.card(526,575,600,180,'SigLIP 2',['Images + natural-language queries','Same 768-dimensional vector space'],TEAL)
     c.arrow(1126,665,1260,665,TEAL)
     c.card(1270,575,550,180,'Frame search',['Similarity-ranked moments','Timestamped candidate frames'],TEAL)
-    c.text(96,802,'Local model: google/siglip2-base-patch16-256',24,MUTED,mono=True)
+    c.text(96,802,'Frame and query embeddings are created locally with SigLIP 2.',26,MUTED)
 
 def ocr(c):
     c.card(96,285,780,170,'Ignore brief movement',['Temporary change → returns to reference','No new stable segment'],MUTED)
@@ -157,7 +159,7 @@ def ocr(c):
     c.card(990,500,360,190,'Keyframes',['Stable boundaries','Full-resolution decode'],TEAL)
     c.arrow(1350,598,1430,598,TEAL)
     c.card(1440,500,380,190,'Local Surya OCR',['Read screen text','Index for search'],TEAL)
-    c.code(990,280,830,['change_hold_samples: int = 2','min_segment_seconds: float = 6.0'])
+    c.card(990,280,830,170,'Confirm stable changes',['Two changed samples must agree','Brief segments merge into their neighbors'],TEAL)
     c.text(96,760,'Confirm changed samples and stability before opening a new segment.',28,MUTED)
     c.text(96,807,'Long segments also receive periodic keyframes.',26,MUTED)
 
@@ -190,22 +192,22 @@ def agent(c,vision=False):
         c.text(96,825,'Images are analyzed separately; the answer merges visual and spoken evidence.',28,MUTED)
 
 def texttools(c):
-    c.card(96,275,820,175,'Explore structure',['get_video_outline','Chapter titles + summaries'],BLUE)
-    c.card(1000,275,820,175,'Search by meaning',['memories_semantic_search','Find specific passages'],BLUE)
+    c.card(96,275,820,175,'Explore structure',['Browse chapter titles and summaries'],BLUE)
+    c.card(1000,275,820,175,'Search by meaning',['Find relevant passages by meaning'],BLUE)
     c.arrow(506,450,506,555,BLUE); c.arrow(1410,450,1410,555,BLUE)
-    c.card(96,565,820,175,'Expand a chapter',['get_chapter_context','Full section with timestamp ranges'],BLUE)
-    c.card(1000,565,820,175,'Expand a memory',['get_memory_context','Target passage + neighboring passages'],BLUE)
+    c.card(96,565,820,175,'Expand a chapter',['Read the full section with timestamp ranges'],BLUE)
+    c.card(1000,565,820,175,'Expand a memory',['Read the target passage and its neighbors'],BLUE)
     c.text(96,795,'Search narrows the scope. Context retrieval supplies the surrounding evidence.',28,MUTED)
 
 def inspection(c,sequence=False):
     if not sequence:
-        c.card(96,275,780,165,'search_visual_moments',['Query → candidate timestamps','Candidates still need inspection'],TEAL)
+        c.card(96,275,780,165,'Search visual moments',['Query → candidate timestamps','Candidates still need inspection'],TEAL)
         c.arrow(876,358,985,358,TEAL)
-        c.card(995,275,825,165,'view_candidates',['Different moments → one contact sheet','Compare each frame independently'],TEAL)
+        c.card(995,275,825,165,'Inspect candidate frames',['Different moments → one contact sheet','Compare each frame independently'],TEAL)
         for i,t in enumerate(['00:12','02:34','06:20']):frame(c,360+i*430,530,390,240,t,phase=i*35,caption='ILLUSTRATIVE CONTACT-SHEET CELL')
         c.text(96,808,'Example layout: candidate times are unrelated; this is not an action sequence.',26,MUTED)
     else:
-        c.card(96,270,1724,150,'view_sequence',['Frames from one time window, ordered left to right'],TEAL)
+        c.card(96,270,1724,150,'Inspect a time sequence',['Frames from one time window, ordered left to right'],TEAL)
         for i,t in enumerate(['00:10','00:12','00:14']):
             frame(c,280+i*520,510,420,240,t,phase=i*95,caption='ILLUSTRATIVE SEQUENCE CELL')
             if i<2:c.arrow(715+i*520,630,785+i*520,630,TEAL)
@@ -214,7 +216,7 @@ def inspection(c,sequence=False):
 def budget(c):
     c.card(96,285,820,215,'6 visual tool calls',['Searches + inspections share this limit','Per answer'],PURPLE)
     c.card(1000,285,820,215,'4 looks',['One grid or close view = one look','Per answer'],TEAL)
-    c.code(96,555,820,['MAX_VISUAL_TOOL_CALLS = 6','MAX_LOOKS = 4'])
+    c.card(96,555,820,230,'Evidence already collected',['Transcript passages + inspected frames','Explicit limits on visual work'],PURPLE)
     c.card(1000,555,820,230,'When the budget is spent',['Further visual calls do no work','Use the evidence already collected','Say what could not be confirmed'],PURPLE)
     c.text(96,803,'Transcript tools do not spend this visual budget.',26,MUTED)
 
@@ -222,11 +224,13 @@ def citations(c):
     c.card(96,280,610,180,'Retrieved tool range',['Example evidence: 02:10–02:40','Only supported times may be cited'],BLUE)
     c.card(96,550,610,170,'Incoming answer stream',['Supported [02:18]','Unsupported [07:50]'],INK)
     c.arrow(706,635,810,635,PURPLE)
-    c.card(820,550,420,170,'CitationFilter',['Check bracket + range','As text streams'],PURPLE)
+    c.card(820,550,420,170,'Citation filter',['Check bracket + range','As text streams'],PURPLE)
     c.arrow(1240,635,1350,635,TEAL)
     c.card(1360,550,460,170,'Filtered stream',['Keep [02:18]','Drop [07:50]'],TEAL)
-    c.arrow(706,370,1030,550,BLUE)
-    c.code(820,285,1000,['SLACK_SECONDS = 1.0','start - SLACK_SECONDS <= second <= end + SLACK_SECONDS'])
+    c.line(401,460,401,495,BLUE)
+    c.line(401,495,1030,495,BLUE)
+    c.arrow(1030,495,1030,550,BLUE)
+    c.card(820,285,1000,175,'Supported timestamp ranges',['Citations must fall inside retrieved evidence','One-second tolerance for rounded timestamps'],BLUE)
     c.text(96,795,'Checks timestamp support; it does not verify whether the prose claim is true.',28,MUTED)
 
 def product(c,library=False):
@@ -240,14 +244,21 @@ def product(c,library=False):
         c.line(1460,471,1646,471,PURPLE)
     c.text(96,1018,'ACTUAL PRODUCT / SAVED VIDEO WORKSPACE',20,MUTED)
 
-BUILDERS={'intro':intro,'architecture':architecture,'discovery':discovery,'parsing':parsing,'transcription':transcription,'reuse':reuse,'parallel':parallel,'memories':memories,'frames':frames,'ocr':ocr,'progressive':progressive,'agent':agent,'texttools':texttools,'candidates':inspection,'sequence':lambda c:inspection(c,True),'vision':lambda c:agent(c,True),'budget':budget,'citations':citations,'workspace':product,'library':lambda c:product(c,True)}
+def outro(c):
+    c.image(ROOT/'assets/vidseek-icon.png',876,260,168,168)
+    c.text(485,510,'Thanks for watching',86,INK,bold=True)
+    c.text(650,635,'VidSeek AI · Shachar Ben Zur',38,MUTED)
+
+BUILDERS={'outro':outro,'intro':intro,'architecture':architecture,'discovery':discovery,'parsing':parsing,'transcription':transcription,'reuse':reuse,'parallel':parallel,'memories':memories,'frames':frames,'ocr':ocr,'progressive':progressive,'agent':agent,'texttools':texttools,'candidates':inspection,'sequence':lambda c:inspection(c,True),'vision':lambda c:agent(c,True),'budget':budget,'citations':citations,'workspace':product,'library':lambda c:product(c,True)}
 ACTIVE={'intro':[], 'architecture':[0,1,2,3,4], 'discovery':[0,1], 'parsing':[1], 'transcription':[1,2], 'reuse':[1,3], 'parallel':[2], 'memories':[2,3], 'frames':[2,3], 'ocr':[2,3], 'progressive':[2,4], 'agent':[3,4,5], 'texttools':[3,4], 'candidates':[3,4], 'sequence':[3,4], 'vision':[4,5], 'budget':[4], 'citations':[4,5]}
 
 def build():
     scenes=json.loads((ROOT/'assets/timeline.json').read_text())
     for s in scenes:
-        c=Canvas(); header(c,s); BUILDERS[s['kind']](c)
-        if s['kind'] not in ['discovery','workspace','library']:roadmap(c,ACTIVE[s['kind']])
+        c=Canvas()
+        if s['kind'] != 'outro': header(c,s)
+        BUILDERS[s['kind']](c)
+        if s['kind'] not in ['discovery','workspace','library','outro']:roadmap(c,ACTIVE[s['kind']])
         elif s['kind']=='discovery':
             c.text(1290,821,'Browser → acquisition',25,TEAL); c.text(96,997,'ACTUAL EXTENSION / TECHNICAL DISCOVERY',20,MUTED)
         c.save(s['id']); print('Built',s['id'])
@@ -260,7 +271,7 @@ def build():
         tile=Image.new('RGB',(480,306),WHITE); tile.paste(im,(0,0))
         ImageDraw.Draw(tile).text((12,277),f"{s['id']} · {s['start']:.2f}s",font=ImageFont.truetype(SANS,16),fill=INK)
         thumbs.append(tile)
-    sheet=Image.new('RGB',(1920,1530),LINE)
+    sheet=Image.new('RGB',(1920,math.ceil(len(thumbs)/4)*306),LINE)
     for i,im in enumerate(thumbs):sheet.paste(im,((i%4)*480,(i//4)*306))
     sheet.save(ROOT/'out/storyboard.jpg',quality=95)
     cards='\n'.join(f'<article><h2>{s["start"]:.2f}s — {html.escape(s["title"])}</h2><img src="assets/scenes/{s["id"]}.png"><p>{html.escape(s["screen"])}</p><a href="assets/scenes/{s["id"]}.svg">Editable SVG</a></article>' for s in scenes)

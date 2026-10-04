@@ -14,9 +14,11 @@
 <text x="1024" y="305" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">4 looks</text>
 <text x="1024" y="357" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">One grid or close view = one look</text>
 <text x="1024" y="396" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Per answer</text>
-<rect x="96" y="555" width="820" height="128" rx="12" fill="#EAF0F8" stroke="#CDD7E4" stroke-width="2"/>
-<text x="120" y="577" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">MAX_VISUAL_TOOL_CALLS = 6</text>
-<text x="120" y="617" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">MAX_LOOKS = 4</text>
+<rect x="96" y="555" width="820" height="230" rx="16" fill="#FFFFFF" stroke="#7451BA" stroke-width="2"/>
+<rect x="96" y="555" width="6" height="230" rx="2" fill="#7451BA" stroke="#7451BA" stroke-width="2"/>
+<text x="120" y="575" fill="#7451BA" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Evidence already collected</text>
+<text x="120" y="627" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Transcript passages + inspected frames</text>
+<text x="120" y="666" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Explicit limits on visual work</text>
 <rect x="1000" y="555" width="820" height="230" rx="16" fill="#FFFFFF" stroke="#7451BA" stroke-width="2"/>
 <rect x="1000" y="555" width="6" height="230" rx="2" fill="#7451BA" stroke="#7451BA" stroke-width="2"/>
 <text x="1024" y="575" fill="#7451BA" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">When the budget is spent</text>

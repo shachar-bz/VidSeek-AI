@@ -49,7 +49,7 @@
 <text x="1294" y="595" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Frame search</text>
 <text x="1294" y="647" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Similarity-ranked moments</text>
 <text x="1294" y="686" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Timestamped candidate frames</text>
-<text x="96" y="802" fill="#64748B" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">Local model: google/siglip2-base-patch16-256</text>
+<text x="96" y="802" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Frame and query embeddings are created locally with SigLIP 2.</text>
 <rect x="96" y="895" width="265" height="64" rx="10" fill="#FFFFFF" stroke="#CDD7E4" stroke-width="1"/>
 <text x="110" y="915" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="22" font-weight="400" dominant-baseline="text-before-edge">Browser + web app</text>
 <path d="M364 927 L385 927" fill="none" stroke="#CDD7E4" stroke-width="3"/>

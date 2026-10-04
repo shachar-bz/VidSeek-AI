@@ -33,7 +33,7 @@
     "title": "Acquire the right media",
     "type": "Screen recording + diagram",
     "screen": "Actual Coursera extension Find / Scan recording next to DOM, embedded-player and network inputs. Main media is selected; ad candidates are rejected.",
-    "transition": "Play the six-second recording once, then hold its final frame. Highlight browser \u2192 acquisition.",
+    "transition": "Play the recording once; fade it out over its final 0.6 seconds to reveal the acquisition diagram. No frozen recording remains.",
     "implementation": "chrome-extension/src/discovery.ts; page-discovery.ts; background.ts",
     "cue_match": 1.0,
     "end": 51.66
@@ -96,9 +96,9 @@
     "start": 86.58,
     "cue": "An LLM divides",
     "title": "Transcript \u2192 memories \u2192 chapters",
-    "type": "Diagram + code view",
+    "type": "Processing diagram",
     "screen": "Timestamped passages become one-idea memories and chapter groups with titles/summaries. E5 creates 384-dimensional passage vectors for pgvector semantic retrieval.",
-    "transition": "Highlight text lane. Small exact code excerpt shows query: / passage: role prefixes.",
+    "transition": "Highlight text lane. Show passage and query vectors as a conceptual flow without code.",
     "implementation": "semantic_segmentation/memories; chapters; embeddings/multilingual_text_embedding/model.py",
     "cue_match": 1.0,
     "end": 102.08
@@ -162,8 +162,8 @@
     "cue": "For questions about spoken",
     "title": "Find the passage, then expand context",
     "type": "Tool diagram",
-    "screen": "get_video_outline or memories_semantic_search \u2192 relevant chapter/memory \u2192 get_chapter_context or get_memory_context \u2192 evidence with timestamp ranges.",
-    "transition": "Follow one path at a time with blue outlines; show exact tool names.",
+    "screen": "Video outline or semantic passage search \u2192 relevant chapter/memory \u2192 full chapter or memory context \u2192 evidence with timestamp ranges.",
+    "transition": "Follow one path at a time with blue outlines; use plain-language tool labels.",
     "implementation": "video_agent/tools/get_video_outline; memories_semantic_search; get_chapter_context; get_memory_context",
     "cue_match": 1.0,
     "end": 169.18
@@ -175,7 +175,7 @@
     "cue": "For visual questions",
     "title": "Search candidates, then inspect",
     "type": "Illustrative inspection diagram",
-    "screen": "search_visual_moments returns candidate times; view_candidates composes a single contact sheet from different moments for comparison.",
+    "screen": "Visual search returns candidate times; candidate inspection composes a single contact sheet from different moments for comparison.",
     "transition": "Use timestamped illustrative cells, explicitly labeled as examples.",
     "implementation": "video_agent/tools/search_visual_moments; view_candidates",
     "cue_match": 1.0,
@@ -188,7 +188,7 @@
     "cue": "Another presents frames",
     "title": "Inspect actions in chronological order",
     "type": "Illustrative sequence diagram",
-    "screen": "view_sequence arranges frames from a time window in chronological order. Show a simple object moving across three frames.",
+    "screen": "Sequence inspection arranges frames from a time window in chronological order. Show a simple object moving across three frames.",
     "transition": "Reuse inspection panel; ordered timestamps and one arrow, no looping animation.",
     "implementation": "video_agent/tools/view_sequence",
     "cue_match": 1.0,
@@ -213,9 +213,9 @@
     "start": 197.48,
     "cue": "A fixed visual budget",
     "title": "Bound the work per answer",
-    "type": "Diagram + exact code view",
+    "type": "Visual-budget diagram",
     "screen": "At most 6 visual tool calls and 4 looks per answer. Once spent, later visual tools do no work; answer with collected evidence and state uncertainty.",
-    "transition": "Static budget counters and exact constants; avoid a fabricated execution trace.",
+    "transition": "Static budget limits in plain language; no code or fabricated execution trace.",
     "implementation": "backend/video_agent/visual_budget.py",
     "cue_match": 1.0,
     "end": 207.8
@@ -228,7 +228,7 @@
     "title": "Validate timestamp support",
     "type": "Streaming-filter diagram",
     "screen": "Retrieved span 02:10\u201302:40 accepts [02:18], drops [07:50]. Text streams through; only citation support is validated. \u00b11 second endpoint tolerance shown as implementation note.",
-    "transition": "One example before/after; a brief exact-code excerpt.",
+    "transition": "One example before/after with the timestamp-support rule stated in plain language.",
     "implementation": "backend/video_agent/citations.py",
     "cue_match": 1.0,
     "end": 218.42
@@ -258,5 +258,18 @@
     "implementation": "promo-video/public/clips/v3/library_chats_pins.mp4, source 0\u201311.3s",
     "cue_match": 1.0,
     "end": 231.967313
+  },
+  {
+    "id": "21-outro",
+    "kind": "outro",
+    "start": 231.967313,
+    "end": 234.467313,
+    "cue": "Thanks for watching",
+    "title": "Thanks for watching",
+    "type": "Closing card",
+    "screen": "VidSeek icon, thanks for watching, and presenter credit.",
+    "transition": "Fade the card in gently; closing audio starts 0.35 seconds into the card, followed by a short hold.",
+    "implementation": "end-audio.mp3",
+    "audio_duration": 1.306063
   }
 ]

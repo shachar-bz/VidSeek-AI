@@ -7,13 +7,11 @@
 <rect x="96" y="275" width="820" height="175" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
 <rect x="96" y="275" width="6" height="175" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
 <text x="120" y="295" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Explore structure</text>
-<text x="120" y="347" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">get_video_outline</text>
-<text x="120" y="386" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Chapter titles + summaries</text>
+<text x="120" y="347" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Browse chapter titles and summaries</text>
 <rect x="1000" y="275" width="820" height="175" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
 <rect x="1000" y="275" width="6" height="175" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
 <text x="1024" y="295" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Search by meaning</text>
-<text x="1024" y="347" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">memories_semantic_search</text>
-<text x="1024" y="386" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Find specific passages</text>
+<text x="1024" y="347" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Find relevant passages by meaning</text>
 <path d="M506 450 L506 555" fill="none" stroke="#315ACB" stroke-width="3"/>
 <polygon points="506,555 499.7674679981454,543.5914266954252 512.2325320018547,543.5914266954252" fill="#315ACB"/>
 <path d="M1410 450 L1410 555" fill="none" stroke="#315ACB" stroke-width="3"/>
@@ -21,13 +19,11 @@
 <rect x="96" y="565" width="820" height="175" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
 <rect x="96" y="565" width="6" height="175" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
 <text x="120" y="585" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Expand a chapter</text>
-<text x="120" y="637" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">get_chapter_context</text>
-<text x="120" y="676" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Full section with timestamp ranges</text>
+<text x="120" y="637" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Read the full section with timestamp ranges</text>
 <rect x="1000" y="565" width="820" height="175" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
 <rect x="1000" y="565" width="6" height="175" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
 <text x="1024" y="585" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Expand a memory</text>
-<text x="1024" y="637" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">get_memory_context</text>
-<text x="1024" y="676" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Target passage + neighboring passages</text>
+<text x="1024" y="637" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Read the target passage and its neighbors</text>
 <text x="96" y="795" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="28" font-weight="400" dominant-baseline="text-before-edge">Search narrows the scope. Context retrieval supplies the surrounding evidence.</text>
 <rect x="96" y="895" width="265" height="64" rx="10" fill="#FFFFFF" stroke="#CDD7E4" stroke-width="1"/>
 <text x="110" y="915" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="22" font-weight="400" dominant-baseline="text-before-edge">Browser + web app</text>

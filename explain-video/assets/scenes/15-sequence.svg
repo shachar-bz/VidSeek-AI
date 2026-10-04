@@ -6,7 +6,7 @@
 <path d="M96 214 L1824 214" fill="none" stroke="#CDD7E4" stroke-width="3"/>
 <rect x="96" y="270" width="1724" height="150" rx="16" fill="#FFFFFF" stroke="#067C7A" stroke-width="2"/>
 <rect x="96" y="270" width="6" height="150" rx="2" fill="#067C7A" stroke="#067C7A" stroke-width="2"/>
-<text x="120" y="290" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">view_sequence</text>
+<text x="120" y="290" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Inspect a time sequence</text>
 <text x="120" y="342" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Frames from one time window, ordered left to right</text>
 <rect x="280" y="510" width="420" height="240" rx="8" fill="#E8EEF6" stroke="#CDD7E4" stroke-width="2"/>
 <rect x="292" y="522" width="88" height="32" rx="5" fill="#17243A" stroke="#17243A" stroke-width="2"/>

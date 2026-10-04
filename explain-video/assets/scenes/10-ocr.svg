@@ -28,9 +28,11 @@
 <text x="1464" y="520" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Local Surya OCR</text>
 <text x="1464" y="572" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Read screen text</text>
 <text x="1464" y="611" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Index for search</text>
-<rect x="990" y="280" width="830" height="128" rx="12" fill="#EAF0F8" stroke="#CDD7E4" stroke-width="2"/>
-<text x="1014" y="302" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">change_hold_samples: int = 2</text>
-<text x="1014" y="342" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">min_segment_seconds: float = 6.0</text>
+<rect x="990" y="280" width="830" height="170" rx="16" fill="#FFFFFF" stroke="#067C7A" stroke-width="2"/>
+<rect x="990" y="280" width="6" height="170" rx="2" fill="#067C7A" stroke="#067C7A" stroke-width="2"/>
+<text x="1014" y="300" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Confirm stable changes</text>
+<text x="1014" y="352" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Two changed samples must agree</text>
+<text x="1014" y="391" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Brief segments merge into their neighbors</text>
 <text x="96" y="760" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="28" font-weight="400" dominant-baseline="text-before-edge">Confirm changed samples and stability before opening a new segment.</text>
 <text x="96" y="807" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Long segments also receive periodic keyframes.</text>
 <rect x="96" y="895" width="265" height="64" rx="10" fill="#FFFFFF" stroke="#CDD7E4" stroke-width="1"/>

@@ -18,7 +18,7 @@
 <polygon points="810,635 798.5914266954252,641.2325320018547 798.5914266954252,628.7674679981453" fill="#7451BA"/>
 <rect x="820" y="550" width="420" height="170" rx="16" fill="#FFFFFF" stroke="#7451BA" stroke-width="2"/>
 <rect x="820" y="550" width="6" height="170" rx="2" fill="#7451BA" stroke="#7451BA" stroke-width="2"/>
-<text x="844" y="570" fill="#7451BA" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">CitationFilter</text>
+<text x="844" y="570" fill="#7451BA" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Citation filter</text>
 <text x="844" y="622" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Check bracket + range</text>
 <text x="844" y="661" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">As text streams</text>
 <path d="M1240 635 L1350 635" fill="none" stroke="#067C7A" stroke-width="3"/>
@@ -28,11 +28,15 @@
 <text x="1384" y="570" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Filtered stream</text>
 <text x="1384" y="622" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Keep [02:18]</text>
 <text x="1384" y="661" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Drop [07:50]</text>
-<path d="M706 370 L1030 550" fill="none" stroke="#315ACB" stroke-width="3"/>
-<polygon points="1030,550 1017.0003275255947,549.9077202178815 1023.0538977456853,539.0112938217184" fill="#315ACB"/>
-<rect x="820" y="285" width="1000" height="128" rx="12" fill="#EAF0F8" stroke="#CDD7E4" stroke-width="2"/>
-<text x="844" y="307" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">SLACK_SECONDS = 1.0</text>
-<text x="844" y="347" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">start - SLACK_SECONDS &lt;= second &lt;= end + SLACK_SECONDS</text>
+<path d="M401 460 L401 495" fill="none" stroke="#315ACB" stroke-width="3"/>
+<path d="M401 495 L1030 495" fill="none" stroke="#315ACB" stroke-width="3"/>
+<path d="M1030 495 L1030 550" fill="none" stroke="#315ACB" stroke-width="3"/>
+<polygon points="1030,550 1023.7674679981453,538.5914266954252 1036.2325320018547,538.5914266954252" fill="#315ACB"/>
+<rect x="820" y="285" width="1000" height="175" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
+<rect x="820" y="285" width="6" height="175" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
+<text x="844" y="305" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Supported timestamp ranges</text>
+<text x="844" y="357" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Citations must fall inside retrieved evidence</text>
+<text x="844" y="396" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">One-second tolerance for rounded timestamps</text>
 <text x="96" y="795" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="28" font-weight="400" dominant-baseline="text-before-edge">Checks timestamp support; it does not verify whether the prose claim is true.</text>
 <rect x="96" y="895" width="265" height="64" rx="10" fill="#FFFFFF" stroke="#CDD7E4" stroke-width="1"/>
 <text x="110" y="915" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="22" font-weight="400" dominant-baseline="text-before-edge">Browser + web app</text>

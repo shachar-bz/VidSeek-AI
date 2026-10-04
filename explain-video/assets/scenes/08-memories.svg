@@ -29,10 +29,11 @@
 <text x="1434" y="362" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">E5 · 384 dimensions</text>
 <text x="1434" y="401" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Semantic retrieval</text>
 <text x="96" y="545" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="31" font-weight="400" dominant-baseline="text-before-edge">LLM segmentation preserves links to the source timeline.</text>
-<rect x="96" y="615" width="1000" height="168" rx="12" fill="#EAF0F8" stroke="#CDD7E4" stroke-width="2"/>
-<text x="120" y="637" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">MODEL_NAME = &quot;intfloat/multilingual-e5-small&quot;</text>
-<text x="120" y="677" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">QUERY_PREFIX = &quot;query: &quot;</text>
-<text x="120" y="717" fill="#17243A" font-family="Menlo, monospace" font-size="24" font-weight="400" dominant-baseline="text-before-edge">PASSAGE_PREFIX = &quot;passage: &quot;</text>
+<rect x="96" y="600" width="1000" height="190" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
+<rect x="96" y="600" width="6" height="190" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
+<text x="120" y="620" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Comparable vectors</text>
+<text x="120" y="672" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Embed passages and questions</text>
+<text x="120" y="711" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Rank matches by semantic similarity</text>
 <rect x="1160" y="600" width="660" height="190" rx="16" fill="#FFFFFF" stroke="#315ACB" stroke-width="2"/>
 <rect x="1160" y="600" width="6" height="190" rx="2" fill="#315ACB" stroke="#315ACB" stroke-width="2"/>
 <text x="1184" y="620" fill="#315ACB" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Search by meaning</text>

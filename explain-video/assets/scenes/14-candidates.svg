@@ -6,14 +6,14 @@
 <path d="M96 214 L1824 214" fill="none" stroke="#CDD7E4" stroke-width="3"/>
 <rect x="96" y="275" width="780" height="165" rx="16" fill="#FFFFFF" stroke="#067C7A" stroke-width="2"/>
 <rect x="96" y="275" width="6" height="165" rx="2" fill="#067C7A" stroke="#067C7A" stroke-width="2"/>
-<text x="120" y="295" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">search_visual_moments</text>
+<text x="120" y="295" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Search visual moments</text>
 <text x="120" y="347" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Query → candidate timestamps</text>
 <text x="120" y="386" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Candidates still need inspection</text>
 <path d="M876 358 L985 358" fill="none" stroke="#067C7A" stroke-width="3"/>
 <polygon points="985,358 973.5914266954252,364.2325320018546 973.5914266954252,351.7674679981454" fill="#067C7A"/>
 <rect x="995" y="275" width="825" height="165" rx="16" fill="#FFFFFF" stroke="#067C7A" stroke-width="2"/>
 <rect x="995" y="275" width="6" height="165" rx="2" fill="#067C7A" stroke="#067C7A" stroke-width="2"/>
-<text x="1019" y="295" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">view_candidates</text>
+<text x="1019" y="295" fill="#067C7A" font-family="Avenir Next, Arial, sans-serif" font-size="32" font-weight="600" dominant-baseline="text-before-edge">Inspect candidate frames</text>
 <text x="1019" y="347" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Different moments → one contact sheet</text>
 <text x="1019" y="386" fill="#64748B" font-family="Avenir Next, Arial, sans-serif" font-size="26" font-weight="400" dominant-baseline="text-before-edge">Compare each frame independently</text>
 <rect x="360" y="530" width="390" height="240" rx="8" fill="#E8EEF6" stroke="#CDD7E4" stroke-width="2"/>

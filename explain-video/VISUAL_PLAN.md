@@ -1,10 +1,10 @@
 # VidSeek AI — technical walkthrough visual plan
 
-Duration: 03:51.97. Original narration preserved. Local Whisper word timestamps align editorial cues; provided transcript is the authority for wording. Cues are rounded to the 30 fps edit grid for export.
+Duration: 03:54.47. Original narration preserved; the supplied end-audio.mp3 is appended over a quiet closing card. Local Whisper word timestamps align editorial cues; provided transcript is the authority for wording. Cues are rounded to the 30 fps edit grid for export.
 
 ## Visual approach
 
-1920 × 1080, 30 fps. Warm white background, dark navy text, blue text pathway, teal visual pathway, purple agent pathway. Use the VidSeek icon, Avenir headings and Menlo code. One persistent architecture map with matching detail panels. Static holds and progressive highlights; clean cuts at changes of topic. No music, sound effects, marketing CTA, or ornamental transitions.
+1920 × 1080, 30 fps. Warm white background, dark navy text, blue text pathway, teal visual pathway, purple agent pathway. Use the VidSeek icon, Avenir headings and plain-language diagram labels. No code excerpts or implementation identifiers appear on screen. One persistent architecture map with matching detail panels. Static holds and progressive highlights; clean cuts at changes of topic. No music, sound effects, marketing CTA, or ornamental transitions.
 
 Product inserts reuse authentic recordings from this project and are recut for this narration; no UI or backend activity is fabricated. Illustrative frames and citation examples are explicitly labeled. The processing timeline expresses order, not measured elapsed time.
 
@@ -36,7 +36,7 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Visual:** Screen recording + diagram. Actual Coursera extension Find / Scan recording next to DOM, embedded-player and network inputs. Main media is selected; ad candidates are rejected.
 
-**Direction:** Play the six-second recording once, then hold its final frame. Highlight browser → acquisition.
+**Direction:** Play the recording once; fade it out over its final 0.6 seconds to reveal the acquisition diagram. No frozen recording remains.
 
 **Implementation evidence:** `chrome-extension/src/discovery.ts; page-discovery.ts; background.ts`
 
@@ -84,9 +84,9 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Narration:** An LLM divides the transcript into memories — short passages, each focused on one idea — and groups them into chapters with titles and summaries. We then create embeddings for these passages, enabling search based on semantic similarity.
 
-**Visual:** Diagram + code view. Timestamped passages become one-idea memories and chapter groups with titles/summaries. E5 creates 384-dimensional passage vectors for pgvector semantic retrieval.
+**Visual:** Processing diagram. Timestamped passages become one-idea memories and chapter groups with titles/summaries. E5 creates 384-dimensional passage vectors for pgvector semantic retrieval.
 
-**Direction:** Highlight text lane. Small exact code excerpt shows query: / passage: role prefixes.
+**Direction:** Highlight text lane. Show passage and query vectors as a conceptual flow without code.
 
 **Implementation evidence:** `semantic_segmentation/memories; chapters; embeddings/multilingual_text_embedding/model.py`
 
@@ -134,9 +134,9 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Narration:** For questions about spoken content, the agent can explore chapter titles and summaries to identify relevant sections, or use semantic search to find specific passages. It can then retrieve a full chapter or a memory with its surrounding passages for context.
 
-**Visual:** Tool diagram. get_video_outline or memories_semantic_search → relevant chapter/memory → get_chapter_context or get_memory_context → evidence with timestamp ranges.
+**Visual:** Tool diagram. Video outline or semantic passage search → relevant chapter/memory → full chapter or memory context → evidence with timestamp ranges.
 
-**Direction:** Follow one path at a time with blue outlines; show exact tool names.
+**Direction:** Follow one path at a time with blue outlines; use plain-language tool labels.
 
 **Implementation evidence:** `video_agent/tools/get_video_outline; memories_semantic_search; get_chapter_context; get_memory_context`
 
@@ -144,7 +144,7 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Narration:** For visual questions, a search tool finds candidate moments. The agent then uses inspection tools. One combines frames from different moments into a single image for comparison. Another presents frames in chronological order to examine how an action unfolds.
 
-**Visual:** Illustrative inspection diagram. search_visual_moments returns candidate times; view_candidates composes a single contact sheet from different moments for comparison.
+**Visual:** Illustrative inspection diagram. Visual search returns candidate times; candidate inspection composes a single contact sheet from different moments for comparison.
 
 **Direction:** Use timestamped illustrative cells, explicitly labeled as examples.
 
@@ -154,7 +154,7 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Narration:** Another presents frames…
 
-**Visual:** Illustrative sequence diagram. view_sequence arranges frames from a time window in chronological order. Show a simple object moving across three frames.
+**Visual:** Illustrative sequence diagram. Sequence inspection arranges frames from a time window in chronological order. Show a simple object moving across three frames.
 
 **Direction:** Reuse inspection panel; ordered timestamps and one arrow, no looping animation.
 
@@ -174,9 +174,9 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Narration:** A fixed visual budget limits searches and inspections per answer. Once exhausted, the agent must use the evidence collected and acknowledge what it could not confirm.
 
-**Visual:** Diagram + exact code view. At most 6 visual tool calls and 4 looks per answer. Once spent, later visual tools do no work; answer with collected evidence and state uncertainty.
+**Visual:** Visual-budget diagram. At most 6 visual tool calls and 4 looks per answer. Once spent, later visual tools do no work; answer with collected evidence and state uncertainty.
 
-**Direction:** Static budget counters and exact constants; avoid a fabricated execution trace.
+**Direction:** Static budget limits in plain language; no code or fabricated execution trace.
 
 **Implementation evidence:** `backend/video_agent/visual_budget.py`
 
@@ -186,7 +186,7 @@ Product inserts reuse authentic recordings from this project and are recut for t
 
 **Visual:** Streaming-filter diagram. Retrieved span 02:10–02:40 accepts [02:18], drops [07:50]. Text streams through; only citation support is validated. ±1 second endpoint tolerance shown as implementation note.
 
-**Direction:** One example before/after; a brief exact-code excerpt.
+**Direction:** One example before/after with the timestamp-support rule stated in plain language.
 
 **Implementation evidence:** `backend/video_agent/citations.py`
 
@@ -209,6 +209,16 @@ Product inserts reuse authentic recordings from this project and are recut for t
 **Direction:** Use source 0–11.3s, muted, with a held final frame if needed. End on workspace; no sales CTA.
 
 **Implementation evidence:** `promo-video/public/clips/v3/library_chats_pins.mp4, source 0–11.3s`
+
+### 21-outro · 03:51.97–03:54.47 · Thanks for watching
+
+**Narration:** Thanks for watching.
+
+**Visual:** Closing card. VidSeek icon, thanks for watching, and presenter credit.
+
+**Direction:** Fade the card in gently; closing audio starts 0.35 seconds into the card, followed by a short hold.
+
+**Implementation evidence:** `end-audio.mp3`
 
 ## Source and accuracy notes
 
