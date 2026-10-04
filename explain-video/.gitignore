@@ -1,0 +1,5 @@
+out/
+recordings/
+assets/scenes/*.png
+assets/source-frames/
+__pycache__/

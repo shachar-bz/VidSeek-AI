@@ -1,0 +1,3666 @@
+{
+  "text": " Hi everyone, I'm Shahal Benzo, and this is VidSeek AI. In my first video, I introduced the features. Today, I'll walk through the architecture and the decisions behind it. The goal of VidSeek AI is to turn videos into searchable, interactive knowledge, what was said, what was shown, and when it happened, all through one conversation. The system combines a web app, a Chrome extension, and a fast API backend. Azure stores the structured data, embeddings, and video files. The first challenge is acquiring the right media. The extension identifies the video through page elements, embedded players, and network activity in the user's browser session. When needed, playback reveals the stream and helps distinguish the main content from ads or other videos. Known structures are parsed deterministically. Unfamiliar structured data goes through an LLM fallback, with its selections validated against the captured data. The system uses existing time-stamped captions or transcribes the audio with 11 labs. Videos and their analysis are saved. Before downloading, the system checks for a matching source and reuses existing results to save time and resources. Now, let's talk about how the video is processed. Processing follows two parallel paths, text and visuals. An LLM divides the transcript into memories, short passages each focused on one idea, and groups them into chapters with titles and summaries. We then create embeddings for these passages, enabling search based on semantic similarity. The visual pipeline samples a frame every two seconds and creates visual embeddings for natural language search. It detects lasting changes in scenes or on-screen content, filtering out brief movement. Selected keyframes then pass through local OCR to make on-screen text searchable. Because this takes time, capabilities become available progressively. Users can start chatting about the transcript while visual processing continues. Visual search becomes available next, and OCR coverage expands as more keyframes are processed. So, how does the agent use all this information? It calls tools to search the video and inspect specific moments, retrieving focused evidence without loading the entire transcript and every image into its context. For questions about spoken content, the agent can explore chapter titles and summaries to identify relevant sections or use semantic search to find specific passages. It can then retrieve a full chapter or a memory with its surrounding passages for context. For visual questions, a search tool finds candidate moments. The agent then uses inspection tools. One combines frames from different moments into a single image for comparison. Another presents frames in chronological order to examine how an action unfolds. A separate vision model analyzes these images and returns focused observations, which the main agent combines with transcript evidence to answer. A fixed visual budget limits searches and inspections per answer. Once exhausted, the agent must use the evidence collected and acknowledge what it could not confirm. Finally, a streaming filter removes time stamp citations outside the range's return by tools. This validates time stamp support. The website brings the video, conversations, transcript, and chapters into one workspace. A personal library keeps saved videos accessible, so users can return to a video and continue exploring without starting over.",
+  "chunks": [
+    {
+      "text": " Hi",
+      "timestamp": [
+        0.0,
+        0.18
+      ]
+    },
+    {
+      "text": " everyone,",
+      "timestamp": [
+        0.18,
+        0.94
+      ]
+    },
+    {
+      "text": " I'm",
+      "timestamp": [
+        0.94,
+        1.14
+      ]
+    },
+    {
+      "text": " Shahal",
+      "timestamp": [
+        1.14,
+        1.46
+      ]
+    },
+    {
+      "text": " Benzo,",
+      "timestamp": [
+        1.46,
+        2.08
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        2.08,
+        2.34
+      ]
+    },
+    {
+      "text": " this",
+      "timestamp": [
+        2.34,
+        2.66
+      ]
+    },
+    {
+      "text": " is",
+      "timestamp": [
+        2.66,
+        3.02
+      ]
+    },
+    {
+      "text": " VidSeek",
+      "timestamp": [
+        3.02,
+        3.58
+      ]
+    },
+    {
+      "text": " AI.",
+      "timestamp": [
+        3.58,
+        4.54
+      ]
+    },
+    {
+      "text": " In",
+      "timestamp": [
+        4.92,
+        4.98
+      ]
+    },
+    {
+      "text": " my",
+      "timestamp": [
+        4.98,
+        5.08
+      ]
+    },
+    {
+      "text": " first",
+      "timestamp": [
+        5.08,
+        5.32
+      ]
+    },
+    {
+      "text": " video,",
+      "timestamp": [
+        5.32,
+        5.68
+      ]
+    },
+    {
+      "text": " I",
+      "timestamp": [
+        5.68,
+        6.1
+      ]
+    },
+    {
+      "text": " introduced",
+      "timestamp": [
+        6.1,
+        6.28
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        6.28,
+        6.66
+      ]
+    },
+    {
+      "text": " features.",
+      "timestamp": [
+        6.66,
+        7.62
+      ]
+    },
+    {
+      "text": " Today,",
+      "timestamp": [
+        7.96,
+        8.24
+      ]
+    },
+    {
+      "text": " I'll",
+      "timestamp": [
+        8.24,
+        8.46
+      ]
+    },
+    {
+      "text": " walk",
+      "timestamp": [
+        8.46,
+        8.68
+      ]
+    },
+    {
+      "text": " through",
+      "timestamp": [
+        8.68,
+        8.92
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        8.92,
+        9.06
+      ]
+    },
+    {
+      "text": " architecture",
+      "timestamp": [
+        9.06,
+        9.6
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        9.6,
+        10.02
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        10.02,
+        10.14
+      ]
+    },
+    {
+      "text": " decisions",
+      "timestamp": [
+        10.14,
+        10.5
+      ]
+    },
+    {
+      "text": " behind",
+      "timestamp": [
+        10.5,
+        10.94
+      ]
+    },
+    {
+      "text": " it.",
+      "timestamp": [
+        10.94,
+        11.98
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        12.24,
+        12.34
+      ]
+    },
+    {
+      "text": " goal",
+      "timestamp": [
+        12.34,
+        12.52
+      ]
+    },
+    {
+      "text": " of",
+      "timestamp": [
+        12.52,
+        12.76
+      ]
+    },
+    {
+      "text": " VidSeek",
+      "timestamp": [
+        12.76,
+        13.18
+      ]
+    },
+    {
+      "text": " AI",
+      "timestamp": [
+        13.18,
+        13.46
+      ]
+    },
+    {
+      "text": " is",
+      "timestamp": [
+        13.46,
+        13.8
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        13.8,
+        13.94
+      ]
+    },
+    {
+      "text": " turn",
+      "timestamp": [
+        13.94,
+        14.14
+      ]
+    },
+    {
+      "text": " videos",
+      "timestamp": [
+        14.14,
+        14.52
+      ]
+    },
+    {
+      "text": " into",
+      "timestamp": [
+        14.52,
+        14.92
+      ]
+    },
+    {
+      "text": " searchable,",
+      "timestamp": [
+        14.92,
+        15.74
+      ]
+    },
+    {
+      "text": " interactive",
+      "timestamp": [
+        15.74,
+        16.14
+      ]
+    },
+    {
+      "text": " knowledge,",
+      "timestamp": [
+        16.14,
+        17.08
+      ]
+    },
+    {
+      "text": " what",
+      "timestamp": [
+        17.32,
+        17.4
+      ]
+    },
+    {
+      "text": " was",
+      "timestamp": [
+        17.4,
+        17.56
+      ]
+    },
+    {
+      "text": " said,",
+      "timestamp": [
+        17.56,
+        18.3
+      ]
+    },
+    {
+      "text": " what",
+      "timestamp": [
+        18.3,
+        18.4
+      ]
+    },
+    {
+      "text": " was",
+      "timestamp": [
+        18.4,
+        18.54
+      ]
+    },
+    {
+      "text": " shown,",
+      "timestamp": [
+        18.54,
+        19.22
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        19.22,
+        19.46
+      ]
+    },
+    {
+      "text": " when",
+      "timestamp": [
+        19.46,
+        19.72
+      ]
+    },
+    {
+      "text": " it",
+      "timestamp": [
+        19.72,
+        19.86
+      ]
+    },
+    {
+      "text": " happened,",
+      "timestamp": [
+        19.86,
+        20.54
+      ]
+    },
+    {
+      "text": " all",
+      "timestamp": [
+        20.78,
+        20.86
+      ]
+    },
+    {
+      "text": " through",
+      "timestamp": [
+        20.86,
+        21.16
+      ]
+    },
+    {
+      "text": " one",
+      "timestamp": [
+        21.16,
+        21.42
+      ]
+    },
+    {
+      "text": " conversation.",
+      "timestamp": [
+        21.42,
+        22.66
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        23.4,
+        23.48
+      ]
+    },
+    {
+      "text": " system",
+      "timestamp": [
+        23.48,
+        23.72
+      ]
+    },
+    {
+      "text": " combines",
+      "timestamp": [
+        23.72,
+        24.12
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        24.12,
+        24.4
+      ]
+    },
+    {
+      "text": " web",
+      "timestamp": [
+        24.4,
+        24.58
+      ]
+    },
+    {
+      "text": " app,",
+      "timestamp": [
+        24.58,
+        25.08
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        25.24,
+        25.24
+      ]
+    },
+    {
+      "text": " Chrome",
+      "timestamp": [
+        25.24,
+        25.44
+      ]
+    },
+    {
+      "text": " extension,",
+      "timestamp": [
+        25.44,
+        26.16
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        26.16,
+        26.42
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        26.42,
+        26.5
+      ]
+    },
+    {
+      "text": " fast",
+      "timestamp": [
+        26.5,
+        26.82
+      ]
+    },
+    {
+      "text": " API",
+      "timestamp": [
+        26.82,
+        27.12
+      ]
+    },
+    {
+      "text": " backend.",
+      "timestamp": [
+        27.12,
+        28.24
+      ]
+    },
+    {
+      "text": " Azure",
+      "timestamp": [
+        28.96,
+        28.96
+      ]
+    },
+    {
+      "text": " stores",
+      "timestamp": [
+        28.96,
+        29.22
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        29.22,
+        29.52
+      ]
+    },
+    {
+      "text": " structured",
+      "timestamp": [
+        29.52,
+        29.82
+      ]
+    },
+    {
+      "text": " data,",
+      "timestamp": [
+        29.82,
+        30.58
+      ]
+    },
+    {
+      "text": " embeddings,",
+      "timestamp": [
+        31.0,
+        31.2
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        31.2,
+        31.6
+      ]
+    },
+    {
+      "text": " video",
+      "timestamp": [
+        31.6,
+        31.84
+      ]
+    },
+    {
+      "text": " files.",
+      "timestamp": [
+        31.84,
+        32.92
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        33.44,
+        33.52
+      ]
+    },
+    {
+      "text": " first",
+      "timestamp": [
+        33.52,
+        33.74
+      ]
+    },
+    {
+      "text": " challenge",
+      "timestamp": [
+        33.74,
+        34.02
+      ]
+    },
+    {
+      "text": " is",
+      "timestamp": [
+        34.02,
+        34.38
+      ]
+    },
+    {
+      "text": " acquiring",
+      "timestamp": [
+        34.38,
+        34.68
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        34.68,
+        35.06
+      ]
+    },
+    {
+      "text": " right",
+      "timestamp": [
+        35.06,
+        35.3
+      ]
+    },
+    {
+      "text": " media.",
+      "timestamp": [
+        35.3,
+        36.16
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        36.36,
+        36.6
+      ]
+    },
+    {
+      "text": " extension",
+      "timestamp": [
+        36.6,
+        36.92
+      ]
+    },
+    {
+      "text": " identifies",
+      "timestamp": [
+        36.92,
+        37.36
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        37.36,
+        37.86
+      ]
+    },
+    {
+      "text": " video",
+      "timestamp": [
+        37.86,
+        38.1
+      ]
+    },
+    {
+      "text": " through",
+      "timestamp": [
+        38.1,
+        38.4
+      ]
+    },
+    {
+      "text": " page",
+      "timestamp": [
+        38.4,
+        38.68
+      ]
+    },
+    {
+      "text": " elements,",
+      "timestamp": [
+        39.2,
+        39.5
+      ]
+    },
+    {
+      "text": " embedded",
+      "timestamp": [
+        39.5,
+        39.84
+      ]
+    },
+    {
+      "text": " players,",
+      "timestamp": [
+        39.84,
+        40.66
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        40.66,
+        40.9
+      ]
+    },
+    {
+      "text": " network",
+      "timestamp": [
+        40.9,
+        41.16
+      ]
+    },
+    {
+      "text": " activity",
+      "timestamp": [
+        41.16,
+        41.66
+      ]
+    },
+    {
+      "text": " in",
+      "timestamp": [
+        41.66,
+        42.08
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        42.08,
+        42.18
+      ]
+    },
+    {
+      "text": " user's",
+      "timestamp": [
+        42.18,
+        42.48
+      ]
+    },
+    {
+      "text": " browser",
+      "timestamp": [
+        42.48,
+        42.8
+      ]
+    },
+    {
+      "text": " session.",
+      "timestamp": [
+        42.8,
+        43.9
+      ]
+    },
+    {
+      "text": " When",
+      "timestamp": [
+        44.24,
+        44.34
+      ]
+    },
+    {
+      "text": " needed,",
+      "timestamp": [
+        44.34,
+        45.2
+      ]
+    },
+    {
+      "text": " playback",
+      "timestamp": [
+        45.2,
+        45.38
+      ]
+    },
+    {
+      "text": " reveals",
+      "timestamp": [
+        45.38,
+        45.96
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        45.96,
+        46.26
+      ]
+    },
+    {
+      "text": " stream",
+      "timestamp": [
+        46.26,
+        46.52
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        46.52,
+        46.9
+      ]
+    },
+    {
+      "text": " helps",
+      "timestamp": [
+        46.9,
+        47.12
+      ]
+    },
+    {
+      "text": " distinguish",
+      "timestamp": [
+        47.12,
+        47.52
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        47.52,
+        47.92
+      ]
+    },
+    {
+      "text": " main",
+      "timestamp": [
+        47.92,
+        48.14
+      ]
+    },
+    {
+      "text": " content",
+      "timestamp": [
+        48.14,
+        48.6
+      ]
+    },
+    {
+      "text": " from",
+      "timestamp": [
+        49.04,
+        49.04
+      ]
+    },
+    {
+      "text": " ads",
+      "timestamp": [
+        49.04,
+        49.36
+      ]
+    },
+    {
+      "text": " or",
+      "timestamp": [
+        49.36,
+        49.76
+      ]
+    },
+    {
+      "text": " other",
+      "timestamp": [
+        49.76,
+        50.04
+      ]
+    },
+    {
+      "text": " videos.",
+      "timestamp": [
+        50.04,
+        51.66
+      ]
+    },
+    {
+      "text": " Known",
+      "timestamp": [
+        51.66,
+        51.68
+      ]
+    },
+    {
+      "text": " structures",
+      "timestamp": [
+        51.68,
+        52.08
+      ]
+    },
+    {
+      "text": " are",
+      "timestamp": [
+        52.08,
+        52.54
+      ]
+    },
+    {
+      "text": " parsed",
+      "timestamp": [
+        52.54,
+        52.76
+      ]
+    },
+    {
+      "text": " deterministically.",
+      "timestamp": [
+        52.76,
+        54.36
+      ]
+    },
+    {
+      "text": " Unfamiliar",
+      "timestamp": [
+        54.72,
+        55.14
+      ]
+    },
+    {
+      "text": " structured",
+      "timestamp": [
+        55.14,
+        55.48
+      ]
+    },
+    {
+      "text": " data",
+      "timestamp": [
+        55.48,
+        55.9
+      ]
+    },
+    {
+      "text": " goes",
+      "timestamp": [
+        55.9,
+        56.26
+      ]
+    },
+    {
+      "text": " through",
+      "timestamp": [
+        56.26,
+        56.52
+      ]
+    },
+    {
+      "text": " an",
+      "timestamp": [
+        56.52,
+        56.66
+      ]
+    },
+    {
+      "text": " LLM",
+      "timestamp": [
+        56.66,
+        57.14
+      ]
+    },
+    {
+      "text": " fallback,",
+      "timestamp": [
+        57.14,
+        58.1
+      ]
+    },
+    {
+      "text": " with",
+      "timestamp": [
+        58.1,
+        58.22
+      ]
+    },
+    {
+      "text": " its",
+      "timestamp": [
+        58.22,
+        58.34
+      ]
+    },
+    {
+      "text": " selections",
+      "timestamp": [
+        58.34,
+        58.72
+      ]
+    },
+    {
+      "text": " validated",
+      "timestamp": [
+        58.72,
+        59.4
+      ]
+    },
+    {
+      "text": " against",
+      "timestamp": [
+        59.4,
+        59.92
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        60.14,
+        60.14
+      ]
+    },
+    {
+      "text": " captured",
+      "timestamp": [
+        60.14,
+        60.4
+      ]
+    },
+    {
+      "text": " data.",
+      "timestamp": [
+        60.4,
+        61.6
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        61.7,
+        61.8
+      ]
+    },
+    {
+      "text": " system",
+      "timestamp": [
+        61.8,
+        62.0
+      ]
+    },
+    {
+      "text": " uses",
+      "timestamp": [
+        62.0,
+        62.36
+      ]
+    },
+    {
+      "text": " existing",
+      "timestamp": [
+        62.36,
+        63.0
+      ]
+    },
+    {
+      "text": " time",
+      "timestamp": [
+        63.0,
+        63.34
+      ]
+    },
+    {
+      "text": "-stamped",
+      "timestamp": [
+        63.34,
+        63.7
+      ]
+    },
+    {
+      "text": " captions",
+      "timestamp": [
+        63.7,
+        64.24
+      ]
+    },
+    {
+      "text": " or",
+      "timestamp": [
+        64.24,
+        64.7
+      ]
+    },
+    {
+      "text": " transcribes",
+      "timestamp": [
+        64.7,
+        65.32
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        65.32,
+        65.5
+      ]
+    },
+    {
+      "text": " audio",
+      "timestamp": [
+        65.5,
+        65.68
+      ]
+    },
+    {
+      "text": " with",
+      "timestamp": [
+        65.68,
+        66.02
+      ]
+    },
+    {
+      "text": " 11",
+      "timestamp": [
+        66.02,
+        66.26
+      ]
+    },
+    {
+      "text": " labs.",
+      "timestamp": [
+        66.26,
+        67.5
+      ]
+    },
+    {
+      "text": " Videos",
+      "timestamp": [
+        68.02,
+        68.02
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        68.02,
+        68.2
+      ]
+    },
+    {
+      "text": " their",
+      "timestamp": [
+        68.2,
+        68.32
+      ]
+    },
+    {
+      "text": " analysis",
+      "timestamp": [
+        68.32,
+        68.66
+      ]
+    },
+    {
+      "text": " are",
+      "timestamp": [
+        68.66,
+        69.08
+      ]
+    },
+    {
+      "text": " saved.",
+      "timestamp": [
+        69.08,
+        70.24
+      ]
+    },
+    {
+      "text": " Before",
+      "timestamp": [
+        70.5,
+        70.5
+      ]
+    },
+    {
+      "text": " downloading,",
+      "timestamp": [
+        70.5,
+        71.4
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        71.4,
+        71.54
+      ]
+    },
+    {
+      "text": " system",
+      "timestamp": [
+        71.54,
+        71.8
+      ]
+    },
+    {
+      "text": " checks",
+      "timestamp": [
+        71.8,
+        72.06
+      ]
+    },
+    {
+      "text": " for",
+      "timestamp": [
+        72.08,
+        72.38
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        72.38,
+        72.46
+      ]
+    },
+    {
+      "text": " matching",
+      "timestamp": [
+        72.46,
+        72.76
+      ]
+    },
+    {
+      "text": " source",
+      "timestamp": [
+        72.76,
+        73.18
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        73.18,
+        73.54
+      ]
+    },
+    {
+      "text": " reuses",
+      "timestamp": [
+        73.84,
+        74.14
+      ]
+    },
+    {
+      "text": " existing",
+      "timestamp": [
+        74.14,
+        74.4
+      ]
+    },
+    {
+      "text": " results",
+      "timestamp": [
+        74.4,
+        75.04
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        75.04,
+        75.4
+      ]
+    },
+    {
+      "text": " save",
+      "timestamp": [
+        75.4,
+        75.64
+      ]
+    },
+    {
+      "text": " time",
+      "timestamp": [
+        75.64,
+        75.94
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        75.94,
+        76.26
+      ]
+    },
+    {
+      "text": " resources.",
+      "timestamp": [
+        76.26,
+        77.44
+      ]
+    },
+    {
+      "text": " Now,",
+      "timestamp": [
+        77.44,
+        78.56
+      ]
+    },
+    {
+      "text": " let's",
+      "timestamp": [
+        78.56,
+        78.94
+      ]
+    },
+    {
+      "text": " talk",
+      "timestamp": [
+        78.94,
+        79.1
+      ]
+    },
+    {
+      "text": " about",
+      "timestamp": [
+        79.1,
+        79.34
+      ]
+    },
+    {
+      "text": " how",
+      "timestamp": [
+        79.34,
+        79.64
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        79.64,
+        79.86
+      ]
+    },
+    {
+      "text": " video",
+      "timestamp": [
+        79.86,
+        80.12
+      ]
+    },
+    {
+      "text": " is",
+      "timestamp": [
+        80.12,
+        80.3
+      ]
+    },
+    {
+      "text": " processed.",
+      "timestamp": [
+        80.3,
+        81.48
+      ]
+    },
+    {
+      "text": " Processing",
+      "timestamp": [
+        81.74,
+        82.02
+      ]
+    },
+    {
+      "text": " follows",
+      "timestamp": [
+        82.02,
+        82.46
+      ]
+    },
+    {
+      "text": " two",
+      "timestamp": [
+        82.46,
+        82.96
+      ]
+    },
+    {
+      "text": " parallel",
+      "timestamp": [
+        82.96,
+        83.4
+      ]
+    },
+    {
+      "text": " paths,",
+      "timestamp": [
+        83.4,
+        84.44
+      ]
+    },
+    {
+      "text": " text",
+      "timestamp": [
+        84.44,
+        84.7
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        84.7,
+        85.22
+      ]
+    },
+    {
+      "text": " visuals.",
+      "timestamp": [
+        85.22,
+        86.58
+      ]
+    },
+    {
+      "text": " An",
+      "timestamp": [
+        86.58,
+        86.64
+      ]
+    },
+    {
+      "text": " LLM",
+      "timestamp": [
+        86.64,
+        87.18
+      ]
+    },
+    {
+      "text": " divides",
+      "timestamp": [
+        87.18,
+        87.58
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        87.58,
+        87.9
+      ]
+    },
+    {
+      "text": " transcript",
+      "timestamp": [
+        87.9,
+        88.28
+      ]
+    },
+    {
+      "text": " into",
+      "timestamp": [
+        88.28,
+        88.68
+      ]
+    },
+    {
+      "text": " memories,",
+      "timestamp": [
+        88.7,
+        89.62
+      ]
+    },
+    {
+      "text": " short",
+      "timestamp": [
+        89.62,
+        90.04
+      ]
+    },
+    {
+      "text": " passages",
+      "timestamp": [
+        90.04,
+        90.4
+      ]
+    },
+    {
+      "text": " each",
+      "timestamp": [
+        90.4,
+        91.08
+      ]
+    },
+    {
+      "text": " focused",
+      "timestamp": [
+        91.08,
+        91.44
+      ]
+    },
+    {
+      "text": " on",
+      "timestamp": [
+        91.44,
+        91.74
+      ]
+    },
+    {
+      "text": " one",
+      "timestamp": [
+        91.74,
+        92.0
+      ]
+    },
+    {
+      "text": " idea,",
+      "timestamp": [
+        92.0,
+        92.68
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        93.14,
+        93.14
+      ]
+    },
+    {
+      "text": " groups",
+      "timestamp": [
+        93.14,
+        93.32
+      ]
+    },
+    {
+      "text": " them",
+      "timestamp": [
+        93.32,
+        93.66
+      ]
+    },
+    {
+      "text": " into",
+      "timestamp": [
+        93.66,
+        93.9
+      ]
+    },
+    {
+      "text": " chapters",
+      "timestamp": [
+        93.9,
+        94.34
+      ]
+    },
+    {
+      "text": " with",
+      "timestamp": [
+        94.34,
+        94.68
+      ]
+    },
+    {
+      "text": " titles",
+      "timestamp": [
+        94.68,
+        95.02
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        95.02,
+        95.42
+      ]
+    },
+    {
+      "text": " summaries.",
+      "timestamp": [
+        95.42,
+        96.42
+      ]
+    },
+    {
+      "text": " We",
+      "timestamp": [
+        96.42,
+        96.84
+      ]
+    },
+    {
+      "text": " then",
+      "timestamp": [
+        96.84,
+        97.0
+      ]
+    },
+    {
+      "text": " create",
+      "timestamp": [
+        97.0,
+        97.3
+      ]
+    },
+    {
+      "text": " embeddings",
+      "timestamp": [
+        97.3,
+        97.92
+      ]
+    },
+    {
+      "text": " for",
+      "timestamp": [
+        97.92,
+        98.1
+      ]
+    },
+    {
+      "text": " these",
+      "timestamp": [
+        98.1,
+        98.24
+      ]
+    },
+    {
+      "text": " passages,",
+      "timestamp": [
+        98.76,
+        99.16
+      ]
+    },
+    {
+      "text": " enabling",
+      "timestamp": [
+        99.16,
+        99.54
+      ]
+    },
+    {
+      "text": " search",
+      "timestamp": [
+        99.54,
+        99.88
+      ]
+    },
+    {
+      "text": " based",
+      "timestamp": [
+        99.88,
+        100.26
+      ]
+    },
+    {
+      "text": " on",
+      "timestamp": [
+        100.26,
+        100.5
+      ]
+    },
+    {
+      "text": " semantic",
+      "timestamp": [
+        100.5,
+        100.86
+      ]
+    },
+    {
+      "text": " similarity.",
+      "timestamp": [
+        100.86,
+        102.08
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        102.08,
+        102.78
+      ]
+    },
+    {
+      "text": " visual",
+      "timestamp": [
+        102.78,
+        103.06
+      ]
+    },
+    {
+      "text": " pipeline",
+      "timestamp": [
+        103.06,
+        103.38
+      ]
+    },
+    {
+      "text": " samples",
+      "timestamp": [
+        103.38,
+        103.88
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        103.88,
+        104.22
+      ]
+    },
+    {
+      "text": " frame",
+      "timestamp": [
+        104.22,
+        104.48
+      ]
+    },
+    {
+      "text": " every",
+      "timestamp": [
+        104.92,
+        104.92
+      ]
+    },
+    {
+      "text": " two",
+      "timestamp": [
+        104.92,
+        105.16
+      ]
+    },
+    {
+      "text": " seconds",
+      "timestamp": [
+        105.16,
+        105.54
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        105.54,
+        106.14
+      ]
+    },
+    {
+      "text": " creates",
+      "timestamp": [
+        106.14,
+        106.42
+      ]
+    },
+    {
+      "text": " visual",
+      "timestamp": [
+        106.42,
+        106.88
+      ]
+    },
+    {
+      "text": " embeddings",
+      "timestamp": [
+        106.88,
+        107.52
+      ]
+    },
+    {
+      "text": " for",
+      "timestamp": [
+        107.52,
+        107.7
+      ]
+    },
+    {
+      "text": " natural",
+      "timestamp": [
+        108.16,
+        108.16
+      ]
+    },
+    {
+      "text": " language",
+      "timestamp": [
+        108.16,
+        108.46
+      ]
+    },
+    {
+      "text": " search.",
+      "timestamp": [
+        108.46,
+        109.7
+      ]
+    },
+    {
+      "text": " It",
+      "timestamp": [
+        109.74,
+        109.86
+      ]
+    },
+    {
+      "text": " detects",
+      "timestamp": [
+        109.86,
+        110.08
+      ]
+    },
+    {
+      "text": " lasting",
+      "timestamp": [
+        110.08,
+        110.48
+      ]
+    },
+    {
+      "text": " changes",
+      "timestamp": [
+        110.48,
+        111.0
+      ]
+    },
+    {
+      "text": " in",
+      "timestamp": [
+        111.0,
+        111.34
+      ]
+    },
+    {
+      "text": " scenes",
+      "timestamp": [
+        111.34,
+        111.62
+      ]
+    },
+    {
+      "text": " or",
+      "timestamp": [
+        111.62,
+        112.1
+      ]
+    },
+    {
+      "text": " on",
+      "timestamp": [
+        112.1,
+        112.36
+      ]
+    },
+    {
+      "text": "-screen",
+      "timestamp": [
+        112.36,
+        112.58
+      ]
+    },
+    {
+      "text": " content,",
+      "timestamp": [
+        112.58,
+        113.56
+      ]
+    },
+    {
+      "text": " filtering",
+      "timestamp": [
+        113.56,
+        113.96
+      ]
+    },
+    {
+      "text": " out",
+      "timestamp": [
+        113.96,
+        114.24
+      ]
+    },
+    {
+      "text": " brief",
+      "timestamp": [
+        114.24,
+        114.52
+      ]
+    },
+    {
+      "text": " movement.",
+      "timestamp": [
+        114.52,
+        115.88
+      ]
+    },
+    {
+      "text": " Selected",
+      "timestamp": [
+        115.98,
+        116.36
+      ]
+    },
+    {
+      "text": " keyframes",
+      "timestamp": [
+        116.36,
+        116.84
+      ]
+    },
+    {
+      "text": " then",
+      "timestamp": [
+        116.84,
+        117.14
+      ]
+    },
+    {
+      "text": " pass",
+      "timestamp": [
+        117.14,
+        117.42
+      ]
+    },
+    {
+      "text": " through",
+      "timestamp": [
+        117.42,
+        117.74
+      ]
+    },
+    {
+      "text": " local",
+      "timestamp": [
+        117.74,
+        118.16
+      ]
+    },
+    {
+      "text": " OCR",
+      "timestamp": [
+        118.16,
+        118.6
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        118.6,
+        119.26
+      ]
+    },
+    {
+      "text": " make",
+      "timestamp": [
+        119.26,
+        119.4
+      ]
+    },
+    {
+      "text": " on",
+      "timestamp": [
+        119.4,
+        119.74
+      ]
+    },
+    {
+      "text": "-screen",
+      "timestamp": [
+        119.74,
+        120.02
+      ]
+    },
+    {
+      "text": " text",
+      "timestamp": [
+        120.02,
+        120.44
+      ]
+    },
+    {
+      "text": " searchable.",
+      "timestamp": [
+        120.44,
+        121.94
+      ]
+    },
+    {
+      "text": " Because",
+      "timestamp": [
+        121.98,
+        122.2
+      ]
+    },
+    {
+      "text": " this",
+      "timestamp": [
+        122.2,
+        122.38
+      ]
+    },
+    {
+      "text": " takes",
+      "timestamp": [
+        122.38,
+        122.6
+      ]
+    },
+    {
+      "text": " time,",
+      "timestamp": [
+        122.6,
+        123.42
+      ]
+    },
+    {
+      "text": " capabilities",
+      "timestamp": [
+        123.42,
+        123.82
+      ]
+    },
+    {
+      "text": " become",
+      "timestamp": [
+        123.82,
+        124.38
+      ]
+    },
+    {
+      "text": " available",
+      "timestamp": [
+        124.38,
+        124.72
+      ]
+    },
+    {
+      "text": " progressively.",
+      "timestamp": [
+        124.72,
+        126.12
+      ]
+    },
+    {
+      "text": " Users",
+      "timestamp": [
+        126.54,
+        126.68
+      ]
+    },
+    {
+      "text": " can",
+      "timestamp": [
+        126.68,
+        126.98
+      ]
+    },
+    {
+      "text": " start",
+      "timestamp": [
+        126.98,
+        127.26
+      ]
+    },
+    {
+      "text": " chatting",
+      "timestamp": [
+        127.26,
+        127.44
+      ]
+    },
+    {
+      "text": " about",
+      "timestamp": [
+        127.44,
+        127.82
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        127.82,
+        127.96
+      ]
+    },
+    {
+      "text": " transcript",
+      "timestamp": [
+        127.96,
+        128.34
+      ]
+    },
+    {
+      "text": " while",
+      "timestamp": [
+        128.34,
+        128.92
+      ]
+    },
+    {
+      "text": " visual",
+      "timestamp": [
+        128.92,
+        129.26
+      ]
+    },
+    {
+      "text": " processing",
+      "timestamp": [
+        129.26,
+        129.8
+      ]
+    },
+    {
+      "text": " continues.",
+      "timestamp": [
+        129.8,
+        131.4
+      ]
+    },
+    {
+      "text": " Visual",
+      "timestamp": [
+        131.4,
+        131.6
+      ]
+    },
+    {
+      "text": " search",
+      "timestamp": [
+        131.6,
+        132.02
+      ]
+    },
+    {
+      "text": " becomes",
+      "timestamp": [
+        132.42,
+        132.42
+      ]
+    },
+    {
+      "text": " available",
+      "timestamp": [
+        132.42,
+        132.68
+      ]
+    },
+    {
+      "text": " next,",
+      "timestamp": [
+        132.68,
+        133.8
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        133.8,
+        133.9
+      ]
+    },
+    {
+      "text": " OCR",
+      "timestamp": [
+        133.9,
+        134.36
+      ]
+    },
+    {
+      "text": " coverage",
+      "timestamp": [
+        134.36,
+        134.78
+      ]
+    },
+    {
+      "text": " expands",
+      "timestamp": [
+        134.78,
+        135.38
+      ]
+    },
+    {
+      "text": " as",
+      "timestamp": [
+        135.38,
+        135.88
+      ]
+    },
+    {
+      "text": " more",
+      "timestamp": [
+        135.88,
+        136.2
+      ]
+    },
+    {
+      "text": " keyframes",
+      "timestamp": [
+        136.2,
+        136.72
+      ]
+    },
+    {
+      "text": " are",
+      "timestamp": [
+        136.72,
+        136.94
+      ]
+    },
+    {
+      "text": " processed.",
+      "timestamp": [
+        136.94,
+        138.46
+      ]
+    },
+    {
+      "text": " So,",
+      "timestamp": [
+        138.88,
+        139.34
+      ]
+    },
+    {
+      "text": " how",
+      "timestamp": [
+        139.34,
+        139.64
+      ]
+    },
+    {
+      "text": " does",
+      "timestamp": [
+        139.64,
+        139.76
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        139.76,
+        139.9
+      ]
+    },
+    {
+      "text": " agent",
+      "timestamp": [
+        139.9,
+        140.14
+      ]
+    },
+    {
+      "text": " use",
+      "timestamp": [
+        140.14,
+        140.54
+      ]
+    },
+    {
+      "text": " all",
+      "timestamp": [
+        140.54,
+        140.82
+      ]
+    },
+    {
+      "text": " this",
+      "timestamp": [
+        140.82,
+        140.94
+      ]
+    },
+    {
+      "text": " information?",
+      "timestamp": [
+        140.94,
+        142.24
+      ]
+    },
+    {
+      "text": " It",
+      "timestamp": [
+        142.38,
+        142.44
+      ]
+    },
+    {
+      "text": " calls",
+      "timestamp": [
+        142.44,
+        142.68
+      ]
+    },
+    {
+      "text": " tools",
+      "timestamp": [
+        142.68,
+        143.04
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        143.04,
+        143.42
+      ]
+    },
+    {
+      "text": " search",
+      "timestamp": [
+        143.42,
+        143.62
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        143.62,
+        143.88
+      ]
+    },
+    {
+      "text": " video",
+      "timestamp": [
+        143.88,
+        144.22
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        144.48,
+        144.5
+      ]
+    },
+    {
+      "text": " inspect",
+      "timestamp": [
+        144.5,
+        144.8
+      ]
+    },
+    {
+      "text": " specific",
+      "timestamp": [
+        144.8,
+        145.24
+      ]
+    },
+    {
+      "text": " moments,",
+      "timestamp": [
+        145.24,
+        146.3
+      ]
+    },
+    {
+      "text": " retrieving",
+      "timestamp": [
+        146.3,
+        146.72
+      ]
+    },
+    {
+      "text": " focused",
+      "timestamp": [
+        146.72,
+        147.26
+      ]
+    },
+    {
+      "text": " evidence",
+      "timestamp": [
+        147.26,
+        147.78
+      ]
+    },
+    {
+      "text": " without",
+      "timestamp": [
+        148.18,
+        148.18
+      ]
+    },
+    {
+      "text": " loading",
+      "timestamp": [
+        148.18,
+        148.66
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        148.66,
+        148.88
+      ]
+    },
+    {
+      "text": " entire",
+      "timestamp": [
+        148.88,
+        149.22
+      ]
+    },
+    {
+      "text": " transcript",
+      "timestamp": [
+        149.22,
+        149.84
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        149.84,
+        150.14
+      ]
+    },
+    {
+      "text": " every",
+      "timestamp": [
+        150.14,
+        150.48
+      ]
+    },
+    {
+      "text": " image",
+      "timestamp": [
+        150.48,
+        150.86
+      ]
+    },
+    {
+      "text": " into",
+      "timestamp": [
+        151.28,
+        151.28
+      ]
+    },
+    {
+      "text": " its",
+      "timestamp": [
+        151.28,
+        151.44
+      ]
+    },
+    {
+      "text": " context.",
+      "timestamp": [
+        151.44,
+        152.74
+      ]
+    },
+    {
+      "text": " For",
+      "timestamp": [
+        152.9,
+        152.98
+      ]
+    },
+    {
+      "text": " questions",
+      "timestamp": [
+        152.98,
+        153.26
+      ]
+    },
+    {
+      "text": " about",
+      "timestamp": [
+        153.26,
+        153.6
+      ]
+    },
+    {
+      "text": " spoken",
+      "timestamp": [
+        153.6,
+        153.96
+      ]
+    },
+    {
+      "text": " content,",
+      "timestamp": [
+        153.96,
+        155.1
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        155.16,
+        155.18
+      ]
+    },
+    {
+      "text": " agent",
+      "timestamp": [
+        155.18,
+        155.44
+      ]
+    },
+    {
+      "text": " can",
+      "timestamp": [
+        155.44,
+        155.66
+      ]
+    },
+    {
+      "text": " explore",
+      "timestamp": [
+        155.66,
+        156.04
+      ]
+    },
+    {
+      "text": " chapter",
+      "timestamp": [
+        156.04,
+        156.38
+      ]
+    },
+    {
+      "text": " titles",
+      "timestamp": [
+        156.4,
+        156.9
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        156.9,
+        157.1
+      ]
+    },
+    {
+      "text": " summaries",
+      "timestamp": [
+        157.1,
+        157.66
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        157.66,
+        157.88
+      ]
+    },
+    {
+      "text": " identify",
+      "timestamp": [
+        158.36,
+        158.36
+      ]
+    },
+    {
+      "text": " relevant",
+      "timestamp": [
+        158.36,
+        158.68
+      ]
+    },
+    {
+      "text": " sections",
+      "timestamp": [
+        158.68,
+        159.12
+      ]
+    },
+    {
+      "text": " or",
+      "timestamp": [
+        159.12,
+        160.04
+      ]
+    },
+    {
+      "text": " use",
+      "timestamp": [
+        160.04,
+        160.3
+      ]
+    },
+    {
+      "text": " semantic",
+      "timestamp": [
+        160.3,
+        160.66
+      ]
+    },
+    {
+      "text": " search",
+      "timestamp": [
+        160.66,
+        161.06
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        161.06,
+        161.36
+      ]
+    },
+    {
+      "text": " find",
+      "timestamp": [
+        161.36,
+        161.56
+      ]
+    },
+    {
+      "text": " specific",
+      "timestamp": [
+        161.56,
+        162.04
+      ]
+    },
+    {
+      "text": " passages.",
+      "timestamp": [
+        162.04,
+        163.16
+      ]
+    },
+    {
+      "text": " It",
+      "timestamp": [
+        163.26,
+        163.26
+      ]
+    },
+    {
+      "text": " can",
+      "timestamp": [
+        163.26,
+        163.42
+      ]
+    },
+    {
+      "text": " then",
+      "timestamp": [
+        163.42,
+        163.62
+      ]
+    },
+    {
+      "text": " retrieve",
+      "timestamp": [
+        163.62,
+        163.98
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        163.98,
+        164.22
+      ]
+    },
+    {
+      "text": " full",
+      "timestamp": [
+        164.22,
+        164.5
+      ]
+    },
+    {
+      "text": " chapter",
+      "timestamp": [
+        164.5,
+        164.88
+      ]
+    },
+    {
+      "text": " or",
+      "timestamp": [
+        164.88,
+        165.5
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        165.5,
+        165.64
+      ]
+    },
+    {
+      "text": " memory",
+      "timestamp": [
+        165.64,
+        165.98
+      ]
+    },
+    {
+      "text": " with",
+      "timestamp": [
+        165.98,
+        166.4
+      ]
+    },
+    {
+      "text": " its",
+      "timestamp": [
+        166.4,
+        166.5
+      ]
+    },
+    {
+      "text": " surrounding",
+      "timestamp": [
+        166.5,
+        166.92
+      ]
+    },
+    {
+      "text": " passages",
+      "timestamp": [
+        166.92,
+        167.46
+      ]
+    },
+    {
+      "text": " for",
+      "timestamp": [
+        167.46,
+        167.86
+      ]
+    },
+    {
+      "text": " context.",
+      "timestamp": [
+        167.86,
+        169.18
+      ]
+    },
+    {
+      "text": " For",
+      "timestamp": [
+        169.18,
+        169.32
+      ]
+    },
+    {
+      "text": " visual",
+      "timestamp": [
+        169.32,
+        169.56
+      ]
+    },
+    {
+      "text": " questions,",
+      "timestamp": [
+        169.56,
+        170.52
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        170.52,
+        170.66
+      ]
+    },
+    {
+      "text": " search",
+      "timestamp": [
+        170.66,
+        170.86
+      ]
+    },
+    {
+      "text": " tool",
+      "timestamp": [
+        170.86,
+        171.18
+      ]
+    },
+    {
+      "text": " finds",
+      "timestamp": [
+        171.18,
+        171.56
+      ]
+    },
+    {
+      "text": " candidate",
+      "timestamp": [
+        171.56,
+        172.06
+      ]
+    },
+    {
+      "text": " moments.",
+      "timestamp": [
+        172.06,
+        173.46
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        173.46,
+        173.56
+      ]
+    },
+    {
+      "text": " agent",
+      "timestamp": [
+        173.56,
+        173.84
+      ]
+    },
+    {
+      "text": " then",
+      "timestamp": [
+        173.84,
+        174.18
+      ]
+    },
+    {
+      "text": " uses",
+      "timestamp": [
+        174.18,
+        174.52
+      ]
+    },
+    {
+      "text": " inspection",
+      "timestamp": [
+        174.52,
+        174.92
+      ]
+    },
+    {
+      "text": " tools.",
+      "timestamp": [
+        174.92,
+        176.38
+      ]
+    },
+    {
+      "text": " One",
+      "timestamp": [
+        176.56,
+        176.56
+      ]
+    },
+    {
+      "text": " combines",
+      "timestamp": [
+        176.56,
+        176.96
+      ]
+    },
+    {
+      "text": " frames",
+      "timestamp": [
+        176.96,
+        177.32
+      ]
+    },
+    {
+      "text": " from",
+      "timestamp": [
+        177.32,
+        177.68
+      ]
+    },
+    {
+      "text": " different",
+      "timestamp": [
+        177.68,
+        177.9
+      ]
+    },
+    {
+      "text": " moments",
+      "timestamp": [
+        177.9,
+        178.34
+      ]
+    },
+    {
+      "text": " into",
+      "timestamp": [
+        178.34,
+        178.8
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        178.8,
+        178.96
+      ]
+    },
+    {
+      "text": " single",
+      "timestamp": [
+        178.96,
+        179.3
+      ]
+    },
+    {
+      "text": " image",
+      "timestamp": [
+        179.3,
+        179.66
+      ]
+    },
+    {
+      "text": " for",
+      "timestamp": [
+        179.66,
+        179.92
+      ]
+    },
+    {
+      "text": " comparison.",
+      "timestamp": [
+        179.92,
+        181.34
+      ]
+    },
+    {
+      "text": " Another",
+      "timestamp": [
+        181.34,
+        181.72
+      ]
+    },
+    {
+      "text": " presents",
+      "timestamp": [
+        181.72,
+        182.1
+      ]
+    },
+    {
+      "text": " frames",
+      "timestamp": [
+        182.1,
+        182.5
+      ]
+    },
+    {
+      "text": " in",
+      "timestamp": [
+        182.5,
+        182.78
+      ]
+    },
+    {
+      "text": " chronological",
+      "timestamp": [
+        182.78,
+        183.0
+      ]
+    },
+    {
+      "text": " order",
+      "timestamp": [
+        183.0,
+        183.82
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        183.82,
+        184.24
+      ]
+    },
+    {
+      "text": " examine",
+      "timestamp": [
+        184.24,
+        184.6
+      ]
+    },
+    {
+      "text": " how",
+      "timestamp": [
+        184.6,
+        185.02
+      ]
+    },
+    {
+      "text": " an",
+      "timestamp": [
+        185.02,
+        185.18
+      ]
+    },
+    {
+      "text": " action",
+      "timestamp": [
+        185.18,
+        185.42
+      ]
+    },
+    {
+      "text": " unfolds.",
+      "timestamp": [
+        185.42,
+        186.9
+      ]
+    },
+    {
+      "text": " A",
+      "timestamp": [
+        187.32,
+        187.32
+      ]
+    },
+    {
+      "text": " separate",
+      "timestamp": [
+        187.32,
+        187.64
+      ]
+    },
+    {
+      "text": " vision",
+      "timestamp": [
+        187.64,
+        187.94
+      ]
+    },
+    {
+      "text": " model",
+      "timestamp": [
+        187.94,
+        188.34
+      ]
+    },
+    {
+      "text": " analyzes",
+      "timestamp": [
+        188.34,
+        189.16
+      ]
+    },
+    {
+      "text": " these",
+      "timestamp": [
+        189.16,
+        189.36
+      ]
+    },
+    {
+      "text": " images",
+      "timestamp": [
+        189.36,
+        189.74
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        189.74,
+        190.2
+      ]
+    },
+    {
+      "text": " returns",
+      "timestamp": [
+        190.2,
+        190.46
+      ]
+    },
+    {
+      "text": " focused",
+      "timestamp": [
+        190.46,
+        191.02
+      ]
+    },
+    {
+      "text": " observations,",
+      "timestamp": [
+        191.02,
+        191.84
+      ]
+    },
+    {
+      "text": " which",
+      "timestamp": [
+        191.84,
+        192.54
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        192.54,
+        192.74
+      ]
+    },
+    {
+      "text": " main",
+      "timestamp": [
+        192.96,
+        192.96
+      ]
+    },
+    {
+      "text": " agent",
+      "timestamp": [
+        192.96,
+        193.38
+      ]
+    },
+    {
+      "text": " combines",
+      "timestamp": [
+        193.38,
+        193.68
+      ]
+    },
+    {
+      "text": " with",
+      "timestamp": [
+        193.68,
+        194.24
+      ]
+    },
+    {
+      "text": " transcript",
+      "timestamp": [
+        194.24,
+        194.56
+      ]
+    },
+    {
+      "text": " evidence",
+      "timestamp": [
+        194.56,
+        195.0
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        195.0,
+        195.4
+      ]
+    },
+    {
+      "text": " answer.",
+      "timestamp": [
+        195.4,
+        197.06
+      ]
+    },
+    {
+      "text": " A",
+      "timestamp": [
+        197.48,
+        197.54
+      ]
+    },
+    {
+      "text": " fixed",
+      "timestamp": [
+        197.54,
+        197.88
+      ]
+    },
+    {
+      "text": " visual",
+      "timestamp": [
+        197.88,
+        198.18
+      ]
+    },
+    {
+      "text": " budget",
+      "timestamp": [
+        198.18,
+        198.66
+      ]
+    },
+    {
+      "text": " limits",
+      "timestamp": [
+        198.66,
+        199.1
+      ]
+    },
+    {
+      "text": " searches",
+      "timestamp": [
+        199.1,
+        199.5
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        199.5,
+        199.9
+      ]
+    },
+    {
+      "text": " inspections",
+      "timestamp": [
+        199.9,
+        200.2
+      ]
+    },
+    {
+      "text": " per",
+      "timestamp": [
+        200.2,
+        200.64
+      ]
+    },
+    {
+      "text": " answer.",
+      "timestamp": [
+        200.64,
+        201.78
+      ]
+    },
+    {
+      "text": " Once",
+      "timestamp": [
+        202.04,
+        202.04
+      ]
+    },
+    {
+      "text": " exhausted,",
+      "timestamp": [
+        202.04,
+        202.9
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        202.9,
+        203.1
+      ]
+    },
+    {
+      "text": " agent",
+      "timestamp": [
+        203.1,
+        203.36
+      ]
+    },
+    {
+      "text": " must",
+      "timestamp": [
+        203.36,
+        203.74
+      ]
+    },
+    {
+      "text": " use",
+      "timestamp": [
+        203.74,
+        204.0
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        204.0,
+        204.18
+      ]
+    },
+    {
+      "text": " evidence",
+      "timestamp": [
+        204.18,
+        204.44
+      ]
+    },
+    {
+      "text": " collected",
+      "timestamp": [
+        204.44,
+        204.86
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        204.86,
+        205.36
+      ]
+    },
+    {
+      "text": " acknowledge",
+      "timestamp": [
+        205.36,
+        205.76
+      ]
+    },
+    {
+      "text": " what",
+      "timestamp": [
+        205.76,
+        206.16
+      ]
+    },
+    {
+      "text": " it",
+      "timestamp": [
+        206.16,
+        206.24
+      ]
+    },
+    {
+      "text": " could",
+      "timestamp": [
+        206.24,
+        206.4
+      ]
+    },
+    {
+      "text": " not",
+      "timestamp": [
+        206.4,
+        206.66
+      ]
+    },
+    {
+      "text": " confirm.",
+      "timestamp": [
+        207.04,
+        207.74
+      ]
+    },
+    {
+      "text": " Finally,",
+      "timestamp": [
+        207.8,
+        208.88
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        208.86,
+        209.1
+      ]
+    },
+    {
+      "text": " streaming",
+      "timestamp": [
+        209.1,
+        209.44
+      ]
+    },
+    {
+      "text": " filter",
+      "timestamp": [
+        209.44,
+        209.84
+      ]
+    },
+    {
+      "text": " removes",
+      "timestamp": [
+        210.48,
+        210.48
+      ]
+    },
+    {
+      "text": " time",
+      "timestamp": [
+        210.48,
+        210.8
+      ]
+    },
+    {
+      "text": " stamp",
+      "timestamp": [
+        210.8,
+        211.08
+      ]
+    },
+    {
+      "text": " citations",
+      "timestamp": [
+        211.08,
+        211.54
+      ]
+    },
+    {
+      "text": " outside",
+      "timestamp": [
+        211.54,
+        212.14
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        212.14,
+        212.54
+      ]
+    },
+    {
+      "text": " range's",
+      "timestamp": [
+        212.54,
+        212.9
+      ]
+    },
+    {
+      "text": " return",
+      "timestamp": [
+        212.9,
+        213.22
+      ]
+    },
+    {
+      "text": " by",
+      "timestamp": [
+        213.22,
+        213.46
+      ]
+    },
+    {
+      "text": " tools.",
+      "timestamp": [
+        213.46,
+        214.38
+      ]
+    },
+    {
+      "text": " This",
+      "timestamp": [
+        214.38,
+        214.74
+      ]
+    },
+    {
+      "text": " validates",
+      "timestamp": [
+        214.74,
+        215.3
+      ]
+    },
+    {
+      "text": " time",
+      "timestamp": [
+        215.3,
+        215.56
+      ]
+    },
+    {
+      "text": " stamp",
+      "timestamp": [
+        215.56,
+        215.86
+      ]
+    },
+    {
+      "text": " support.",
+      "timestamp": [
+        215.86,
+        217.58
+      ]
+    },
+    {
+      "text": " The",
+      "timestamp": [
+        218.42,
+        218.54
+      ]
+    },
+    {
+      "text": " website",
+      "timestamp": [
+        218.54,
+        218.76
+      ]
+    },
+    {
+      "text": " brings",
+      "timestamp": [
+        218.76,
+        219.12
+      ]
+    },
+    {
+      "text": " the",
+      "timestamp": [
+        219.12,
+        219.36
+      ]
+    },
+    {
+      "text": " video,",
+      "timestamp": [
+        219.36,
+        220.02
+      ]
+    },
+    {
+      "text": " conversations,",
+      "timestamp": [
+        220.02,
+        221.06
+      ]
+    },
+    {
+      "text": " transcript,",
+      "timestamp": [
+        221.06,
+        221.86
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        221.86,
+        221.98
+      ]
+    },
+    {
+      "text": " chapters",
+      "timestamp": [
+        221.98,
+        222.38
+      ]
+    },
+    {
+      "text": " into",
+      "timestamp": [
+        222.38,
+        222.8
+      ]
+    },
+    {
+      "text": " one",
+      "timestamp": [
+        222.8,
+        223.12
+      ]
+    },
+    {
+      "text": " workspace.",
+      "timestamp": [
+        223.12,
+        224.28
+      ]
+    },
+    {
+      "text": " A",
+      "timestamp": [
+        223.76,
+        224.2
+      ]
+    },
+    {
+      "text": " personal",
+      "timestamp": [
+        224.2,
+        224.96
+      ]
+    },
+    {
+      "text": " library",
+      "timestamp": [
+        224.96,
+        225.4
+      ]
+    },
+    {
+      "text": " keeps",
+      "timestamp": [
+        225.36,
+        225.86
+      ]
+    },
+    {
+      "text": " saved",
+      "timestamp": [
+        225.86,
+        226.28
+      ]
+    },
+    {
+      "text": " videos",
+      "timestamp": [
+        226.28,
+        226.66
+      ]
+    },
+    {
+      "text": " accessible,",
+      "timestamp": [
+        226.66,
+        227.74
+      ]
+    },
+    {
+      "text": " so",
+      "timestamp": [
+        227.74,
+        227.88
+      ]
+    },
+    {
+      "text": " users",
+      "timestamp": [
+        227.88,
+        228.16
+      ]
+    },
+    {
+      "text": " can",
+      "timestamp": [
+        228.16,
+        228.4
+      ]
+    },
+    {
+      "text": " return",
+      "timestamp": [
+        228.4,
+        228.64
+      ]
+    },
+    {
+      "text": " to",
+      "timestamp": [
+        228.64,
+        229.0
+      ]
+    },
+    {
+      "text": " a",
+      "timestamp": [
+        229.0,
+        229.1
+      ]
+    },
+    {
+      "text": " video",
+      "timestamp": [
+        229.1,
+        229.34
+      ]
+    },
+    {
+      "text": " and",
+      "timestamp": [
+        229.34,
+        229.64
+      ]
+    },
+    {
+      "text": " continue",
+      "timestamp": [
+        229.64,
+        230.08
+      ]
+    },
+    {
+      "text": " exploring",
+      "timestamp": [
+        230.66,
+        230.66
+      ]
+    },
+    {
+      "text": " without",
+      "timestamp": [
+        230.66,
+        230.92
+      ]
+    },
+    {
+      "text": " starting",
+      "timestamp": [
+        230.92,
+        231.48
+      ]
+    },
+    {
+      "text": " over.",
+      "timestamp": [
+        231.48,
+        231.94
+      ]
+    }
+  ]
+}
