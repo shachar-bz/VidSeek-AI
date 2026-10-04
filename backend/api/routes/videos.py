@@ -78,6 +78,7 @@ def _pin_response(pin) -> PinnedAnswer:
         message_id=pin.message_id,
         conversation_id=pin.conversation_id,
         content=pin.content,
+        message_created_at=pin.message_created_at,
         pinned_at=pin.pinned_at,
     )
 

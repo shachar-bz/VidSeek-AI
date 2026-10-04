@@ -173,6 +173,7 @@ class PinnedAnswer(BaseModel):
     message_id: str
     conversation_id: str
     content: str
+    message_created_at: str
     pinned_at: str
 
 

@@ -260,6 +260,8 @@ export interface PinnedAnswer {
   message_id: string;
   conversation_id: string;
   content: string;
+  /** When the pinned message itself was sent, as opposed to when it was pinned. */
+  message_created_at: string;
   pinned_at: string;
 }
 
