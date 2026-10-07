@@ -4,11 +4,11 @@ A map of where each part of VidSeek AI lives. For the architecture itself, see t
 
 ```text
 VidSeek-AI/
-├── backend/                     Python · FastAPI local companion
+├── backend/                     Python · FastAPI backend
 │   ├── app.py                   ASGI entry point (uvicorn backend.app:app)
 │   ├── api/                     App factory, auth dependencies, model preloading
 │   │   └── routes/              auth · sessions · account · library (+ SSE events) · video_jobs · videos · conversations (SSE chat)
-│   ├── core/                    Config, security (SSRF guard, loopback, origins), auth, source-URL canonicalisation, caption parsing
+│   ├── core/                    Config, security (SSRF guard, origin checks), auth, source-URL canonicalisation, caption parsing
 │   ├── schemas/                 Pydantic request/response models, readiness stages
 │   ├── download_pipeline/       Ingestion orchestration: acquire → store → segment → embed → insights, plus visual indexing
 │   │                            and maintenance CLIs (reembed_stale_videos, reindex_visually, resume_keyframe_text, …)
@@ -74,4 +74,4 @@ These modules are kept for reference. The running product does not import them:
 | Path | What it is |
 |---|---|
 | `backend/services/shot_detection/` | Offline comparison of three shot detectors (TransNetV2, PySceneDetect, OmniShotCut), with sample results. Production segmentation uses SigLIP + perceptual-hash content change instead. |
-| `backend/services/transcription/openai_pipeline/` | An alternative transcription path: OpenAI speech-to-text with local torchaudio MMS word alignment. Production uses captions or ElevenLabs. |
+| `backend/services/transcription/openai_pipeline/` | An alternative transcription path: OpenAI speech-to-text with torchaudio MMS word alignment. Production uses captions or ElevenLabs. |
