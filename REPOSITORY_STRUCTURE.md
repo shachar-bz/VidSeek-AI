@@ -61,8 +61,7 @@ VidSeek-AI/
 │   │   └── pages/               library · video (player, transcript, summary, chat, pins) · account · setup · auth
 │   └── tests/                   Vitest + Testing Library suite (87 tests)
 │
-├── images/                      Logos and README images
-└── VIDEO_AGENT_EVAL_REPORT.md   Agent evaluation: 18 tests × 2 runs, grounding and latency
+└── images/                      Logos and README images
 ```
 
 ## Experiments outside the live path
