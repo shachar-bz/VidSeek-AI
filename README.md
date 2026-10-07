@@ -218,15 +218,6 @@ flowchart LR
 - **Citations verified while streaming.** Each `[MM:SS]` is held back until it closes. It is dropped unless both ends fall inside a span a tool returned (±1 s). Spans are stored per message, so follow-up answers can cite earlier evidence.
 - **State-aware tools.** Visual tools stay hidden until the frame index is ready. Each question carries the player's position, so "what's on screen right now?" works.
 
-**Evaluated, not just demoed.** The [evaluation report](VIDEO_AGENT_EVAL_REPORT.md) runs 18 scenario tests on 6 videos, twice each, through the production agent. Every claim was checked against the database and extracted frames.
-
-- 16 of the 18 tests pass in both runs.
-- The agent invented 0 facts.
-- Every citation in all 36 answers falls inside a tool-returned span.
-- Median latency is about 9–10 s.
-
-The remaining failures are documented with their root causes.
-
 ---
 
 ## Web app
