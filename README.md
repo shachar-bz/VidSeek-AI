@@ -23,11 +23,11 @@
 
 ## 🎬 Watch it
 
-| [![Product promo](images/readme/video-promo.jpg)](https://github.com/shachar-bz/VidSeek-AI/releases/download/v1.0.0/vidseek-promo.mp4) | [![Architecture walkthrough](images/readme/video-walkthrough.jpg)](https://github.com/shachar-bz/VidSeek-AI/releases/download/v1.0.0/vidseek-architecture-walkthrough.mp4) | [![Full video](images/readme/video-full.jpg)](https://github.com/shachar-bz/VidSeek-AI/releases/download/v1.0.0/vidseek-full-video.mp4) |
+| [![Product promo](images/readme/video-promo.jpg)](https://drive.google.com/file/d/1nLpSrvlrQ4ulZq_ih36OZMnX-x2wVjbm/view?usp=sharing) | [![Architecture walkthrough](images/readme/video-walkthrough.jpg)](https://drive.google.com/file/d/1XM35D6wu7_r2d-2qUCMLTYBHydQmCYWz/view?usp=sharing) | [![Full video](images/readme/video-full.jpg)](https://drive.google.com/file/d/190IBrqsLmJo0ctHglXR8zCOwi_hUDnVc/view?usp=sharing) |
 |:--:|:--:|:--:|
 | **Product promo** · 1:19 | **Architecture walkthrough** · 3:54<br/>How it works and the decisions behind it | **Full video** · 5:13<br/>Promo followed by the walkthrough |
 
-<sub>All three videos are attached to the <a href="https://github.com/shachar-bz/VidSeek-AI/releases/tag/v1.0.0">v1.0.0 release</a>.</sub>
+<sub>All three videos open in Google Drive. The <code>.mp4</code> files are also attached to the <a href="https://github.com/shachar-bz/VidSeek-AI/releases/tag/v1.0.0">v1.0.0 release</a>.</sub>
 
 ---
 
