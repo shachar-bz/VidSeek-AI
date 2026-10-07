@@ -61,8 +61,6 @@ VidSeek-AI/
 │   │   └── pages/               library · video (player, transcript, summary, chat, pins) · account · setup · auth
 │   └── tests/                   Vitest + Testing Library suite (87 tests)
 │
-├── promo-video/                 Remotion project for the 79-second product promo
-├── explain-video/               Scene SVGs, timeline and build scripts for the architecture walkthrough
 ├── images/                      Logos and README images
 └── VIDEO_AGENT_EVAL_REPORT.md   Agent evaluation: 18 tests × 2 runs, grounding and latency
 ```

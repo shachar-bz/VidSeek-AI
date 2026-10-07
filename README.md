@@ -55,36 +55,75 @@ VidSeek AI gets the video from the page you're watching and indexes both the **s
 
 ---
 
+## Extension & video ingestion
+
+<img src="images/readme/extension-youtube.jpg" alt="VidSeek AI side panel open next to a YouTube video, showing the video summary and suggested questions" width="100%" />
+
+The extension is a Manifest V3 side panel: *Find video → Scan video → live progress → chat*.
+
+| Signal | How it is read |
+|---|---|
+| Page DOM | `<video>`, `<source>`, `<track>`, in-memory text tracks and `og:video`, including inside shadow roots |
+| Embedded players | Every frame is inspected in its own context; YouTube embeds are recognised |
+| Network | Resource Timing, plus opt-in Chrome DevTools Protocol capture during a playback check |
+| Player data | JSON, JSON-LD and inline-script JSON, parsed without `eval` |
+| Captions | Track files fetched *inside the frame that owns them*, with the page's own credentials |
+
+- **Main content vs. ads.** Ad hosts and JSON flagged as ads are dropped, and HLS renditions are folded into their master playlist. If streams appear only during playback, a short *playback check* ranks them by length and by how much was played. Short clips are flagged as a likely ad or intro.
+- **Transcript panels without site-specific code.** The extension reads an open transcript panel by its accessibility labels, scrolling virtualised lists to collect every row. The result is accepted only if it covers the whole video.
+- **DRM is refused, not bypassed.** Protection is detected from manifest tags, license-server traffic and an EME monitor. If DRM is found, nothing is downloaded.
+- **LLM fallback for unfamiliar player JSON.** `gpt-6.1-sol` sees only a privacy-preserving inventory: paths, hosts, key names and value types. It never sees full URLs, cookies or caption text, and it returns only field mappings. The backend validates those mappings against every row and abstains on any violation.
+
+| Source | Acquisition |
+|---|---|
+| **YouTube** | yt-dlp, plus top comments via the YouTube Data API |
+| **Direct file** | `chrome.downloads` in the user's own session |
+| **HLS / DASH / embedded player** | yt-dlp + FFmpeg with the user's cookies and allow-listed headers |
+
+Transcripts reuse existing captions whenever possible. The order is page captions, then platform subtitles, then forced alignment of untimed English text, with ElevenLabs Scribe speech-to-text as the last resort. The promo shows the product working on **YouTube, Coursera, TED, Internet Archive and Moodle/Panopto**.
+
+**Security**
+- **Locked-down API.**
+  - CORS and extension-ID allowlists, plus session tokens bound to the requesting origin.
+  - An SSRF guard requires every resolved IP to be public and re-checks each download request and redirect.
+- **Minimal credential exposure.**
+  - Forwarded headers are allow-listed, and `Authorization` is stripped on cross-origin requests.
+  - Cookies go into a `0600` jar that is deleted after use, and cookies and headers are wiped from memory when the job ends.
+  - Host permissions are requested per origin and revoked after each job.
+- **Validated media.** Every download must pass `ffprobe` with a real video stream.
+
+---
+
 ## Architecture
 
 ```mermaid
-flowchart TB
-  subgraph Browser["User's browser"]
-    direction LR
-    EXT["Chrome extension<br/>side panel"]
-    WEB["Web app<br/>React"]
+flowchart LR
+  subgraph Clients["User's browser"]
+    direction TB
+    EXT["Chrome extension<br/>finds the video in the tab"]
+    WEB["Web app<br/>library · workspace · chat"]
   end
 
   subgraph Backend["FastAPI backend"]
-    API["REST + SSE API<br/>auth · library · jobs · chat"]
-    JOBS["Ingestion pipeline<br/>job + GPU visual workers"]
+    direction TB
+    API["REST + SSE API"]
+    ING["Ingestion pipeline<br/>transcript + visual indexing"]
     AGENT["Video agent<br/>Pydantic AI · 11 tools"]
-    API --> JOBS
-    API --> AGENT
   end
 
-  MODELS["Embedding & OCR models<br/>multilingual-e5 · SigLIP 2<br/>Surya OCR"]
-  AZURE[("Azure<br/>PostgreSQL + pgvector<br/>Blob Storage")]
-  HOSTED["Hosted APIs<br/>OpenAI · ElevenLabs Scribe<br/>YouTube Data API"]
+  subgraph Services["Data & AI services"]
+    direction TB
+    DB[("Azure<br/>PostgreSQL + pgvector<br/>Blob Storage")]
+    AI["AI models<br/>OpenAI · ElevenLabs<br/>e5 · SigLIP 2 · Surya OCR"]
+  end
 
-  EXT -- "discovered media +<br/>session context" --> API
-  WEB -- "REST · SSE" --> API
-  JOBS --> MODELS
-  JOBS --> AZURE
-  JOBS --> HOSTED
-  AGENT --> MODELS
-  AGENT --> AZURE
-  AGENT --> HOSTED
+  EXT --> API
+  WEB --> API
+  API -- "scan" --> ING
+  API -- "ask" --> AGENT
+  ING -- "writes index" --> DB
+  AGENT -- "retrieves evidence" --> DB
+  Backend -.-> AI
 ```
 
 **Life of a video:** *Find* (extension) → *Scan* (job, deduplicated by source) → *Acquire* (media + timed transcript) → *Index* (text and visual lanes in parallel) → *Ask* (agent + verified citations). The web app and the extension share one account, one API and the same conversations.
@@ -190,45 +229,6 @@ The remaining failures are documented with their root causes.
 
 ---
 
-## Extension & video ingestion
-
-<img src="images/readme/extension-youtube.jpg" alt="VidSeek AI side panel open next to a YouTube video, showing the video summary and suggested questions" width="100%" />
-
-The extension is a Manifest V3 side panel: *Find video → Scan video → live progress → chat*.
-
-| Signal | How it is read |
-|---|---|
-| Page DOM | `<video>`, `<source>`, `<track>`, in-memory text tracks and `og:video`, including inside shadow roots |
-| Embedded players | Every frame is inspected in its own context; YouTube embeds are recognised |
-| Network | Resource Timing, plus opt-in Chrome DevTools Protocol capture during a playback check |
-| Player data | JSON, JSON-LD and inline-script JSON, parsed without `eval` |
-| Captions | Track files fetched *inside the frame that owns them*, with the page's own credentials |
-
-- **Main content vs. ads.** Ad hosts and JSON flagged as ads are dropped, and HLS renditions are folded into their master playlist. If streams appear only during playback, a short *playback check* ranks them by length and by how much was played. Short clips are flagged as a likely ad or intro.
-- **Transcript panels without site-specific code.** The extension reads an open transcript panel by its accessibility labels, scrolling virtualised lists to collect every row. The result is accepted only if it covers the whole video.
-- **DRM is refused, not bypassed.** Protection is detected from manifest tags, license-server traffic and an EME monitor. If DRM is found, nothing is downloaded.
-- **LLM fallback for unfamiliar player JSON.** `gpt-6.1-sol` sees only a privacy-preserving inventory: paths, hosts, key names and value types. It never sees full URLs, cookies or caption text, and it returns only field mappings. The backend validates those mappings against every row and abstains on any violation.
-
-| Source | Acquisition |
-|---|---|
-| **YouTube** | yt-dlp, plus top comments via the YouTube Data API |
-| **Direct file** | `chrome.downloads` in the user's own session |
-| **HLS / DASH / embedded player** | yt-dlp + FFmpeg with the user's cookies and allow-listed headers |
-
-Transcripts reuse existing captions whenever possible. The order is page captions, then platform subtitles, then forced alignment of untimed English text, with ElevenLabs Scribe speech-to-text as the last resort. The promo shows the product working on **YouTube, Coursera, TED, Internet Archive and Moodle/Panopto**.
-
-**Security**
-- **Locked-down API.**
-  - CORS and extension-ID allowlists, plus session tokens bound to the requesting origin.
-  - An SSRF guard requires every resolved IP to be public and re-checks each download request and redirect.
-- **Minimal credential exposure.**
-  - Forwarded headers are allow-listed, and `Authorization` is stripped on cross-origin requests.
-  - Cookies go into a `0600` jar that is deleted after use, and cookies and headers are wiped from memory when the job ends.
-  - Host permissions are requested per origin and revoked after each job.
-- **Validated media.** Every download must pass `ffprobe` with a real video stream.
-
----
-
 ## Web app
 
 | <img src="images/readme/cited-timestamps.jpg" alt="An answer with clickable timestamp citations in the video workspace" /> | <img src="images/readme/library.jpg" alt="The library with search, tag, source, stage and date filters" /> |
@@ -238,12 +238,6 @@ Transcripts reuse existing captions whenever possible. The order is page caption
 Answers stream as typed SSE events (`token`, `tool_call`, `tool_result`, `message_complete`), with short activity labels such as *"Searching the picture"*. They can be stopped mid-stream, and the partial answer is kept.
 
 ---
-
-## Engineering quality
-
-- **1,224 automated tests:** 1,017 pytest, 87 Vitest for the web app and 120 Vitest for the extension. They cover agent tools, citation filtering, retrieval, pipeline stages, security checks, discovery heuristics and UI flows.
-- **Schema as code:** 29 ordered SQL migrations with an idempotent runner.
-- **Operational tooling:** maintenance CLIs to re-embed stale vectors, rebuild a visual index, resume OCR and repair caption cues. Destructive ones default to a dry run.
 
 See [**REPOSITORY_STRUCTURE.md**](REPOSITORY_STRUCTURE.md) for a map of the codebase.
 
