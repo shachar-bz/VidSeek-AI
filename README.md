@@ -231,9 +231,9 @@ The remaining failures are documented with their root causes.
 
 ## Web app
 
-| <img src="images/readme/cited-timestamps.jpg" alt="An answer with clickable timestamp citations in the video workspace" /> | <img src="images/readme/library.jpg" alt="The library with search, tag, source, stage and date filters" /> |
-|:--:|:--:|
-| **Video workspace:** player, a transcript that follows playback, summary and chapters, multiple chats and pinned answers | **Library:** filters, tags and renaming, with live job progress over SSE |
+| <img src="images/readme/sign-in.jpg" alt="The VidSeek AI sign-in page: a carousel of example questions next to the email and password form" /> | <img src="images/readme/cited-timestamps.jpg" alt="An answer with clickable timestamp citations in the video workspace" /> | <img src="images/readme/library.jpg" alt="The library with search, tag, source, stage and date filters" /> |
+|:--:|:--:|:--:|
+| **One account on both surfaces.** Users sign up with email and password in the web app or the extension's side panel. Both use the same auth API, and every sign-in becomes its own session. | **Video workspace:** player, a transcript that follows playback, summary and chapters, multiple chats and pinned answers | **Library:** filters, tags and renaming, with live job progress over SSE |
 
 Answers stream as typed SSE events (`token`, `tool_call`, `tool_result`, `message_complete`), with short activity labels such as *"Searching the picture"*. They can be stopped mid-stream, and the partial answer is kept.
 
@@ -242,18 +242,6 @@ Answers stream as typed SSE events (`token`, `tool_call`, `tool_result`, `messag
 - **One player, many ways in.** Citations, transcript lines and chapters all seek the same HTML5 player. The transcript highlights the current line and keeps it centred. Scrolling by hand pauses that for 6 s and shows a *Follow playback* button.
 - **Pinned answers stay live.** Opening a pin jumps to that message in its conversation, where its citations are clickable again.
 - **In the extension, the jump happens in your own tab.** The side panel finds the largest loaded `<video>` across every frame of the page and sets its time, so it works with any site's player, YouTube included.
-
-**Accounts & sessions**
-
-<img src="images/readme/sign-in.jpg" alt="The VidSeek AI sign-in page: a carousel of example questions next to the email and password form" width="100%" />
-
-- **One account on both surfaces.** Users sign up with email and password in the web app or the extension's side panel. Both use the same auth API, and every sign-in becomes its own session. The server labels each session `website` or `extension` from the request's `Origin`, never from anything the client sends.
-- **Passwords:** bcrypt with a per-hash salt. Passwords must be 8–72 characters, because bcrypt ignores bytes past 72 and a longer password would be silently truncated.
-- **Sessions:**
-  - Opaque 256-bit bearer tokens, valid for 30 days. Postgres stores only their SHA-256, so a database leak exposes no usable token.
-  - Signing out deletes the session, and changing the password revokes every session. Any `401` signs the client out, so a session revoked elsewhere ends everywhere.
-- **Per-user isolation.** Videos are shared and deduplicated, but each user's library, titles, tags, conversations and pins are scoped to their account. Asking for someone else's video returns `404`.
-- **Private playback.** The player streams from a read-only Azure Blob SAS URL that expires after an hour. The web app fetches a fresh URL 5 minutes early and restores the position and play state, so long viewing sessions don't break.
 
 ---
 
