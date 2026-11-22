@@ -119,7 +119,7 @@ def test_a_trace_entry_still_in_flight_has_no_finish_time() -> None:
     # What a live trace shows while a slow retrieval is running.
     call = ToolCallTrace(
         call_id="c1",
-        tool="memories_semantic_search",
+        tool="search_video_speech",
         arguments={"query": "X"},
         started_at="2026-09-14T10:00:00+00:00",
     )

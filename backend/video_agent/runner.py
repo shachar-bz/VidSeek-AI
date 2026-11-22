@@ -46,7 +46,7 @@ from .tools.get_memory_context import get_memory_context
 from .tools.get_video_info import get_video_info
 from .tools.get_video_outline import get_video_outline
 from .tools.get_viewer_comments import viewer_comments_tool
-from .tools.memories_semantic_search import memories_semantic_search
+from .tools.search_video_speech import search_video_speech
 from .tools.visual_tools import VISUAL_TOOLS
 
 # Every other OpenAI call site in the backend (video_insights, grouper, segmenter,
@@ -58,7 +58,7 @@ PARAGRAPH_BREAK = "\n\n"
 TOOLS = (
     get_video_info,
     get_video_outline,
-    memories_semantic_search,
+    search_video_speech,
     get_chapter_context,
     get_memory_context,
     # Offered only for a video whose visual index is ready; see `tools/visual_tools.py`.

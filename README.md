@@ -200,7 +200,7 @@ flowchart LR
 | Tool | What it does |
 |---|---|
 | `get_video_outline` | Chapter titles, summaries and times |
-| `memories_semantic_search` | Finds passages by meaning (e5 + pgvector, per-video z-score cutoff) |
+| `search_video_speech` | Finds passages by meaning and exact words (e5 + BM25, fused with RRF) |
 | `get_chapter_context` · `get_memory_context` | A whole chapter, or one passage's exact wording with its neighbours |
 | `get_video_info` | Title, source and transcript language |
 | `search_visual_moments` | Natural-language picture search (SigLIP 2 over frames sampled every 2 s) |

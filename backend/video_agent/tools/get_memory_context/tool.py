@@ -104,7 +104,7 @@ def _clamp(context_range: int) -> int:
 def _load_target(ctx: RunContext[ConversationDeps], memory_id: str) -> StoredMemory:
     """The memory the model asked about, or a retry telling it the id is not one of ours.
 
-    The lookup is scoped to `ctx.deps.video_id`, the same way `memories_semantic_search` is,
+    The lookup is scoped to `ctx.deps.video_id`, the same way `search_video_speech` is,
     so the agent cannot read a video the conversation is not about. A malformed id, an id
     that exists in no video, and an id belonging to a different video are answered
     identically on purpose: all three mean the model invented or mixed up an id, and all

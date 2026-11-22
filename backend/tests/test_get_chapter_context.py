@@ -59,7 +59,7 @@ def _context(deps: ConversationDeps) -> RunContext[ConversationDeps]:
     """A RunContext carrying nothing but the deps.
 
     Built field by field rather than through the constructor, for the same reason
-    `test_memories_semantic_search` does: Pydantic AI has changed which of RunContext's
+    `test_search_video_speech` does: Pydantic AI has changed which of RunContext's
     other fields are required across versions, and a tool that only reads `ctx.deps` should
     not have a test that breaks when a field it never touches is added.
     """
@@ -101,7 +101,7 @@ def test_every_memory_in_the_chapter_comes_back_earliest_first() -> None:
 
 
 def test_a_memory_is_given_as_a_summary_and_a_timespan_only() -> None:
-    """What was actually said is `memories_semantic_search`'s job. A chapter is read for its
+    """What was actually said is `search_video_speech`'s job. A chapter is read for its
     shape, and carrying every memory's speech would make the longest chapters the dearest.
     """
     chapter, _ = _read(CHAPTER_ID, ROWS)

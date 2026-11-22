@@ -1,7 +1,7 @@
 """What a chapter looks like to the agent that asked for it.
 
 Pydantic models rather than the store's dataclasses, for the same reason
-`memories_semantic_search.result` has its own: this is the tool's contract with the model.
+`search_video_speech.result` has its own: this is the tool's contract with the model.
 Pydantic AI serializes the chapter through these, but the model is not sent their schema: it
 sees field names and values only. So what it must know to read the result, that a moment's
 summary is all it is being given, is said in the tool's docstring, and the field descriptions

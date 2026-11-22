@@ -40,7 +40,7 @@ def test_a_message_is_appended_and_read_back() -> None:
 
 
 def test_an_assistant_message_carries_its_tool_trace() -> None:
-    trace = [{"tool": "memories_semantic_search", "args": {"query": "chapter 3"}}]
+    trace = [{"tool": "search_video_speech", "args": {"query": "chapter 3"}}]
     messages, pool = _messages([{**ROW, "role": "assistant", "tool_trace": trace}])
     stored = messages.add(CONVERSATION_ID, "assistant", "It covers X.", tool_trace=trace)
 

@@ -12,7 +12,7 @@ TOOL_ACTIVITY: dict[str, str] = {
     "get_video_outline": "Reading the outline",
     "get_chapter_context": "Reading a chapter",
     "get_memory_context": "Reading a moment closely",
-    "memories_semantic_search": "Searching the video",
+    "search_video_speech": "Searching the video",
     "get_viewer_comments": "Reading viewer comments",
     "search_visual_moments": "Searching the picture",
     "search_screen_text": "Searching on-screen text",

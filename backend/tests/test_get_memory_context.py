@@ -58,7 +58,7 @@ def _context(deps: ConversationDeps) -> RunContext[ConversationDeps]:
     """A RunContext carrying nothing but the deps.
 
     Built field by field rather than through the constructor, for the same reason
-    `test_memories_semantic_search` does: Pydantic AI has changed which of RunContext's
+    `test_search_video_speech` does: Pydantic AI has changed which of RunContext's
     other fields are required across versions, and a tool that only reads `ctx.deps` should
     not have a test that breaks when a field it never touches is added.
     """

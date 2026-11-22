@@ -25,7 +25,7 @@ vi.mock("../src/api/video", () => ({
 function trace(overrides: Partial<ToolCallTrace> = {}): ToolCallTrace {
   return {
     call_id: "call-1",
-    tool: "memories_semantic_search",
+    tool: "search_video_speech",
     arguments: { query: "launch" },
     summary: null,
     started_at: "2026-09-20T10:00:00Z",
