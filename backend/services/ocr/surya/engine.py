@@ -15,7 +15,10 @@ fresh one; a request the worker merely failed to read is reported and the worker
 The worker's environment is set so Surya fits the developer machine (GTX 1650, 4 GB):
 llama.cpp rather than vLLM, which needs Docker and claims most of the card; two parallel
 slots, since each slot keeps a KV cache of its own; the text detector on the CPU, leaving the
-GPU to SigLIP and the OCR model. Any of them can be overridden in the process environment.
+GPU to SigLIP and the OCR model. On an Apple Silicon Mac the detector goes on the Apple GPU
+(MPS) instead: memory there is shared with the system, so there is no small card to protect,
+and it detects about four times faster than on the CPU. Any of them can be overridden in the
+process environment.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ import threading
 from collections.abc import Sequence
 from pathlib import Path
 
+import torch
 from PIL import Image
 
 from ..engine import FrameReading, OcrError, TextBlock
@@ -57,7 +61,6 @@ STOP_TIMEOUT_SECONDS = 30.0
 WORKER_ENVIRONMENT_DEFAULTS = {
     "SURYA_INFERENCE_BACKEND": "llamacpp",
     "SURYA_INFERENCE_PARALLEL": "2",
-    "TORCH_DEVICE": "cpu",
     "DISABLE_TQDM": "true",
     "PYTHONUNBUFFERED": "1",
 }
@@ -153,6 +156,7 @@ class SuryaOcrEngine:
         environment = dict(os.environ)
         for name, value in WORKER_ENVIRONMENT_DEFAULTS.items():
             environment.setdefault(name, value)
+        environment.setdefault("TORCH_DEVICE", _text_detector_device())
         if self._llama_server_path:
             environment["LLAMA_CPP_BINARY"] = self._llama_server_path
         return environment
@@ -235,6 +239,15 @@ class _WorkerProcess:
         detail = bytes(self._stderr_tail).decode("utf-8", errors="replace").strip()
         last_lines = "\n".join(detail.splitlines()[-5:])
         return f"Surya's worker {what_happened}" + (f": {last_lines}" if last_lines else "")
+
+
+def _text_detector_device() -> str:
+    """Where Surya's text detector runs: the Apple GPU when there is one, else the CPU.
+
+    An NVIDIA GPU is passed over on purpose: its memory is the card's own, and the OCR model
+    and SigLIP need it more than the detector does.
+    """
+    return "mps" if torch.backends.mps.is_available() else "cpu"
 
 
 def _png_base64(image: Image.Image) -> str:
