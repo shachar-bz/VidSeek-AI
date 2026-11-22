@@ -24,6 +24,8 @@ import torch
 from PIL import Image
 from transformers import AutoModel, AutoProcessor
 
+from backend.services.torch_device import preferred_torch_device
+
 MODEL_NAME = "google/siglip2-base-patch16-256"
 
 # The width of both towers' output; `video_frame_embeddings.embedding` is declared with it.
@@ -48,7 +50,7 @@ class SiglipEncoder:
 
     def __init__(self, model_name: str = MODEL_NAME, device: str | None = None):
         self.model_name = model_name
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device or preferred_torch_device()
         # Full precision, on the GPU as well. Half precision would halve the weights, but the
         # GTX 1650 has no tensor cores and measured 2.6x slower in it (32 frames in 4.8 s
         # against 1.8 s), which is a slower index for memory the card does not need back.
