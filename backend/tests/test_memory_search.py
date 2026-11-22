@@ -1,12 +1,13 @@
-"""Tests for which of a video's memories a semantic search counts as hits."""
+"""Tests for how a hybrid search ranks a video's memories: cosine and BM25, fused with RRF."""
 
 from backend.services.memory_search import (
     DEFAULT_SETTINGS,
     MemorySearchSettings,
+    fuse_semantic_and_lexical,
+    lexical_ranking,
     search_memories,
-    standout_memories,
+    semantic_ranking,
 )
-from backend.services.visual_search import z_scores
 from backend.storage.postgres import ScoredMemory
 from backend.tests.fake_postgres import FakePool
 
@@ -15,11 +16,11 @@ MODEL = "intfloat/multilingual-e5-small"
 QUERY_VECTOR = [0.1] * 384
 
 
-def _memory(index: int, similarity: float) -> ScoredMemory:
+def _memory(index: int, similarity: float, text: str | None = None) -> ScoredMemory:
     return ScoredMemory(
         memory_id=f"memory-{index}",
         chapter_id=None,
-        text=f"speech {index}",
+        text=text if text is not None else f"speech {index}",
         summary=f"summary {index}",
         chapter_title=None,
         start_seconds=index * 10.0,
@@ -28,77 +29,73 @@ def _memory(index: int, similarity: float) -> ScoredMemory:
     )
 
 
-def _ids(found) -> list[str]:
-    return [memory.memory_id for memory in found.memories]
+def _ids(memories) -> list[str]:
+    return [memory.memory_id for memory in memories]
 
 
 def test_the_starting_settings_are_the_ones_agreed() -> None:
-    assert DEFAULT_SETTINGS == MemorySearchSettings(z_threshold=1.5, max_moments=8, weak_moments=3)
+    assert DEFAULT_SETTINGS == MemorySearchSettings(max_moments=6, rrf_k=60, bm25_k1=1.2, bm25_b=0.75)
 
 
-def test_a_hit_is_a_memory_at_or_above_the_z_threshold_and_no_other() -> None:
-    # One memory far above the rest, one only a little above them, and the rest level.
-    scored = [_memory(0, 0.95), _memory(1, 0.84)] + [_memory(index, 0.80) for index in range(2, 12)]
-    z = z_scores([memory.similarity for memory in scored])
-    assert z[0] >= 1.5 > z[1]
+def test_semantic_ranking_is_by_cosine_highest_first() -> None:
+    scored = [_memory(0, 0.80), _memory(1, 0.90), _memory(2, 0.85)]
 
-    found = standout_memories(scored)
-
-    assert _ids(found) == ["memory-0"]
-    assert found.nothing_stood_out is False
+    assert semantic_ranking(scored) == ["memory-1", "memory-2", "memory-0"]
 
 
-def test_the_threshold_comes_from_the_settings() -> None:
-    scored = [_memory(0, 0.95), _memory(1, 0.84)] + [_memory(index, 0.80) for index in range(2, 12)]
+def test_lexical_ranking_leaves_out_memories_sharing_no_word_with_the_query() -> None:
+    scored = [
+        _memory(0, 0.9, "we talk about the weather"),
+        _memory(1, 0.8, "the aligner needs sixteen kilohertz audio"),
+        _memory(2, 0.7, "nothing in common here"),
+    ]
 
-    found = standout_memories(scored, MemorySearchSettings(z_threshold=0.5))
+    assert lexical_ranking(scored, "aligner kilohertz") == ["memory-1"]
+
+
+def test_lexical_ranking_matches_a_hebrew_word_behind_a_prefix_letter() -> None:
+    scored = [
+        _memory(0, 0.9, "היום נדבר על מזג האוויר"),
+        _memory(1, 0.8, "כתבנו את זה בפייתון"),
+    ]
+
+    assert lexical_ranking(scored, "פייתון") == ["memory-1"]
+
+
+def test_an_exact_term_e5_ranks_last_is_lifted_into_the_results() -> None:
+    background = [_memory(index, 0.90 - index * 0.01, f"general talk {index}") for index in range(10)]
+    exact = _memory(99, 0.50, "we deploy it with kubernetes on azure")
+
+    found = fuse_semantic_and_lexical(background + [exact], "kubernetes")
+
+    assert "memory-99" in _ids(found)
+    assert found[0].memory_id == "memory-99"
+
+
+def test_with_no_word_in_common_the_order_is_the_cosine_order() -> None:
+    scored = [_memory(index, 0.5 + index * 0.01) for index in range(5)]
+
+    found = fuse_semantic_and_lexical(scored, "zzz unmatched")
+
+    assert _ids(found) == ["memory-4", "memory-3", "memory-2", "memory-1", "memory-0"]
+
+
+def test_there_is_no_gate_and_at_most_six_come_back() -> None:
+    scored = [_memory(index, 0.82) for index in range(10)]
+
+    found = fuse_semantic_and_lexical(scored, "anything")
+
+    assert len(found) == 6
+
+
+def test_a_video_with_fewer_memories_than_the_cap_returns_them_all() -> None:
+    found = fuse_semantic_and_lexical([_memory(0, 0.9), _memory(1, 0.8)], "anything")
 
     assert _ids(found) == ["memory-0", "memory-1"]
 
 
-def test_hits_are_capped_at_eight_closest_first() -> None:
-    # Ten memories stand out (z about 2) above forty that do not.
-    standing_out = [_memory(index, 0.90 + index * 0.001) for index in range(10)]
-    background = [_memory(index, 0.50) for index in range(10, 50)]
-
-    found = standout_memories(background + standing_out)
-
-    assert _ids(found) == [f"memory-{index}" for index in range(9, 1, -1)]
-    assert found.nothing_stood_out is False
-
-
-def test_when_nothing_stands_out_the_three_closest_come_back_as_weak() -> None:
-    # Evenly spread: the closest of five is only 1.41 standard deviations up.
-    scored = [_memory(index, 0.80 + index * 0.01) for index in range(5)]
-
-    found = standout_memories(scored)
-
-    assert _ids(found) == ["memory-4", "memory-3", "memory-2"]
-    assert found.nothing_stood_out is True
-
-
-def test_every_memory_scoring_the_same_means_nothing_stood_out() -> None:
-    found = standout_memories([_memory(index, 0.82) for index in range(10)])
-
-    assert len(found.memories) == 3
-    assert found.nothing_stood_out is True
-
-
-def test_a_video_of_one_memory_follows_the_same_rule() -> None:
-    """There is no minimum count: a lone memory has nothing to stand out from, so it comes
-    back as the closest one rather than as a hit.
-    """
-    found = standout_memories([_memory(0, 0.9)])
-
-    assert _ids(found) == ["memory-0"]
-    assert found.nothing_stood_out is True
-
-
-def test_a_video_with_nothing_embedded_finds_nothing_and_nothing_is_weak() -> None:
-    found = standout_memories([])
-
-    assert found.memories == []
-    assert found.nothing_stood_out is False
+def test_a_video_with_nothing_to_search_returns_nothing() -> None:
+    assert fuse_semantic_and_lexical([], "anything") == []
 
 
 def test_the_search_scores_every_memory_of_the_video_with_the_current_model() -> None:
