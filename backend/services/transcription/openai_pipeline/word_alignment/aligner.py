@@ -6,8 +6,8 @@ because this project's videos code-switch: a Hebrew-only vocabulary would have n
 for the English words in a Hebrew sentence, leaving a hole at every one of them. MMS works
 on romanized text, so Hebrew and English land in the same alphabet.
 
-Alignment is a batch job, and it runs on the GPU when one is available and on the CPU
-otherwise. It needs the audio and the transcript together: this is not recognition, so a
+Alignment is a batch job, and it runs on the GPU when one is available (NVIDIA or Apple) and
+on the CPU otherwise. It needs the audio and the transcript together: this is not recognition, so a
 word the transcript does not contain can never be produced.
 
 Requires the ffmpeg binary on PATH.
@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import torch
 import torchaudio
+
+from backend.services.torch_device import CPU, CUDA, preferred_torch_device
 
 from .audio_loader import SAMPLE_RATE_HZ, duration_seconds, load_samples
 from .text_normalizer import NormalizedWord, normalize_text, normalize_words
@@ -70,7 +72,7 @@ class AlignmentResult:
 
 
 def _resolve_device(device: str | None) -> str:
-    return device or ("cuda" if torch.cuda.is_available() else "cpu")
+    return device or preferred_torch_device()
 
 
 @functools.lru_cache(maxsize=2)
@@ -167,6 +169,10 @@ def align_samples(
         with torch.inference_mode():
             emission, _ = model(waveform)
 
+    # torchaudio's forced alignment runs on CUDA and the CPU only, so an emission computed on
+    # an Apple GPU is brought back to the CPU for it.
+    if emission.device.type not in (CUDA, CPU):
+        emission = emission.cpu()
     token_spans = aligner(emission[0], tokenizer(pieces))
 
     # The emission is one frame per group of samples; this is how many seconds a frame is.
