@@ -85,7 +85,7 @@ describe("folding events into the reply", () => {
   });
 
   it("keeps one trace entry per tool call as its result arrives", () => {
-    const call = { call_id: "c1", tool: "memories_semantic_search", arguments: { query: "intro" } };
+    const call = { call_id: "c1", tool: "search_video_speech", arguments: { query: "intro" } };
     let answer = applyStreamEvent(beginAnswer("q"), { type: "message_start", user_message_id: "q", message_id: "r" });
     answer = applyStreamEvent(answer, { type: "tool_call", call });
     answer = applyStreamEvent(answer, { type: "tool_result", call: { ...call, summary: "3 moments", finished_at: "t" } });

@@ -236,7 +236,7 @@ def test_another_users_conversation_is_always_not_found() -> None:
 def test_normal_stream_orders_fragments_tools_and_persisted_completion() -> None:
     runner = FakeRunner(
         [
-            ToolStarted("call-1", "memories_semantic_search", {"query": "mono"}, NOW),
+            ToolStarted("call-1", "search_video_speech", {"query": "mono"}, NOW),
             ToolFinished("call-1", "2 results", NOW),
             TextFragment("The speaker "),
             TextFragment("requires mono audio."),
@@ -277,7 +277,7 @@ def test_normal_stream_orders_fragments_tools_and_persisted_completion() -> None
 def test_a_streamed_tool_call_carries_its_activity_and_the_saved_trace_does_not() -> None:
     runner = FakeRunner(
         [
-            ToolStarted("call-1", "memories_semantic_search", {"query": "mono"}, NOW),
+            ToolStarted("call-1", "search_video_speech", {"query": "mono"}, NOW),
             ToolFinished("call-1", "2 results", NOW),
             ToolStarted("call-2", "a_tool_without_a_label", {}, NOW),
             ToolFinished("call-2", None, NOW),

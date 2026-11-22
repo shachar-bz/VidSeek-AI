@@ -100,7 +100,7 @@ def test_only_supplied_conversation_messages_become_model_history() -> None:
 TRANSCRIPT_TOOLS = [
     "get_video_info",
     "get_video_outline",
-    "memories_semantic_search",
+    "search_video_speech",
     "get_chapter_context",
     "get_memory_context",
 ]

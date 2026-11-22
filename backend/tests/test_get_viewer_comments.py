@@ -40,7 +40,7 @@ COMMENT_ROWS = [
 
 
 def _context(deps: ConversationDeps) -> RunContext[ConversationDeps]:
-    """A RunContext carrying nothing but the deps; see test_memories_semantic_search."""
+    """A RunContext carrying nothing but the deps; see test_search_video_speech."""
     context = object.__new__(RunContext)
     object.__setattr__(context, "deps", deps)
     return context

@@ -16,13 +16,13 @@ def get_chapter_context(ctx: RunContext[ConversationDeps], chapter_id: str) -> C
 
     Call this when a single moment is not enough to answer with -- to see what surrounded
     it, how a topic developed, or what a section of the video covers as a whole. Chapter
-    ids come from `get_video_outline`, or from the moments `memories_semantic_search`
+    ids come from `get_video_outline`, or from the moments `search_video_speech`
     returns.
 
     Every moment in the chapter is returned, however many there are, each as a one-line
     summary and its timing, never as what was said. For the words of one of these moments,
     call `get_memory_context` with its memory id and context_range=0; to find where a topic
-    is discussed, use `memories_semantic_search`.
+    is discussed, use `search_video_speech`.
 
     Args:
         chapter_id: The id of the chapter to read, as given by a moment that belongs to it.
