@@ -311,6 +311,8 @@ def test_the_worker_runs_surya_the_way_the_small_gpu_needs_unless_told_otherwise
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SURYA_INFERENCE_PARALLEL", "1")
+    monkeypatch.delenv("TORCH_DEVICE", raising=False)
+    monkeypatch.setattr("torch.backends.mps.is_available", lambda: False)
     engine = SuryaOcrEngine(tmp_path / "python.exe", llama_server_path="C:/llama/llama-server.exe")
 
     environment = engine._environment()
@@ -320,6 +322,28 @@ def test_the_worker_runs_surya_the_way_the_small_gpu_needs_unless_told_otherwise
     assert environment["SURYA_INFERENCE_PARALLEL"] == "1"
     assert environment["LLAMA_CPP_BINARY"] == "C:/llama/llama-server.exe"
     assert set(WORKER_ENVIRONMENT_DEFAULTS) <= set(environment)
+
+
+def test_on_a_mac_the_text_detector_runs_on_the_apple_gpu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("TORCH_DEVICE", raising=False)
+    monkeypatch.setattr("torch.backends.mps.is_available", lambda: True)
+
+    environment = SuryaOcrEngine(tmp_path / "python.exe")._environment()
+
+    assert environment["TORCH_DEVICE"] == "mps"
+
+
+def test_a_torch_device_set_in_the_environment_wins_over_the_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TORCH_DEVICE", "cpu")
+    monkeypatch.setattr("torch.backends.mps.is_available", lambda: True)
+
+    environment = SuryaOcrEngine(tmp_path / "python.exe")._environment()
+
+    assert environment["TORCH_DEVICE"] == "cpu"
 
 
 def test_ocr_is_off_until_an_interpreter_is_configured(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
